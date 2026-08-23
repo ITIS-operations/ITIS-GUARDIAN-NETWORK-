@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+:root {
+  /* ITIS Official Brand Colors - Extracted from Master Emblem */
+  --itis-navy-canvas: #060b18;
+  --itis-navy-surface: #0a1224;
+  --itis-navy-surface-alt: #0f1a30;
+  --itis-navy-surface-elevated: #15223c;
+  --itis-cyan: #00c2ff;
+  --itis-cyan-hover: #38bdf8;
+  --itis-gold: #d4af37;
+  --itis-gold-hover: #f3d368;
+  --itis-gold-dark: #c59b27;
+  --itis-text-primary: #f8fafc;
+  --itis-text-secondary: #94a3b8;
+  --itis-emergency-red: #f43f5e;
+  --itis-verified-green: #10b981;
+}
+
+@layer base {
+  html, body {
+    max-width: 100%;
+    overflow-x: hidden;
+    background-color: var(--itis-navy-canvas);
+    color: var(--itis-text-primary);
+  }
+  
+  body {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  }
+  
+  code, pre, .font-mono {
+    font-family: 'JetBrains Mono', monospace;
+  }
+}
+
+/* Custom scrollbars for high-density command consoles */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(11, 19, 43, 0.8);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.8);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 1);
+}
+

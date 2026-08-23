@@ -1,0 +1,10 @@
+{
+  "name": "ITIS Guardian Network",
+  "description": "Integrated Technology Intelligence & Safety (ITIS) national child protection ecosystem for South Africa. Protecting Every Learner. Every Journey. Every Second.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

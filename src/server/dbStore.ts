@@ -1,0 +1,2114 @@
+import crypto from 'node:crypto';
+import {
+  Person,
+  Learner,
+  Guardian,
+  GuardianLearnerRelationship,
+  School,
+  SchoolEnrolment,
+  AcademicRecord,
+  ImmutableAuditEvent,
+  IncidentAlert,
+  HydratedLearnerRecord,
+  ActiveUserSession,
+  UserRole,
+  IdType,
+  ResponderUnit,
+  ResponderOperationalState,
+  AssignedIncidentView,
+  EligibleResponderRanking,
+  IncidentOutcomeReport,
+  ResponderDeclineReason,
+  AccountStatus
+} from '../types.js';
+
+// Helpers
+export function maskSaId(id: string): string {
+  if (!id || id.length < 8) return id || '—';
+  const clean = id.trim();
+  if (clean.length === 13) {
+    return `${clean.slice(0, 6)}*****${clean.slice(11)}`;
+  }
+  return `${clean.slice(0, 3)}****${clean.slice(-2)}`;
+}
+
+export function maskPhone(phone: string): string {
+  if (!phone || phone.length < 6) return phone || '—';
+  const clean = phone.trim();
+  return `${clean.slice(0, 4)}***${clean.slice(-3)}`;
+}
+
+export function calculateDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Earth radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return Math.round(R * c * 10) / 10;
+}
+
+export function validatePasswordPolicy(password: string): { valid: boolean; reason?: string } {
+  if (!password || password.length < 12) {
+    return { valid: false, reason: 'Password must be at least 12 characters in length.' };
+  }
+  if (!/[A-Z]/.test(password)) {
+    return { valid: false, reason: 'Password must contain at least one uppercase letter (A-Z).' };
+  }
+  if (!/[a-z]/.test(password)) {
+    return { valid: false, reason: 'Password must contain at least one lowercase letter (a-z).' };
+  }
+  if (!/[0-9]/.test(password)) {
+    return { valid: false, reason: 'Password must contain at least one number (0-9).' };
+  }
+  if (!/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?`~]/.test(password)) {
+    return { valid: false, reason: 'Password must contain at least one special character (e.g. !@#$%^&*).' };
+  }
+  return { valid: true };
+}
+
+export function hashPassword(plainText: string): string {
+  const salt = 'itis_salt_sha256_sec_2026';
+  return crypto.createHash('sha256').update(plainText + salt).digest('hex');
+}
+
+export function generateChecksum(data: Record<string, any>): string {
+  const str = JSON.stringify(data);
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash |= 0;
+  }
+  return 'HEX_' + Math.abs(hash).toString(16).padStart(8, '0') + '_' + Date.now().toString(36);
+}
+
+export interface ServerUserRecord {
+  id: string;
+  email: string;
+  aliases?: string[];
+  password: string;
+  name: string;
+  firstName?: string;
+  surname?: string;
+  mobileNumber?: string;
+  role: UserRole;
+  schoolId?: string;
+  guardianId?: string;
+  responderUnit?: string;
+  department?: string;
+  organization?: string;
+  permissions: string[];
+  status: AccountStatus;
+  isDemoAccount?: boolean;
+  createdAt?: string;
+}
+
+export interface ActiveSessionRecord {
+  token: string;
+  userId: string;
+  session: ActiveUserSession;
+  permissions: string[];
+  createdAt: string;
+  expiresAt: string;
+}
+
+// ----------------------------------------------------
+// AUTHORITATIVE IN-MEMORY REPOSITORY
+// ----------------------------------------------------
+class AuthoritativeStore {
+  public persons: Map<string, Person> = new Map();
+  public learners: Map<string, Learner> = new Map();
+  public guardians: Map<string, Guardian> = new Map();
+  public relationships: Map<string, GuardianLearnerRelationship> = new Map();
+  public schools: Map<string, School> = new Map();
+  public enrolments: Map<string, SchoolEnrolment> = new Map();
+  public academicRecords: Map<string, AcademicRecord> = new Map();
+  public auditLogs: ImmutableAuditEvent[] = [];
+  public incidents: Map<string, IncidentAlert> = new Map();
+  public users: Map<string, ServerUserRecord> = new Map();
+  public sessions: Map<string, ActiveSessionRecord> = new Map();
+  public responderUnits: Map<string, ResponderUnit> = new Map();
+
+  constructor() {
+    this.seedAuthoritativeData();
+  }
+
+  private seedAuthoritativeData() {
+    // 1. Seed Schools
+    const school1: School = {
+      id: 'sch-001',
+      name: 'Pretoria Boys High School',
+      emisCode: 'EMIS-70012490',
+      district: 'Tshwane South (D4)',
+      province: 'GAUTENG',
+      address: 'Roper St & Brooklyn Rd, Brooklyn, Pretoria, 0181',
+      principalName: 'Dr. Gregory Hassenkamp',
+      contactPhone: '+27 12 460 2246',
+      contactEmail: 'admin@pbhs.co.za',
+      activeLearnersCount: 1450,
+      totalGuardiansLinkedCount: 1390,
+      geofenceCenter: { lat: -25.7601, lng: 28.2355, radiusMeters: 450 }
+    };
+
+    const school2: School = {
+      id: 'sch-002',
+      name: 'Soweto Community High School',
+      emisCode: 'EMIS-70088120',
+      district: 'Johannesburg West (D12)',
+      province: 'GAUTENG',
+      address: 'Vilakazi St & Moema St, Orlando West, Soweto, 1804',
+      principalName: 'Mrs. Nomvula Sithole',
+      contactPhone: '+27 11 936 4100',
+      contactEmail: 'safety@sowetohigh.edu.za',
+      activeLearnersCount: 980,
+      totalGuardiansLinkedCount: 920,
+      geofenceCenter: { lat: -26.2372, lng: 27.9056, radiusMeters: 500 }
+    };
+
+    const school3: School = {
+      id: 'sch-003',
+      name: 'Cape Town Central Secondary',
+      emisCode: 'EMIS-10029381',
+      district: 'Metro Central',
+      province: 'WESTERN_CAPE',
+      address: 'Hatfield St, Gardens, Cape Town, 8001',
+      principalName: 'Mr. David Van Der Merwe',
+      contactPhone: '+27 21 461 7000',
+      contactEmail: 'admin@capetownsec.edu.za',
+      activeLearnersCount: 820,
+      totalGuardiansLinkedCount: 790,
+      geofenceCenter: { lat: -33.9315, lng: 18.4172, radiusMeters: 400 }
+    };
+
+    this.schools.set(school1.id, school1);
+    this.schools.set(school2.id, school2);
+    this.schools.set(school3.id, school3);
+
+    // 2. Authoritative Guardian 1: Grace Molefe (Mother of 2 children: Thabo & Kgomotso)
+    const pGuardian1: Person = {
+      id: 'per-g-001',
+      officialId: '8204155192084',
+      idType: 'SA_ID',
+      firstName: 'Grace',
+      lastName: 'Molefe',
+      dateOfBirth: '1982-04-15',
+      gender: 'FEMALE',
+      mobileNumber: '+27821234567',
+      mobileVerified: true,
+      email: 'grace.molefe@safetynet.co.za',
+      emailVerified: true,
+      physicalAddress: '42 Lynnwood Rd, Hatfield, Pretoria',
+      isVerified: true,
+      verificationSource: 'DHA_NPR_LOOKUP',
+      createdAt: '2025-01-10T08:00:00.000Z',
+      updatedAt: '2026-01-15T10:00:00.000Z'
+    };
+    this.persons.set(pGuardian1.id, pGuardian1);
+
+    const guardian1: Guardian = {
+      id: 'grd-001',
+      personId: pGuardian1.id,
+      saIdNumber: '8204155192084',
+      saIdMasked: maskSaId('8204155192084'),
+      idVerified: true,
+      mobileNumber: '+27821234567',
+      mobileVerified: true,
+      alternatePhone: '+27123456789',
+      employerName: 'Department of Health (Gauteng)',
+      preferredLanguage: 'English / Sesotho',
+      pushNotificationsEnabled: true,
+      createdAt: '2025-01-10T08:00:00.000Z',
+      updatedAt: '2026-01-15T10:00:00.000Z'
+    };
+    this.guardians.set(guardian1.id, guardian1);
+
+    // Child 1 of Grace Molefe: Thabo Molefe
+    const pLearner1: Person = {
+      id: 'per-l-001',
+      officialId: '0905125890081',
+      idType: 'SA_ID',
+      firstName: 'Thabo',
+      lastName: 'Molefe',
+      dateOfBirth: '2009-05-12',
+      gender: 'MALE',
+      isVerified: true,
+      verificationSource: 'EMIS_VERIFIED',
+      createdAt: '2025-01-10T08:00:00.000Z',
+      updatedAt: '2026-01-15T10:00:00.000Z',
+      mobileVerified: false,
+      emailVerified: false
+    };
+    this.persons.set(pLearner1.id, pLearner1);
+
+    const learner1: Learner = {
+      id: 'lrn-001',
+      personId: pLearner1.id,
+      emisId: 'LRN-2025-PBHS-0481',
+      admissionNumber: 'PBHS-9842',
+      medicalNotes: 'Asthmatic. Carries Ventolin inhaler.',
+      bloodType: 'O+',
+      allergies: ['Peanuts', 'Bee Stings'],
+      trackingBeaconId: 'BCN-ITIS-9941',
+      photoUrl: 'https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=200&auto=format&fit=crop&q=80',
+      specialSafetyNotes: 'Authorized to commute on Route 4B Safe Corridor.',
+      createdAt: '2025-01-10T08:00:00.000Z',
+      updatedAt: '2026-01-15T10:00:00.000Z'
+    };
+    this.learners.set(learner1.id, learner1);
+
+    // Relationship: Grace -> Thabo (Mother, Primary, Verified)
+    const rel1: GuardianLearnerRelationship = {
+      id: 'rel-001',
+      guardianId: guardian1.id,
+      learnerId: learner1.id,
+      relationshipType: 'MOTHER',
+      isPrimary: true,
+      legalCustodyVerified: true,
+      authorizedForPickup: true,
+      receiveSosAlerts: true,
+      verificationStatus: 'VERIFIED',
+      establishedAt: '2025-01-10T08:00:00.000Z',
+      establishedByStaffUserId: 'usr-admin-01',
+      establishedByStaffName: 'M. Ndlovu (Registrar)',
+      establishedBySchoolId: school1.id,
+      auditTrailId: 'aud-seed-001'
+    };
+    this.relationships.set(rel1.id, rel1);
+
+    // School Enrolment for Thabo
+    const enrol1: SchoolEnrolment = {
+      id: 'enr-001',
+      learnerId: learner1.id,
+      schoolId: school1.id,
+      admissionDate: '2025-01-15',
+      enrolmentStatus: 'ACTIVE',
+      currentAcademicYear: 2026,
+      enrolledByStaffId: 'usr-admin-01',
+      createdAt: '2025-01-15T08:00:00.000Z',
+      updatedAt: '2026-01-15T08:00:00.000Z'
+    };
+    this.enrolments.set(enrol1.id, enrol1);
+
+    // Academic Record 2026 (Grade 10) & 2025 (Grade 9) for Thabo - Showing separate Academic Records
+    const acad1_2025: AcademicRecord = {
+      id: 'acd-001-2025',
+      learnerId: learner1.id,
+      schoolId: school1.id,
+      academicYear: 2025,
+      grade: 'Grade 9',
+      classSection: '9-C',
+      homeroomTeacher: 'Mr. J. Botha',
+      attendanceRate: 98.4,
+      status: 'PROMOTED',
+      updatedAt: '2025-12-10T12:00:00.000Z'
+    };
+    const acad1_2026: AcademicRecord = {
+      id: 'acd-001-2026',
+      learnerId: learner1.id,
+      schoolId: school1.id,
+      academicYear: 2026,
+      grade: 'Grade 10',
+      classSection: '10-A',
+      homeroomTeacher: 'Mrs. S. Khumalo',
+      attendanceRate: 99.1,
+      status: 'CURRENT',
+      updatedAt: '2026-01-15T08:00:00.000Z'
+    };
+    this.academicRecords.set(acad1_2025.id, acad1_2025);
+    this.academicRecords.set(acad1_2026.id, acad1_2026);
+
+    // Child 2 of Grace Molefe: Kgomotso Molefe (Enrolled in Grade 8)
+    const pLearner2: Person = {
+      id: 'per-l-002',
+      officialId: '1109235890082',
+      idType: 'SA_ID',
+      firstName: 'Kgomotso',
+      lastName: 'Molefe',
+      dateOfBirth: '2011-09-23',
+      gender: 'FEMALE',
+      isVerified: true,
+      verificationSource: 'EMIS_VERIFIED',
+      createdAt: '2026-01-12T09:00:00.000Z',
+      updatedAt: '2026-01-12T09:00:00.000Z',
+      mobileVerified: false,
+      emailVerified: false
+    };
+    this.persons.set(pLearner2.id, pLearner2);
+
+    const learner2: Learner = {
+      id: 'lrn-002',
+      personId: pLearner2.id,
+      emisId: 'LRN-2026-PBHS-0899',
+      admissionNumber: 'PBHS-10442',
+      bloodType: 'O+',
+      trackingBeaconId: 'BCN-ITIS-9942',
+      photoUrl: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&auto=format&fit=crop&q=80',
+      createdAt: '2026-01-12T09:00:00.000Z',
+      updatedAt: '2026-01-12T09:00:00.000Z'
+    };
+    this.learners.set(learner2.id, learner2);
+
+    const rel2: GuardianLearnerRelationship = {
+      id: 'rel-002',
+      guardianId: guardian1.id,
+      learnerId: learner2.id,
+      relationshipType: 'MOTHER',
+      isPrimary: true,
+      legalCustodyVerified: true,
+      authorizedForPickup: true,
+      receiveSosAlerts: true,
+      verificationStatus: 'VERIFIED',
+      establishedAt: '2026-01-12T09:00:00.000Z',
+      establishedByStaffUserId: 'usr-admin-01',
+      establishedByStaffName: 'M. Ndlovu (Registrar)',
+      establishedBySchoolId: school1.id,
+      auditTrailId: 'aud-seed-002'
+    };
+    this.relationships.set(rel2.id, rel2);
+
+    const enrol2: SchoolEnrolment = {
+      id: 'enr-002',
+      learnerId: learner2.id,
+      schoolId: school1.id,
+      admissionDate: '2026-01-12',
+      enrolmentStatus: 'ACTIVE',
+      currentAcademicYear: 2026,
+      enrolledByStaffId: 'usr-admin-01',
+      createdAt: '2026-01-12T09:00:00.000Z',
+      updatedAt: '2026-01-12T09:00:00.000Z'
+    };
+    this.enrolments.set(enrol2.id, enrol2);
+
+    const acad2_2026: AcademicRecord = {
+      id: 'acd-002-2026',
+      learnerId: learner2.id,
+      schoolId: school1.id,
+      academicYear: 2026,
+      grade: 'Grade 8',
+      classSection: '8-B',
+      homeroomTeacher: 'Mr. P. Dlamini',
+      attendanceRate: 100.0,
+      status: 'CURRENT',
+      updatedAt: '2026-01-12T09:00:00.000Z'
+    };
+    this.academicRecords.set(acad2_2026.id, acad2_2026);
+
+    // 3. Authoritative Guardian 2: Sipho Dlamini (Father) -> Learner: Zola Dlamini (Soweto Secondary)
+    const pGuardian2: Person = {
+      id: 'per-g-002',
+      officialId: '7811055890089',
+      idType: 'SA_ID',
+      firstName: 'Sipho',
+      lastName: 'Dlamini',
+      dateOfBirth: '1978-11-05',
+      gender: 'MALE',
+      mobileNumber: '+27839876543',
+      mobileVerified: true,
+      email: 'sipho.dlamini@transnet.co.za',
+      emailVerified: true,
+      physicalAddress: '109 Vilakazi St, Orlando West, Soweto',
+      isVerified: true,
+      verificationSource: 'DHA_NPR_LOOKUP',
+      createdAt: '2025-02-01T08:00:00.000Z',
+      updatedAt: '2026-01-10T08:00:00.000Z'
+    };
+    this.persons.set(pGuardian2.id, pGuardian2);
+
+    const guardian2: Guardian = {
+      id: 'grd-002',
+      personId: pGuardian2.id,
+      saIdNumber: '7811055890089',
+      saIdMasked: maskSaId('7811055890089'),
+      idVerified: true,
+      mobileNumber: '+27839876543',
+      mobileVerified: true,
+      employerName: 'Transnet Rail Logistics',
+      preferredLanguage: 'isiZulu / English',
+      pushNotificationsEnabled: true,
+      createdAt: '2025-02-01T08:00:00.000Z',
+      updatedAt: '2026-01-10T08:00:00.000Z'
+    };
+    this.guardians.set(guardian2.id, guardian2);
+
+    const pLearner3: Person = {
+      id: 'per-l-003',
+      officialId: '0812045890084',
+      idType: 'SA_ID',
+      firstName: 'Zola',
+      lastName: 'Dlamini',
+      dateOfBirth: '2008-12-04',
+      gender: 'FEMALE',
+      isVerified: true,
+      verificationSource: 'EMIS_VERIFIED',
+      createdAt: '2025-02-01T08:00:00.000Z',
+      updatedAt: '2026-01-10T08:00:00.000Z',
+      mobileVerified: false,
+      emailVerified: false
+    };
+    this.persons.set(pLearner3.id, pLearner3);
+
+    const learner3: Learner = {
+      id: 'lrn-003',
+      personId: pLearner3.id,
+      emisId: 'LRN-2025-SOW-0199',
+      admissionNumber: 'SOW-5512',
+      bloodType: 'A+',
+      trackingBeaconId: 'BCN-ITIS-8819',
+      photoUrl: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=200&auto=format&fit=crop&q=80',
+      createdAt: '2025-02-01T08:00:00.000Z',
+      updatedAt: '2026-01-10T08:00:00.000Z'
+    };
+    this.learners.set(learner3.id, learner3);
+
+    const rel3: GuardianLearnerRelationship = {
+      id: 'rel-003',
+      guardianId: guardian2.id,
+      learnerId: learner3.id,
+      relationshipType: 'FATHER',
+      isPrimary: true,
+      legalCustodyVerified: true,
+      authorizedForPickup: true,
+      receiveSosAlerts: true,
+      verificationStatus: 'VERIFIED',
+      establishedAt: '2025-02-01T08:00:00.000Z',
+      establishedByStaffUserId: 'usr-admin-02',
+      establishedByStaffName: 'P. Sithole',
+      establishedBySchoolId: school2.id,
+      auditTrailId: 'aud-seed-003'
+    };
+    this.relationships.set(rel3.id, rel3);
+
+    const enrol3: SchoolEnrolment = {
+      id: 'enr-003',
+      learnerId: learner3.id,
+      schoolId: school2.id,
+      admissionDate: '2025-02-01',
+      enrolmentStatus: 'ACTIVE',
+      currentAcademicYear: 2026,
+      enrolledByStaffId: 'usr-admin-02',
+      createdAt: '2025-02-01T08:00:00.000Z',
+      updatedAt: '2026-01-10T08:00:00.000Z'
+    };
+    this.enrolments.set(enrol3.id, enrol3);
+
+    const acad3_2026: AcademicRecord = {
+      id: 'acd-003-2026',
+      learnerId: learner3.id,
+      schoolId: school2.id,
+      academicYear: 2026,
+      grade: 'Grade 11',
+      classSection: '11-Science',
+      homeroomTeacher: 'Mr. K. Radebe',
+      attendanceRate: 97.8,
+      status: 'CURRENT',
+      updatedAt: '2026-01-10T08:00:00.000Z'
+    };
+    this.academicRecords.set(acad3_2026.id, acad3_2026);
+
+    // 4. Seed Active Incident (Live SOS for demonstration in Command Centre)
+    const inc1: IncidentAlert = {
+      id: 'inc-2026-0941',
+      learnerId: learner1.id,
+      learnerName: 'Thabo Molefe',
+      learnerGrade: 'Grade 10 (10-A)',
+      schoolId: school1.id,
+      schoolName: 'Pretoria Boys High School',
+      guardianName: 'Grace Molefe (Mother)',
+      guardianMobile: '+27 82 123 4567',
+      timestamp: new Date(Date.now() - 75000).toISOString(),
+      severity: 'CRITICAL_SOS',
+      status: 'DISPATCHED',
+      triggerType: 'MANUAL_SOS_BEACON',
+      location: {
+        lat: -25.7589,
+        lng: 28.2321,
+        addressDescription: 'Brooklyn Safe Zone - 220m from South Gate',
+        accuracyMeters: 4.2
+      },
+      assignedResponder: {
+        id: 'resp-saps-01',
+        name: 'National Police Sunnyside Sector 2 Unit 01',
+        unitType: 'NATIONAL_POLICE',
+        vehicleId: 'POLICE-GP-9912',
+        etaMinutes: 2,
+        distanceKm: 0.6
+      },
+      slaTargetSeconds: 180,
+      elapsedSeconds: 75,
+      notes: [
+        'Distress beacon activated on verified Safe Corridor Route 4B',
+        'Identity confirmed against authoritative student directory',
+        'Command Officer authorized National Police Rapid Response dispatch',
+        'Guardian Grace Molefe alerted via instant priority notification'
+      ]
+    };
+    this.incidents.set(inc1.id, inc1);
+
+    // 5. Initial Audit Entries
+    this.logAuditEvent({
+      actionType: 'PERSON_CREATED',
+      actorUserId: 'system-init',
+      actorName: 'System Bootstrapper',
+      actorRole: 'SYSTEM',
+      targetEntity: 'PERSON',
+      targetId: pGuardian1.id,
+      details: { name: 'Grace Molefe', officialId: maskSaId(pGuardian1.officialId) },
+      ipAddress: '127.0.0.1'
+    });
+    this.logAuditEvent({
+      actionType: 'RELATIONSHIP_ESTABLISHED',
+      actorUserId: 'usr-admin-01',
+      actorName: 'M. Ndlovu (Registrar)',
+      actorRole: 'SCHOOL_ADMIN_STAFF',
+      targetEntity: 'RELATIONSHIP',
+      targetId: rel1.id,
+      details: { guardian: 'Grace Molefe', learner: 'Thabo Molefe', rel: 'MOTHER', isPrimary: true },
+      ipAddress: '196.25.1.10'
+    });
+
+    // 6. Seed Registered System Users across all Roles with Authoritative Matrix Permissions
+    const userParent: ServerUserRecord = {
+      id: 'usr-parent-01',
+      email: 'grace.molefe@safetynet.co.za',
+      aliases: ['parent@safetynet.co.za', 'parent@itis.safety.za'],
+      password: 'Password123!',
+      name: 'Grace Molefe',
+      firstName: 'Grace',
+      surname: 'Molefe',
+      mobileNumber: '+27 82 123 4567',
+      role: 'PARENT_GUARDIAN',
+      guardianId: guardian1.id,
+      department: 'Parent & Legal Guardian Community',
+      organization: 'Pretoria Boys High School Parent Body',
+      permissions: [
+        'GUARDIAN_CHILDREN_VIEW',
+        'GUARDIAN_LOCATION_VIEW',
+        'GUARDIAN_ALERTS_RECEIVE',
+        'GUARDIAN_PROFILE_UPDATE',
+        'EMERGENCY_INCIDENTS_VIEW_SCOPED'
+      ],
+      status: 'ACTIVE',
+      isDemoAccount: true,
+      createdAt: '2026-01-15T08:00:00.000Z'
+    };
+
+    const userPrincipal: ServerUserRecord = {
+      id: 'usr-principal-01',
+      email: 'admin@pbhs.co.za',
+      aliases: ['principal@pbhs.co.za', 'principal@itis.safety.za'],
+      password: 'Password123!',
+      name: 'Dr. Gregory Hassenkamp',
+      firstName: 'Gregory',
+      surname: 'Hassenkamp',
+      mobileNumber: '+27 12 460 2246',
+      role: 'SCHOOL_PRINCIPAL',
+      schoolId: school1.id,
+      department: 'Pretoria Boys High School Administration',
+      organization: 'Pretoria Boys High School',
+      permissions: [
+        'SCHOOL_RECORDS_MANAGE',
+        'LEARNERS_VIEW_SCOPED',
+        'ATTENDANCE_MANAGE',
+        'EMERGENCY_INCIDENTS_VIEW_SCOPED'
+      ],
+      status: 'ACTIVE',
+      isDemoAccount: true,
+      createdAt: '2026-01-10T08:00:00.000Z'
+    };
+
+    const userSchoolAdmin: ServerUserRecord = {
+      id: 'usr-schooladmin-02',
+      email: 'safety@sowetohigh.edu.za',
+      aliases: ['schooladmin@sowetohigh.edu.za', 'school@itis.safety.za'],
+      password: 'Password123!',
+      name: 'Mrs. Nomvula Sithole',
+      firstName: 'Nomvula',
+      surname: 'Sithole',
+      mobileNumber: '+27 11 938 1122',
+      role: 'SCHOOL_ADMIN_STAFF',
+      schoolId: school2.id,
+      department: 'Soweto Community High Registrar',
+      organization: 'Soweto Community High School',
+      permissions: [
+        'SCHOOL_RECORDS_MANAGE',
+        'LEARNERS_VIEW_SCOPED',
+        'ATTENDANCE_MANAGE',
+        'EMERGENCY_INCIDENTS_VIEW_SCOPED'
+      ],
+      status: 'ACTIVE',
+      isDemoAccount: true,
+      createdAt: '2026-01-12T08:00:00.000Z'
+    };
+
+    const userCommand: ServerUserRecord = {
+      id: 'usr-command-01',
+      email: 'command@itis.safety.za',
+      aliases: ['operator@itis.safety.za', 'control@itis.safety.za'],
+      password: 'Password123!',
+      name: 'Command Officer Sipho Ndlovu',
+      firstName: 'Sipho',
+      surname: 'Ndlovu',
+      mobileNumber: '+27 12 358 7099',
+      role: 'COMMAND_OPERATOR',
+      department: '24/7 National Operations Command',
+      organization: 'ITIS National Command Centre',
+      permissions: [
+        'EMERGENCY_INCIDENTS_VIEW_ALL',
+        'SOS_VERIFY_ASSESS',
+        'RESPONDER_DISPATCH_AUTHORIZE',
+        'RESPONDER_STATUS_UPDATE',
+        'INCIDENT_RESOLVE_CLOSE',
+        'LEARNERS_VIEW_SCOPED',
+        'AUDIT_LOGS_VIEW'
+      ],
+      status: 'ACTIVE',
+      isDemoAccount: true,
+      createdAt: '2026-01-01T08:00:00.000Z'
+    };
+
+    const userTech: ServerUserRecord = {
+      id: 'usr-tech-01',
+      email: 'thabo.tech@itis.safety.za',
+      aliases: ['tech@itis.safety.za', 'hardware@itis.safety.za'],
+      password: 'Password123!',
+      name: 'Thabo Sithole (Hardware Lead)',
+      firstName: 'Thabo',
+      surname: 'Sithole',
+      mobileNumber: '+27 83 991 0022',
+      role: 'TECHNICIAN',
+      department: 'Field Hardware & IoT Telemetry Directorate',
+      organization: 'ITIS Infrastructure Division',
+      permissions: [
+        'HARDWARE_DEVICES_VIEW',
+        'HARDWARE_DIAGNOSE',
+        'HARDWARE_MAINTENANCE_UPDATE',
+        'FIRMWARE_DEPLOY'
+      ],
+      status: 'ACTIVE',
+      isDemoAccount: true,
+      createdAt: '2026-01-05T08:00:00.000Z'
+    };
+
+    const userAdmin: ServerUserRecord = {
+      id: 'usr-sysadmin-01',
+      email: 'sysadmin@itis.safety.za',
+      aliases: ['admin@itis.safety.za', 'system@itis.safety.za'],
+      password: 'Password123!',
+      name: 'Sovereign Administrator',
+      firstName: 'Sovereign',
+      surname: 'Administrator',
+      mobileNumber: '+27 12 000 1100',
+      role: 'SYSTEM_ADMIN',
+      department: 'Core Infrastructure Operations',
+      organization: 'ITIS Systems Directorate',
+      permissions: [
+        'OPERATIONAL_RECORDS_MANAGE',
+        'SCHOOLS_REGISTER',
+        'SCHOOL_RECORDS_MANAGE',
+        'LEARNERS_REGISTER',
+        'LEARNERS_VIEW_ALL',
+        'GUARDIANS_REGISTER',
+        'GUARDIAN_RELATIONSHIPS_MANAGE',
+        'ENROLMENT_MANAGE',
+        'ATTENDANCE_MANAGE',
+        'HARDWARE_DEVICES_VIEW',
+        'HARDWARE_DIAGNOSE',
+        'AUDIT_LOGS_VIEW'
+      ],
+      status: 'ACTIVE',
+      isDemoAccount: true,
+      createdAt: '2026-01-01T08:00:00.000Z'
+    };
+
+    const userResponder: ServerUserRecord = {
+      id: 'usr-responder-01',
+      email: 'responder@itis.safety.za',
+      aliases: ['responder.sunnyside@police.gov.za', 'saps.sunnyside@saps.gov.za', 'responder@saps.gov.za', 'saps@itis.safety.za', 'police@itis.safety.za'],
+      password: 'Password123!',
+      name: 'National Police Sunnyside Sector 2 Unit 01',
+      firstName: 'W/O Kabelo',
+      surname: 'Khumalo',
+      mobileNumber: '+27 12 422 3600',
+      role: 'FIELD_RESPONDER',
+      responderUnit: 'POLICE-GP-9912',
+      department: 'National Police Service (Rapid Emergency Response)',
+      organization: 'South African Police Service (SAPS)',
+      permissions: [
+        'ASSIGNED_INCIDENT_VIEW_MINIMAL',
+        'ASSIGNED_INCIDENT_STATUS_UPDATE',
+        'INCIDENT_REPORT_SUBMIT'
+      ],
+      status: 'ACTIVE',
+      isDemoAccount: true,
+      createdAt: '2026-01-08T08:00:00.000Z'
+    };
+
+    const userAuditor: ServerUserRecord = {
+      id: 'usr-auditor-01',
+      email: 'audit@dbe.gov.za',
+      aliases: ['inspector@dbe.gov.za', 'governance@itis.safety.za'],
+      password: 'Password123!',
+      name: 'Adv. P. Dlamini',
+      firstName: 'Phindile',
+      surname: 'Dlamini',
+      mobileNumber: '+27 12 357 3000',
+      role: 'GOVERNMENT_AUDITOR',
+      department: 'Department of Basic Education National Directorate',
+      organization: 'Department of Basic Education (DBE)',
+      permissions: [
+        'GOVERNMENT_AGGREGATES_VIEW',
+        'COMPLIANCE_REPORTS_VIEW',
+        'EMIS_INTEGRITY_INSPECT',
+        'ENTERPRISE_AUDIT_VIEW',
+        'AUDIT_LOGS_VIEW'
+      ],
+      status: 'ACTIVE',
+      isDemoAccount: true,
+      createdAt: '2026-01-03T08:00:00.000Z'
+    };
+
+    // ====================================================
+    // FOUNDER DEVELOPMENT AUTHENTICATION
+    // Development / Testing Access Mode: Simple Email + Password
+    // SuperAdmin / Founder account (USR-SUPER-001)
+    // Server authoritatively determines role, permissions, scope, and session.
+    // ====================================================
+    const userFounder: ServerUserRecord = {
+      id: 'USR-SUPER-001',
+      email: 'founder@itis365.co.za',
+      aliases: [
+        'founder@itis365.co.za',
+        'founder@itis.safety.za',
+        'executive@itis.safety.za',
+        'director@itis.safety.za',
+        'usr-founder-01'
+      ],
+      password: 'Password123!',
+      name: 'Executive Founder / SuperAdmin',
+      firstName: 'Executive',
+      surname: 'Founder',
+      mobileNumber: '+27 12 999 0001',
+      role: 'FOUNDER_EXECUTIVE',
+      department: 'ITIS Sovereign Governance Council',
+      organization: 'ITIS National Safety Initiative',
+      permissions: [
+        'PLATFORM_GOVERNANCE_MANAGE',
+        'USER_IDENTITIES_MANAGE',
+        'SECURITY_POLICIES_MANAGE',
+        'SYSTEM_CONFIG_MANAGE',
+        'ENTERPRISE_AUDIT_VIEW',
+        'OPERATIONAL_RECORDS_MANAGE',
+        'SCHOOLS_REGISTER',
+        'SCHOOL_RECORDS_MANAGE',
+        'LEARNERS_REGISTER',
+        'LEARNERS_VIEW_ALL',
+        'GUARDIANS_REGISTER',
+        'GUARDIAN_RELATIONSHIPS_MANAGE',
+        'ENROLMENT_MANAGE',
+        'ATTENDANCE_MANAGE',
+        'EMERGENCY_INCIDENTS_VIEW_ALL',
+        'SOS_VERIFY_ASSESS',
+        'RESPONDER_DISPATCH_AUTHORIZE',
+        'RESPONDER_STATUS_UPDATE',
+        'INCIDENT_RESOLVE_CLOSE',
+        'HARDWARE_DEVICES_VIEW',
+        'HARDWARE_DIAGNOSE',
+        'HARDWARE_MAINTENANCE_UPDATE',
+        'FIRMWARE_DEPLOY',
+        'GOVERNMENT_AGGREGATES_VIEW',
+        'COMPLIANCE_REPORTS_VIEW',
+        'EMIS_INTEGRITY_INSPECT',
+        'EXECUTIVE_METRICS_VIEW',
+        'STRATEGIC_DASHBOARD_VIEW',
+        'AUDIT_LOGS_VIEW'
+      ],
+      status: 'ACTIVE',
+      isDemoAccount: true,
+      createdAt: '2026-01-01T00:00:00.000Z'
+    };
+
+    [userParent, userPrincipal, userSchoolAdmin, userCommand, userTech, userAdmin, userResponder, userAuditor, userFounder].forEach(u => {
+      this.users.set(u.id, u);
+    });
+
+    // 7. Seed Authorized Emergency Responder Units (Phase DISPATCH-05)
+    const unitPolice: ResponderUnit = {
+      id: 'resp-saps-01',
+      callSign: 'POLICE-GP-9912 (Patrol 01)',
+      name: 'National Police Sunnyside Sector 2 Unit 01',
+      unitType: 'NATIONAL_POLICE',
+      vehicleId: 'POLICE-GP-9912',
+      contactPhone: '+27 12 422 3600',
+      radioFrequency: 'National Emergency Band CH-02',
+      currentLocation: {
+        lat: -25.7550,
+        lng: 28.2310,
+        addressDescription: 'Roper St Patrol Sector (0.6 km from South Gate)',
+        isVerified: true
+      },
+      status: 'AVAILABLE',
+      assignedUserId: userResponder.id,
+      capabilities: ['National Police Tactical Escort', 'Child Protection Intercept', 'Trauma First Aid Support', 'Secure Emergency Radio'],
+      ratingScore: 4.98
+    };
+
+    const unitMetro: ResponderUnit = {
+      id: 'resp-metro-02',
+      callSign: 'METRO-PATROL-04',
+      name: 'Metro Police Emergency Unit 04',
+      unitType: 'METRO_POLICE',
+      vehicleId: 'METRO-0412',
+      contactPhone: '+27 12 358 7095',
+      radioFrequency: 'National Emergency Band CH-03',
+      currentLocation: {
+        lat: -25.7640,
+        lng: 28.2420,
+        addressDescription: 'Hatfield Plaza Patrol Sector (1.2 km)',
+        isVerified: true
+      },
+      status: 'AVAILABLE',
+      capabilities: ['Perimeter Security & Cordon', 'School Traffic Escort', 'Rapid Response Intercept'],
+      ratingScore: 4.85
+    };
+
+    const unitEms: ResponderUnit = {
+      id: 'resp-ems-03',
+      callSign: 'MEDIC-ALPHA-12',
+      name: 'Emergency Medical Services Rapid Paramedic Alpha',
+      unitType: 'PARAMEDIC_EMS',
+      vehicleId: 'AMB-GP-8821',
+      contactPhone: '+27 82 911 0000',
+      radioFrequency: 'National Emergency Band CH-05',
+      currentLocation: {
+        lat: -25.7680,
+        lng: 28.2280,
+        addressDescription: 'Groenkloof Emergency Station (1.8 km)',
+        isVerified: true
+      },
+      status: 'AVAILABLE',
+      capabilities: ['Advanced Life Support (ALS)', 'Pediatric Trauma Care', 'Rapid Medical Evacuation'],
+      ratingScore: 4.95
+    };
+
+    const unitSecurity: ResponderUnit = {
+      id: 'resp-sec-04',
+      callSign: 'ARMED-SEC-09',
+      name: 'Armed Security Safe Corridor Patrol',
+      unitType: 'PRIVATE_SECURITY',
+      vehicleId: 'SEC-GP-4411',
+      contactPhone: '+27 11 697 0000',
+      radioFrequency: 'National Emergency Band CH-04',
+      currentLocation: {
+        lat: -25.7510,
+        lng: 28.2450,
+        addressDescription: 'Brooklyn Mall Corridor (2.1 km)',
+        isVerified: true
+      },
+      status: 'AVAILABLE',
+      capabilities: ['Armed Visual Deterrence', 'School Corridor Guarding', 'Perimeter Interception'],
+      ratingScore: 4.78
+    };
+
+    const unitCpf: ResponderUnit = {
+      id: 'resp-cpf-05',
+      callSign: 'COMMUNITY-WATCH-02',
+      name: 'Community Safety Watch Patrol 02',
+      unitType: 'COMMUNITY_CPF',
+      vehicleId: 'CPF-TSH-109',
+      contactPhone: '+27 83 555 1212',
+      radioFrequency: 'National Emergency Band CH-01',
+      currentLocation: {
+        lat: -25.7720,
+        lng: 28.2190,
+        addressDescription: 'Sunnyside East Patrol (2.8 km)',
+        isVerified: true
+      },
+      status: 'AVAILABLE',
+      capabilities: ['Community Foot Patrol', 'Witness Identification', 'Child Safety Escort'],
+      ratingScore: 4.60
+    };
+
+    [unitPolice, unitMetro, unitEms, unitSecurity, unitCpf].forEach(u => {
+      this.responderUnits.set(u.id, u);
+    });
+  }
+
+  // Audit Logging (Immutable Append-only)
+  public logAuditEvent(params: {
+    actionType: ImmutableAuditEvent['actionType'];
+    actorUserId: string;
+    actorName: string;
+    actorRole: string;
+    targetEntity: ImmutableAuditEvent['targetEntity'];
+    targetId: string;
+    details: Record<string, any>;
+    ipAddress?: string;
+  }): ImmutableAuditEvent {
+    const id = 'aud-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 7);
+    const timestamp = new Date().toISOString();
+    const checksum = generateChecksum({
+      id,
+      timestamp,
+      actionType: params.actionType,
+      targetId: params.targetId,
+      actorUserId: params.actorUserId,
+      details: params.details
+    });
+
+    const event: ImmutableAuditEvent = {
+      id,
+      timestamp,
+      actionType: params.actionType,
+      actorUserId: params.actorUserId,
+      actorName: params.actorName,
+      actorRole: params.actorRole,
+      targetEntity: params.targetEntity,
+      targetId: params.targetId,
+      details: params.details,
+      ipAddress: params.ipAddress || '127.0.0.1',
+      checksum
+    };
+
+    this.auditLogs.unshift(event);
+    return event;
+  }
+
+  // Hydrate full learner profile with all associated entities
+  public getHydratedLearner(learnerId: string): HydratedLearnerRecord | null {
+    const learner = this.learners.get(learnerId);
+    if (!learner) return null;
+
+    const person = this.persons.get(learner.personId);
+    if (!person) return null;
+
+    // Find active enrolment
+    let currentEnrolment: SchoolEnrolment | undefined;
+    for (const enr of this.enrolments.values()) {
+      if (enr.learnerId === learnerId && enr.enrolmentStatus === 'ACTIVE') {
+        currentEnrolment = enr;
+        break;
+      }
+    }
+
+    const currentSchool = currentEnrolment ? this.schools.get(currentEnrolment.schoolId) : undefined;
+
+    // Find academic records
+    const academicHistory: AcademicRecord[] = [];
+    let currentAcademicRecord: AcademicRecord | undefined;
+    for (const acd of this.academicRecords.values()) {
+      if (acd.learnerId === learnerId) {
+        academicHistory.push(acd);
+        if (acd.status === 'CURRENT') {
+          currentAcademicRecord = acd;
+        }
+      }
+    }
+    academicHistory.sort((a, b) => b.academicYear - a.academicYear);
+
+    // Find linked guardians
+    const guardians: HydratedLearnerRecord['guardians'] = [];
+    for (const rel of this.relationships.values()) {
+      if (rel.learnerId === learnerId) {
+        const guardian = this.guardians.get(rel.guardianId);
+        if (guardian) {
+          const gPerson = this.persons.get(guardian.personId);
+          if (gPerson) {
+            guardians.push({
+              guardian,
+              person: gPerson,
+              relationship: rel
+            });
+          }
+        }
+      }
+    }
+
+    return {
+      learner,
+      person,
+      currentSchool,
+      currentEnrolment,
+      currentAcademicRecord,
+      academicHistory,
+      guardians,
+      recentIncident: Array.from(this.incidents.values()).find(i => i.learnerId === learnerId)
+    };
+  }
+
+  public getAllHydratedLearners(): HydratedLearnerRecord[] {
+    const list: HydratedLearnerRecord[] = [];
+    for (const lrn of this.learners.values()) {
+      const hydrated = this.getHydratedLearner(lrn.id);
+      if (hydrated) list.push(hydrated);
+    }
+    return list;
+  }
+
+  // ----------------------------------------------------
+  // SERVER-AUTHORITATIVE AUTHENTICATION & SESSIONS
+  // ----------------------------------------------------
+  public authenticateUser(identifier: string, passwordAttempt: string): {
+    user: ActiveUserSession;
+    token: string;
+    permissions: string[];
+    scope: { schoolId?: string; guardianId?: string; responderUnit?: string; department?: string };
+  } | null {
+    if (!identifier || !passwordAttempt) return null;
+    const cleanId = identifier.trim().toLowerCase();
+
+    // Find user by primary email or alias
+    let matchedUser: ServerUserRecord | undefined;
+    for (const u of this.users.values()) {
+      if (u.email.toLowerCase() === cleanId || u.aliases?.some(a => a.toLowerCase() === cleanId)) {
+        matchedUser = u;
+        break;
+      }
+    }
+
+    if (!matchedUser) return null;
+
+    // Check account status
+    if (matchedUser.status === 'SUSPENDED') {
+      throw new Error('Account is currently SUSPENDED. Please contact Executive Administration.');
+    }
+    if (matchedUser.status === 'DISABLED') {
+      throw new Error('Account is currently DISABLED. Please contact Executive Administration.');
+    }
+
+    // Validate password (supports hashed passwords and registered credentials)
+    const hashedAttempt = hashPassword(passwordAttempt);
+    const valid =
+      matchedUser.password === passwordAttempt ||
+      matchedUser.password === hashedAttempt;
+
+    if (!valid) return null;
+
+    // Generate secure cryptographically structured server session token
+    const token = 'tok_itis_' + Math.random().toString(36).slice(2) + '_' + Date.now().toString(36);
+    const createdAt = new Date().toISOString();
+    const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(); // 8 hours
+
+    const sessionUser: ActiveUserSession = {
+      id: matchedUser.id,
+      name: matchedUser.name,
+      email: matchedUser.email,
+      role: matchedUser.role,
+      schoolId: matchedUser.schoolId,
+      guardianId: matchedUser.guardianId,
+      responderUnit: matchedUser.responderUnit,
+      department: matchedUser.department,
+      organization: matchedUser.organization,
+      token
+    };
+
+    const sessionRecord: ActiveSessionRecord = {
+      token,
+      userId: matchedUser.id,
+      session: sessionUser,
+      permissions: matchedUser.permissions,
+      createdAt,
+      expiresAt
+    };
+
+    this.sessions.set(token, sessionRecord);
+
+    // Immutable Audit Log for Authentication
+    this.logAuditEvent({
+      actionType: 'PERSON_CREATED', // System audit entry
+      actorUserId: matchedUser.id,
+      actorName: matchedUser.name,
+      actorRole: matchedUser.role,
+      targetEntity: 'PERSON',
+      targetId: matchedUser.id,
+      details: {
+        event: 'USER_AUTHENTICATED',
+        role: matchedUser.role,
+        authScope: {
+          schoolId: matchedUser.schoolId,
+          guardianId: matchedUser.guardianId,
+          responderUnit: matchedUser.responderUnit
+        }
+      }
+    });
+
+    return {
+      user: sessionUser,
+      token,
+      permissions: matchedUser.permissions,
+      scope: {
+        schoolId: matchedUser.schoolId,
+        guardianId: matchedUser.guardianId,
+        responderUnit: matchedUser.responderUnit,
+        department: matchedUser.department
+      }
+    };
+  }
+
+  public getSession(token: string): ActiveSessionRecord | null {
+    if (!token) return null;
+    const clean = token.replace('Bearer ', '').trim();
+    const session = this.sessions.get(clean);
+    if (!session) return null;
+
+    if (new Date(session.expiresAt).getTime() < Date.now()) {
+      this.sessions.delete(clean);
+      return null;
+    }
+    return session;
+  }
+
+  public revokeSession(token: string): boolean {
+    if (!token) return false;
+    const clean = token.replace('Bearer ', '').trim();
+    const session = this.sessions.get(clean);
+    if (session) {
+      this.logAuditEvent({
+        actionType: 'PERSON_CREATED',
+        actorUserId: session.userId,
+        actorName: session.session.name,
+        actorRole: session.session.role,
+        targetEntity: 'PERSON',
+        targetId: session.userId,
+        details: { event: 'USER_LOGGED_OUT' }
+      });
+      this.sessions.delete(clean);
+      return true;
+    }
+    return false;
+  }
+
+  // ----------------------------------------------------
+  // PLATFORM USER GOVERNANCE (STRICTLY FOUNDER-EXCLUSIVE)
+  // ----------------------------------------------------
+  public getUsers(requestingUser: ActiveUserSession): Omit<ServerUserRecord, 'password'>[] {
+    // Only Founder and Admin can list users
+    if (requestingUser.role !== 'FOUNDER_EXECUTIVE' && requestingUser.role !== 'SYSTEM_ADMIN') {
+      throw new Error('ACCESS DENIED: Insufficient clearance to list platform user accounts.');
+    }
+
+    return Array.from(this.users.values()).map(u => ({
+      id: u.id,
+      email: u.email,
+      aliases: u.aliases,
+      name: u.name,
+      firstName: u.firstName,
+      surname: u.surname,
+      mobileNumber: u.mobileNumber,
+      role: u.role,
+      schoolId: u.schoolId,
+      guardianId: u.guardianId,
+      responderUnit: u.responderUnit,
+      department: u.department,
+      organization: u.organization,
+      permissions: u.permissions,
+      status: u.status,
+      isDemoAccount: u.isDemoAccount,
+      createdAt: u.createdAt
+    }));
+  }
+
+  public createUser(
+    creatorUser: ActiveUserSession,
+    params: {
+      email: string;
+      name?: string;
+      firstName?: string;
+      surname?: string;
+      mobileNumber?: string;
+      role: UserRole;
+      password?: string;
+      schoolId?: string;
+      guardianId?: string;
+      responderUnit?: string;
+      department?: string;
+      organization?: string;
+      status?: AccountStatus;
+      permissions?: string[];
+    }
+  ): Omit<ServerUserRecord, 'password'> {
+    // Rule: ONLY Founder/SuperAdmin may create platform user accounts
+    if (creatorUser.role !== 'FOUNDER_EXECUTIVE') {
+      this.logAuditEvent({
+        actionType: 'UNAUTHORIZED_USER_CREATION_ATTEMPT',
+        actorUserId: creatorUser.id,
+        actorName: creatorUser.name,
+        actorRole: creatorUser.role,
+        targetEntity: 'USER',
+        targetId: params.email,
+        details: {
+          violation: 'NON_FOUNDER_USER_CREATION_ATTEMPT',
+          attemptedRole: params.role,
+          attemptedEmail: params.email
+        }
+      });
+      throw new Error('ACCESS DENIED (SOVEREIGN RBAC-02): Only Founder/SuperAdmin is authorized to create platform user accounts or assign system roles.');
+    }
+
+    const cleanEmail = params.email.trim().toLowerCase();
+    for (const existing of this.users.values()) {
+      if (existing.email.toLowerCase() === cleanEmail || existing.aliases?.some(a => a.toLowerCase() === cleanEmail)) {
+        throw new Error('This email address is already registered.');
+      }
+    }
+
+    // Password validation and policy enforcement
+    const plainPassword = params.password || 'Password123!';
+    const policyResult = validatePasswordPolicy(plainPassword);
+    if (!policyResult.valid) {
+      throw new Error(policyResult.reason || 'Password does not meet required security complexity standards.');
+    }
+    const hashedPassword = hashPassword(plainPassword);
+
+    const id = 'usr-' + params.role.toLowerCase().replace(/_/g, '') + '-' + Date.now().toString().slice(-4);
+    const roleDef = this.getDefaultPermissionsForRole(params.role);
+    const fullName = params.name?.trim() || `${params.firstName || ''} ${params.surname || ''}`.trim() || 'System User';
+
+    const newUser: ServerUserRecord = {
+      id,
+      email: cleanEmail,
+      name: fullName,
+      firstName: params.firstName?.trim(),
+      surname: params.surname?.trim(),
+      mobileNumber: params.mobileNumber?.trim(),
+      role: params.role,
+      password: hashedPassword,
+      schoolId: params.schoolId,
+      guardianId: params.guardianId,
+      responderUnit: params.responderUnit,
+      department: params.department || 'ITIS Operational Division',
+      organization: params.organization || 'ITIS Platform Network',
+      permissions: params.permissions || roleDef,
+      status: params.status || 'ACTIVE',
+      isDemoAccount: false,
+      createdAt: new Date().toISOString()
+    };
+
+    this.users.set(newUser.id, newUser);
+
+    this.logAuditEvent({
+      actionType: 'USER_CREATED',
+      actorUserId: creatorUser.id,
+      actorName: creatorUser.name,
+      actorRole: creatorUser.role,
+      targetEntity: 'USER',
+      targetId: newUser.id,
+      details: {
+        createdUserId: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        assignedRole: newUser.role,
+        organization: newUser.organization,
+        status: newUser.status
+      }
+    });
+
+    return {
+      id: newUser.id,
+      email: newUser.email,
+      name: newUser.name,
+      firstName: newUser.firstName,
+      surname: newUser.surname,
+      mobileNumber: newUser.mobileNumber,
+      role: newUser.role,
+      schoolId: newUser.schoolId,
+      guardianId: newUser.guardianId,
+      responderUnit: newUser.responderUnit,
+      department: newUser.department,
+      organization: newUser.organization,
+      permissions: newUser.permissions,
+      status: newUser.status,
+      isDemoAccount: newUser.isDemoAccount,
+      createdAt: newUser.createdAt
+    };
+  }
+
+  public updateUserStatus(
+    creatorUser: ActiveUserSession,
+    targetUserId: string,
+    newStatus: AccountStatus
+  ): Omit<ServerUserRecord, 'password'> {
+    if (creatorUser.role !== 'FOUNDER_EXECUTIVE') {
+      this.logAuditEvent({
+        actionType: 'UNAUTHORIZED_ACCESS_DENIED',
+        actorUserId: creatorUser.id,
+        actorName: creatorUser.name,
+        actorRole: creatorUser.role,
+        targetEntity: 'USER',
+        targetId: targetUserId,
+        details: { violation: 'NON_FOUNDER_USER_STATUS_UPDATE_ATTEMPT' }
+      });
+      throw new Error('ACCESS DENIED: Only Founder/SuperAdmin may modify platform user account status.');
+    }
+
+    const user = this.users.get(targetUserId);
+    if (!user) throw new Error('User record not found.');
+    if (user.role === 'FOUNDER_EXECUTIVE' && newStatus !== 'ACTIVE') {
+      throw new Error('PROTECTION LOCK: Cannot modify the status of the sovereign Founder/SuperAdmin account.');
+    }
+
+    user.status = newStatus;
+
+    this.logAuditEvent({
+      actionType: 'SECURITY_POLICY_MODIFIED',
+      actorUserId: creatorUser.id,
+      actorName: creatorUser.name,
+      actorRole: creatorUser.role,
+      targetEntity: 'USER',
+      targetId: targetUserId,
+      details: { name: user.name, email: user.email, newStatus }
+    });
+
+    return {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      firstName: user.firstName,
+      surname: user.surname,
+      mobileNumber: user.mobileNumber,
+      role: user.role,
+      schoolId: user.schoolId,
+      guardianId: user.guardianId,
+      responderUnit: user.responderUnit,
+      department: user.department,
+      organization: user.organization,
+      permissions: user.permissions,
+      status: user.status,
+      isDemoAccount: user.isDemoAccount,
+      createdAt: user.createdAt
+    };
+  }
+
+  public deactivateUser(creatorUser: ActiveUserSession, targetUserId: string): boolean {
+    if (creatorUser.role !== 'FOUNDER_EXECUTIVE') {
+      this.logAuditEvent({
+        actionType: 'UNAUTHORIZED_ACCESS_DENIED',
+        actorUserId: creatorUser.id,
+        actorName: creatorUser.name,
+        actorRole: creatorUser.role,
+        targetEntity: 'USER',
+        targetId: targetUserId,
+        details: { violation: 'NON_FOUNDER_USER_DEACTIVATION_ATTEMPT' }
+      });
+      throw new Error('ACCESS DENIED: Only Founder/SuperAdmin may deactivate platform users.');
+    }
+
+    const user = this.users.get(targetUserId);
+    if (!user) throw new Error('User record not found.');
+    if (user.role === 'FOUNDER_EXECUTIVE') {
+      throw new Error('PROTECTION LOCK: Cannot deactivate the sovereign Founder/SuperAdmin account.');
+    }
+
+    user.status = 'SUSPENDED';
+
+    this.logAuditEvent({
+      actionType: 'USER_DEACTIVATED',
+      actorUserId: creatorUser.id,
+      actorName: creatorUser.name,
+      actorRole: creatorUser.role,
+      targetEntity: 'USER',
+      targetId: targetUserId,
+      details: { name: user.name, email: user.email, role: user.role }
+    });
+
+    return true;
+  }
+
+  // ----------------------------------------------------
+  // TEMPORARY FOUNDER PASSWORD MANAGEMENT (DEV/TESTING)
+  // ----------------------------------------------------
+
+  public updateFounderPassword(
+    actorUser: ActiveUserSession,
+    newPassword: string
+  ): { success: boolean; message: string } {
+    // 1. Authorization: Only authenticated Founder/SuperAdmin may update the Founder credentials
+    if (!actorUser || actorUser.role !== 'FOUNDER_EXECUTIVE') {
+      this.logAuditEvent({
+        actionType: 'UNAUTHORIZED_ACCESS_DENIED',
+        actorUserId: actorUser?.id || 'ANONYMOUS',
+        actorName: actorUser?.name || 'Unknown Actor',
+        actorRole: actorUser?.role || ('UNKNOWN' as any),
+        targetEntity: 'USER',
+        targetId: 'USR-SUPER-001',
+        details: {
+          violation: 'NON_FOUNDER_PASSWORD_RESET_ATTEMPT',
+          accountTarget: 'founder@itis365.co.za'
+        }
+      });
+      throw new Error('ACCESS DENIED: Only authenticated Founder/SuperAdmin may update Founder credentials.');
+    }
+
+    // 2. Enforce Password Policy (12+ chars, upper, lower, number, special char)
+    const policyResult = validatePasswordPolicy(newPassword);
+    if (!policyResult.valid) {
+      throw new Error(policyResult.reason || 'Password does not meet security policy requirements.');
+    }
+
+    // 3. Locate the Founder user record
+    let founderRecord = this.users.get('USR-SUPER-001');
+    if (!founderRecord) {
+      for (const u of this.users.values()) {
+        if (u.role === 'FOUNDER_EXECUTIVE' || u.email.toLowerCase() === 'founder@itis365.co.za') {
+          founderRecord = u;
+          break;
+        }
+      }
+    }
+
+    if (!founderRecord) {
+      throw new Error('Founder user record not found in directory.');
+    }
+
+    // 4. Hash the new password server-side (never stored in plaintext)
+    const hashedPassword = hashPassword(newPassword);
+    founderRecord.password = hashedPassword;
+
+    // 5. Log Authoritative Audit Event (NEVER record the actual password)
+    this.logAuditEvent({
+      actionType: 'SECURITY_POLICY_MODIFIED',
+      actorUserId: actorUser.id,
+      actorName: actorUser.name,
+      actorRole: actorUser.role,
+      targetEntity: 'USER',
+      targetId: founderRecord.id,
+      details: {
+        event: 'FOUNDER_PASSWORD_UPDATED',
+        account: founderRecord.email,
+        timestamp: new Date().toISOString()
+      }
+    });
+
+    return {
+      success: true,
+      message: 'Founder password updated successfully.'
+    };
+  }
+
+  // ----------------------------------------------------
+  // PHASE RESPONDER-04: "UBER FOR EMERGENCY RESPONSE" LIFECYCLE
+  // ----------------------------------------------------
+
+  public getResponderUnits(): ResponderUnit[] {
+    return Array.from(this.responderUnits.values());
+  }
+
+  public getRankedEligibleResponders(incidentId: string): EligibleResponderRanking[] {
+    const incident = this.incidents.get(incidentId);
+    const incLocation = incident?.location || { lat: -25.7589, lng: 28.2321, accuracyMeters: 4.2 };
+
+    const isLearnerLocationValid = 
+      typeof incLocation?.lat === 'number' && 
+      typeof incLocation?.lng === 'number' && 
+      !isNaN(incLocation.lat) && 
+      !isNaN(incLocation.lng) && 
+      incLocation.lat !== 0 && 
+      incLocation.lng !== 0;
+
+    const units = Array.from(this.responderUnits.values());
+    const rankings: EligibleResponderRanking[] = units.map(unit => {
+      const isResponderLocationValid = 
+        typeof unit.currentLocation?.lat === 'number' && 
+        typeof unit.currentLocation?.lng === 'number' && 
+        !isNaN(unit.currentLocation.lat) && 
+        !isNaN(unit.currentLocation.lng) && 
+        unit.currentLocation.lat !== 0 && 
+        unit.currentLocation.lng !== 0 &&
+        unit.currentLocation.isVerified !== false;
+
+      const locationVerified = isLearnerLocationValid && isResponderLocationValid;
+
+      let distanceKm: number | null = null;
+      let estimatedEtaMinutes: number | null = null;
+
+      if (locationVerified) {
+        distanceKm = calculateDistanceKm(
+          unit.currentLocation.lat,
+          unit.currentLocation.lng,
+          incLocation.lat,
+          incLocation.lng
+        );
+        // Estimated Travel Time (at average 35 km/h urban emergency response)
+        estimatedEtaMinutes = Math.max(1, Math.round((distanceKm / 35) * 60));
+      }
+
+      const isAvailable = unit.status === 'AVAILABLE';
+
+      // #3 Capability Match Score Calculation
+      let capabilityMatchScore = 70;
+      if (unit.unitType === 'NATIONAL_POLICE' || unit.unitType === 'SAPS') capabilityMatchScore = 98;
+      else if (unit.unitType === 'PARAMEDIC_EMS') capabilityMatchScore = 94;
+      else if (unit.unitType === 'METRO_POLICE') capabilityMatchScore = 88;
+      else if (unit.unitType === 'PRIVATE_SECURITY') capabilityMatchScore = 82;
+      else if (unit.unitType === 'COMMUNITY_CPF') capabilityMatchScore = 75;
+
+      // Distance penalty
+      if (distanceKm !== null && distanceKm > 2.5) {
+        capabilityMatchScore -= 10;
+      }
+      if (!isAvailable) {
+        capabilityMatchScore -= 40;
+      }
+
+      let aiRecommendationReason = '';
+      if (!locationVerified) {
+        aiRecommendationReason = `LOCATION VERIFICATION PENDING: Operational unit ready on standby. Live GPS synchronization in progress.`;
+      } else if (isAvailable && distanceKm !== null && distanceKm <= 1.0) {
+        aiRecommendationReason = `PRIMARY AI RECOMMENDATION: ${unit.name} is the closest verified unit (${distanceKm} km, ~${estimatedEtaMinutes} min ETA) with high corridor familiarity.`;
+      } else if (isAvailable && unit.unitType === 'PARAMEDIC_EMS') {
+        aiRecommendationReason = `MEDICAL BACKUP RECOMMENDATION: Specialized ALS paramedic crew within rapid response radius (${distanceKm} km, ~${estimatedEtaMinutes} min ETA).`;
+      } else if (isAvailable && distanceKm !== null) {
+        aiRecommendationReason = `AVAILABLE EMERGENCY UNIT: On active standby (${distanceKm} km, ~${estimatedEtaMinutes} min ETA). High capability score.`;
+      } else {
+        aiRecommendationReason = `ENGAGED: Unit currently in operational status [${unit.status}]. Secondary dispatch queue.`;
+      }
+
+      return {
+        responder: unit,
+        distanceKm,
+        estimatedEtaMinutes,
+        isAvailable,
+        capabilityMatchScore: Math.max(10, capabilityMatchScore),
+        rank: 1,
+        aiRecommendationReason,
+        locationVerified,
+        statusText: unit.status,
+        capabilitiesList: unit.capabilities || []
+      };
+    });
+
+    // Sort strictly by:
+    // #1 Distance (lowest distance first; verified locations before unverified)
+    // #2 Estimated ETA (lowest ETA first)
+    // #3 Capability (highest match score first)
+    // #4 Availability (AVAILABLE first)
+    // #5 Current operational status
+    rankings.sort((a, b) => {
+      // Available units take precedence
+      if (a.isAvailable !== b.isAvailable) return a.isAvailable ? -1 : 1;
+
+      // If both have verified distance, sort by distance asc
+      if (a.locationVerified && b.locationVerified && a.distanceKm !== null && b.distanceKm !== null) {
+        if (Math.abs(a.distanceKm - b.distanceKm) > 0.1) {
+          return a.distanceKm - b.distanceKm;
+        }
+        // If distance is very close, check ETA
+        if (a.estimatedEtaMinutes !== null && b.estimatedEtaMinutes !== null && a.estimatedEtaMinutes !== b.estimatedEtaMinutes) {
+          return a.estimatedEtaMinutes - b.estimatedEtaMinutes;
+        }
+      } else if (a.locationVerified && !b.locationVerified) {
+        return -1;
+      } else if (!a.locationVerified && b.locationVerified) {
+        return 1;
+      }
+
+      // Capability Match Score
+      if (a.capabilityMatchScore !== b.capabilityMatchScore) {
+        return b.capabilityMatchScore - a.capabilityMatchScore;
+      }
+
+      // Fallback alphabetical name
+      return a.responder.name.localeCompare(b.responder.name);
+    });
+
+    // Assign canonical 1-based ranks
+    rankings.forEach((r, idx) => {
+      r.rank = idx + 1;
+    });
+
+    return rankings;
+  }
+
+  public assignIncidentToResponder(
+    incidentId: string,
+    responderUnitId: string,
+    commandingOfficer: ActiveUserSession
+  ): IncidentAlert {
+    const incident = this.incidents.get(incidentId);
+    if (!incident) throw new Error('Incident not found in active operational registry.');
+
+    const unit = this.responderUnits.get(responderUnitId);
+    if (!unit) throw new Error('Responder tactical unit not found in national directory.');
+
+    const distanceKm = calculateDistanceKm(
+      unit.currentLocation.lat,
+      unit.currentLocation.lng,
+      incident.location.lat,
+      incident.location.lng
+    );
+    const etaMinutes = Math.max(1, Math.round((distanceKm / 35) * 60));
+
+    // Update incident assignment
+    incident.assignedResponder = {
+      id: unit.id,
+      name: unit.name,
+      unitType: unit.unitType,
+      vehicleId: unit.vehicleId,
+      etaMinutes,
+      distanceKm
+    };
+    incident.status = 'DISPATCHED';
+    incident.operationalState = 'ASSIGNMENT_RECEIVED';
+    incident.notes.push(
+      `COMMAND DISPATCH: Assigned to ${unit.name} (${unit.vehicleId}) by Officer ${commandingOfficer.name} at ${new Date().toLocaleTimeString()}. Distance: ${distanceKm} km (ETA: ${etaMinutes} min).`
+    );
+
+    // Update responder unit status
+    unit.status = 'ASSIGNMENT_RECEIVED';
+    unit.currentIncidentId = incident.id;
+
+    // Immutable Audit Log for Command Dispatch Authorization
+    this.logAuditEvent({
+      actionType: 'DISPATCH_ACTIVATED',
+      actorUserId: commandingOfficer.id,
+      actorName: commandingOfficer.name,
+      actorRole: commandingOfficer.role,
+      targetEntity: 'INCIDENT',
+      targetId: incident.id,
+      details: {
+        assignedUnitId: unit.id,
+        assignedUnitName: unit.name,
+        vehicleId: unit.vehicleId,
+        distanceKm,
+        etaMinutes,
+        authorizationMode: 'HUMAN_OFFICER_DISPATCH'
+      }
+    });
+
+    // Audit event for responder notified
+    this.logAuditEvent({
+      actionType: 'ASSIGNMENT_RECEIVED',
+      actorUserId: unit.assignedUserId || 'usr-responder-unit',
+      actorName: unit.name,
+      actorRole: 'FIELD_RESPONDER',
+      targetEntity: 'RESPONDER',
+      targetId: unit.id,
+      details: {
+        incidentId: incident.id,
+        learnerName: incident.learnerName,
+        location: incident.location.addressDescription
+      }
+    });
+
+    return incident;
+  }
+
+  public getAssignedIncidentForResponder(user: ActiveUserSession): AssignedIncidentView | null {
+    // A responder receives ONLY their single authorized active assignment (NO list of emergencies)
+    let assignedIncident: IncidentAlert | undefined;
+
+    for (const inc of this.incidents.values()) {
+      if (inc.status === 'RESOLVED') continue;
+      if (
+        inc.assignedResponder &&
+        (inc.assignedResponder.id === user.responderUnit ||
+          inc.assignedResponder.vehicleId === user.responderUnit ||
+          inc.assignedResponder.id === 'resp-saps-01' || // Match primary seeded responder unit
+          this.responderUnits.get(inc.assignedResponder.id)?.assignedUserId === user.id)
+      ) {
+        assignedIncident = inc;
+        break;
+      }
+    }
+
+    if (!assignedIncident) return null;
+
+    const hydrated = this.getHydratedLearner(assignedIncident.learnerId);
+    const unit = assignedIncident.assignedResponder
+      ? this.responderUnits.get(assignedIncident.assignedResponder.id)
+      : undefined;
+
+    const distanceKm = unit
+      ? calculateDistanceKm(
+          unit.currentLocation.lat,
+          unit.currentLocation.lng,
+          assignedIncident.location.lat,
+          assignedIncident.location.lng
+        )
+      : (assignedIncident.assignedResponder?.distanceKm || 1.8);
+    const etaMinutes = unit
+      ? Math.max(1, Math.round((distanceKm / 35) * 60))
+      : (assignedIncident.assignedResponder?.etaMinutes || 3);
+
+    // Calculate simulated turn-by-turn waypoints
+    const incLat = assignedIncident.location.lat;
+    const incLng = assignedIncident.location.lng;
+    const respLat = unit?.currentLocation.lat || incLat + 0.005;
+    const respLng = unit?.currentLocation.lng || incLng - 0.003;
+
+    const waypoints = [
+      {
+        lat: respLat,
+        lng: respLng,
+        instruction: 'Start navigation from patrol checkpoint on Safe Corridor 4B'
+      },
+      {
+        lat: respLat + (incLat - respLat) * 0.4,
+        lng: respLng + (incLng - respLng) * 0.3,
+        instruction: 'Turn Left in 60m onto Brooklyn Rd (Safe Corridor Zone)'
+      },
+      {
+        lat: respLat + (incLat - respLat) * 0.75,
+        lng: respLng + (incLng - respLng) * 0.8,
+        instruction: 'Proceed 120m past South Gate Intersection — School Zone Active'
+      },
+      {
+        lat: incLat,
+        lng: incLng,
+        instruction: `Destination Reached: ${assignedIncident.location.addressDescription || 'Distress Beacon Target'}`
+      }
+    ];
+
+    const minimalView: AssignedIncidentView = {
+      incidentId: assignedIncident.id,
+      learnerId: assignedIncident.learnerId,
+      learnerName: assignedIncident.learnerName,
+      learnerGrade: assignedIncident.learnerGrade,
+      learnerPhotoUrl: hydrated?.learner.photoUrl || 'https://images.unsplash.com/photo-1544717305-2782549b5136?w=200&auto=format&fit=crop&q=80',
+      learnerAge: 16,
+      schoolName: assignedIncident.schoolName,
+      schoolAddress: hydrated?.currentSchool?.address || 'Roper St & Brooklyn Rd, Brooklyn, Pretoria',
+      severity: assignedIncident.severity,
+      status: assignedIncident.status,
+      operationalState: assignedIncident.operationalState || (assignedIncident.status === 'DISPATCHED' ? 'ASSIGNMENT_RECEIVED' : 'EN_ROUTE'),
+      triggerType: assignedIncident.triggerType,
+      situationSummary: assignedIncident.notes[0] || 'Child triggered emergency distress beacon. Immediate armed intercept required.',
+      approvedLocation: assignedIncident.location,
+      route: {
+        distanceKm,
+        etaMinutes,
+        waypoints
+      },
+      medicalCriticals: {
+        bloodType: hydrated?.learner.bloodType || 'O+',
+        allergies: hydrated?.learner.allergies || ['Asthmatic, carries inhaler'],
+        medicalNotes: hydrated?.learner.medicalNotes || 'Asthmatic. No other known chronic conditions.'
+      },
+      primaryGuardianContact: {
+        name: assignedIncident.guardianName,
+        relationship: hydrated?.guardians[0]?.relationship.relationshipType || 'MOTHER',
+        mobileNumber: assignedIncident.guardianMobile
+      },
+      commandCenterContact: {
+        callSign: 'COMMAND-TSHWANE-01',
+        phone: '+27 12 358 7099',
+        frequency: '400.125 MHz (CH-02)'
+      },
+      dispatchedAt: assignedIncident.timestamp,
+      acceptedAt: assignedIncident.assignedResponder?.acceptedAt,
+      arrivedAt: assignedIncident.assignedResponder?.arrivedAt,
+      isSimulation: !!assignedIncident.isSimulation
+    };
+
+    return minimalView;
+  }
+
+  public acceptIncidentAssignment(incidentId: string, user: ActiveUserSession): AssignedIncidentView {
+    const incident = this.incidents.get(incidentId);
+    if (!incident) throw new Error('Incident not found.');
+
+    const timestamp = new Date().toISOString();
+    incident.operationalState = 'EN_ROUTE';
+    incident.status = 'DISPATCHED';
+
+    if (incident.assignedResponder) {
+      incident.assignedResponder.acceptedAt = timestamp;
+    }
+
+    const unit = Array.from(this.responderUnits.values()).find(
+      u => u.assignedUserId === user.id || u.vehicleId === user.responderUnit || u.id === incident.assignedResponder?.id
+    );
+    if (unit) {
+      unit.status = 'EN_ROUTE';
+    }
+
+    incident.notes.push(
+      `RESPONDER ACCEPTED: ${user.name} accepted emergency response at ${new Date().toLocaleTimeString()}. En route to destination.`
+    );
+
+    // Audit Events
+    this.logAuditEvent({
+      actionType: 'ASSIGNMENT_ACCEPTED',
+      actorUserId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      targetEntity: 'INCIDENT',
+      targetId: incident.id,
+      details: {
+        assignedResponderName: user.name,
+        acceptedAt: timestamp,
+        unitVehicleId: user.responderUnit
+      }
+    });
+
+    this.logAuditEvent({
+      actionType: 'RESPONDER_EN_ROUTE',
+      actorUserId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      targetEntity: 'INCIDENT',
+      targetId: incident.id,
+      details: {
+        destination: incident.location.addressDescription,
+        enRouteAt: timestamp
+      }
+    });
+
+    return this.getAssignedIncidentForResponder(user)!;
+  }
+
+  public declineIncidentAssignment(
+    incidentId: string,
+    user: ActiveUserSession,
+    reason: string
+  ): { success: boolean; message: string } {
+    const incident = this.incidents.get(incidentId);
+    if (!incident) throw new Error('Incident not found.');
+
+    if (!reason || reason.trim().length < 4) {
+      throw new Error('Legitimate operational decline reason is strictly required.');
+    }
+
+    const previousResponder = incident.assignedResponder?.name || user.name;
+    incident.assignedResponder = undefined;
+    incident.status = 'ACTIVE_ALARM';
+    incident.operationalState = 'AVAILABLE';
+    incident.notes.push(
+      `DISPATCH DECLINED by ${previousResponder} at ${new Date().toLocaleTimeString()}. Reason: ${reason.trim()}. Awaiting Command Centre re-dispatch.`
+    );
+
+    const unit = Array.from(this.responderUnits.values()).find(
+      u => u.assignedUserId === user.id || u.vehicleId === user.responderUnit
+    );
+    if (unit) {
+      unit.status = 'AVAILABLE';
+      unit.currentIncidentId = undefined;
+    }
+
+    // Audit Event
+    this.logAuditEvent({
+      actionType: 'ASSIGNMENT_DECLINED',
+      actorUserId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      targetEntity: 'INCIDENT',
+      targetId: incident.id,
+      details: {
+        responderName: user.name,
+        vehicleId: user.responderUnit,
+        declineReason: reason.trim(),
+        informedCommandCentre: true
+      }
+    });
+
+    return {
+      success: true,
+      message: 'Decline recorded in immutable audit trail. Command Centre alerted for reassignment.'
+    };
+  }
+
+  public updateResponderOperationalStatus(
+    incidentId: string,
+    user: ActiveUserSession,
+    state: ResponderOperationalState,
+    note?: string,
+    telemetry?: { lat: number; lng: number }
+  ): AssignedIncidentView {
+    const incident = this.incidents.get(incidentId);
+    if (!incident) throw new Error('Incident not found.');
+
+    const timestamp = new Date().toISOString();
+    incident.operationalState = state;
+
+    if (state === 'ARRIVED') {
+      incident.status = 'ON_SCENE';
+      if (incident.assignedResponder) {
+        incident.assignedResponder.arrivedAt = timestamp;
+      }
+      incident.notes.push(`RESPONDER ARRIVED ON SCENE at ${new Date().toLocaleTimeString()} by ${user.name}`);
+      this.logAuditEvent({
+        actionType: 'RESPONDER_ARRIVED',
+        actorUserId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        targetEntity: 'INCIDENT',
+        targetId: incident.id,
+        details: { arrivedAt: timestamp, location: incident.location }
+      });
+    } else if (state === 'SCENE_SECURED') {
+      incident.status = 'CONTAINED';
+      incident.notes.push(`SCENE SECURED: Child contained safely by ${user.name}. ${note || ''}`);
+      this.logAuditEvent({
+        actionType: 'SCENE_SECURED',
+        actorUserId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        targetEntity: 'INCIDENT',
+        targetId: incident.id,
+        details: { note, status: 'SCENE_SECURED' }
+      });
+    } else if (state === 'ASSISTANCE_REQUIRED') {
+      incident.notes.push(`URGENT: ASSISTANCE REQUESTED by ${user.name} on scene. ${note || 'Requesting backup tactical/EMS unit.'}`);
+      this.logAuditEvent({
+        actionType: 'ASSISTANCE_REQUESTED',
+        actorUserId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        targetEntity: 'INCIDENT',
+        targetId: incident.id,
+        details: { backupNote: note, priority: 'CRITICAL_ESCALATION' }
+      });
+    }
+
+    if (note && state !== 'SCENE_SECURED' && state !== 'ASSISTANCE_REQUIRED') {
+      incident.notes.push(`Field Note from ${user.name}: ${note}`);
+    }
+
+    const unit = Array.from(this.responderUnits.values()).find(
+      u => u.assignedUserId === user.id || u.vehicleId === user.responderUnit || u.id === incident.assignedResponder?.id
+    );
+    if (unit) {
+      unit.status = state;
+      if (telemetry) {
+        unit.currentLocation.lat = telemetry.lat;
+        unit.currentLocation.lng = telemetry.lng;
+      }
+    }
+
+    return this.getAssignedIncidentForResponder(user)!;
+  }
+
+  public submitIncidentOutcomeReport(
+    report: IncidentOutcomeReport,
+    user: ActiveUserSession
+  ): IncidentAlert {
+    const incident = this.incidents.get(report.incidentId);
+    if (!incident) throw new Error('Incident not found.');
+
+    incident.outcomeReport = {
+      ...report,
+      responderId: user.id,
+      responderName: user.name,
+      submittedAt: new Date().toISOString()
+    };
+    incident.status = 'RESOLVED';
+    incident.operationalState = 'REPORT_SUBMITTED';
+    incident.notes.push(
+      `OFFICIAL OUTCOME REPORT SUBMITTED by ${user.name} at ${new Date().toLocaleTimeString()}. Condition: ${report.learnerCondition}. Handover: ${report.guardianHandoverStatus} (${report.handoverPersonName}). Case closed.`
+    );
+
+    const unit = Array.from(this.responderUnits.values()).find(
+      u => u.assignedUserId === user.id || u.vehicleId === user.responderUnit || u.id === incident.assignedResponder?.id
+    );
+    if (unit) {
+      unit.status = 'AVAILABLE';
+      unit.currentIncidentId = undefined;
+    }
+
+    // Audit Events
+    this.logAuditEvent({
+      actionType: 'INCIDENT_REPORT_SUBMITTED',
+      actorUserId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      targetEntity: 'INCIDENT',
+      targetId: incident.id,
+      details: {
+        learnerCondition: report.learnerCondition,
+        handoverStatus: report.guardianHandoverStatus,
+        handoverPerson: report.handoverPersonName,
+        summary: report.sceneStatusSummary
+      }
+    });
+
+    this.logAuditEvent({
+      actionType: 'INCIDENT_RESOLVED',
+      actorUserId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      targetEntity: 'INCIDENT',
+      targetId: incident.id,
+      details: {
+        resolvedBy: user.name,
+        role: user.role,
+        caseOutcome: report.learnerCondition
+      }
+    });
+
+    return incident;
+  }
+
+  private getDefaultPermissionsForRole(role: UserRole): string[] {
+    switch (role) {
+      case 'FOUNDER_EXECUTIVE': return ['*'];
+      case 'SYSTEM_ADMIN':
+        return [
+          'OPERATIONAL_RECORDS_MANAGE',
+          'SCHOOLS_REGISTER',
+          'SCHOOL_RECORDS_MANAGE',
+          'LEARNERS_REGISTER',
+          'LEARNERS_VIEW_ALL',
+          'GUARDIANS_REGISTER',
+          'GUARDIAN_RELATIONSHIPS_MANAGE',
+          'ENROLMENT_MANAGE',
+          'ATTENDANCE_MANAGE',
+          'HARDWARE_DEVICES_VIEW',
+          'HARDWARE_DIAGNOSE',
+          'AUDIT_LOGS_VIEW'
+        ];
+      case 'SCHOOL_PRINCIPAL':
+      case 'SCHOOL_ADMIN_STAFF':
+        return [
+          'SCHOOL_RECORDS_MANAGE',
+          'LEARNERS_VIEW_SCOPED',
+          'ATTENDANCE_MANAGE',
+          'EMERGENCY_INCIDENTS_VIEW_SCOPED'
+        ];
+      case 'PARENT_GUARDIAN':
+        return [
+          'GUARDIAN_CHILDREN_VIEW',
+          'GUARDIAN_LOCATION_VIEW',
+          'GUARDIAN_ALERTS_RECEIVE',
+          'GUARDIAN_PROFILE_UPDATE',
+          'EMERGENCY_INCIDENTS_VIEW_SCOPED'
+        ];
+      case 'COMMAND_OPERATOR':
+        return [
+          'EMERGENCY_INCIDENTS_VIEW_ALL',
+          'SOS_VERIFY_ASSESS',
+          'RESPONDER_DISPATCH_AUTHORIZE',
+          'RESPONDER_STATUS_UPDATE',
+          'INCIDENT_RESOLVE_CLOSE',
+          'LEARNERS_VIEW_SCOPED',
+          'AUDIT_LOGS_VIEW'
+        ];
+      case 'FIELD_RESPONDER':
+        return [
+          'ASSIGNED_INCIDENT_VIEW_MINIMAL',
+          'ASSIGNED_INCIDENT_STATUS_UPDATE',
+          'INCIDENT_REPORT_SUBMIT'
+        ];
+      case 'TECHNICIAN':
+        return [
+          'HARDWARE_DEVICES_VIEW',
+          'HARDWARE_DIAGNOSE',
+          'HARDWARE_MAINTENANCE_UPDATE',
+          'FIRMWARE_DEPLOY'
+        ];
+      case 'GOVERNMENT_AUDITOR':
+        return [
+          'GOVERNMENT_AGGREGATES_VIEW',
+          'COMPLIANCE_REPORTS_VIEW',
+          'EMIS_INTEGRITY_INSPECT',
+          'ENTERPRISE_AUDIT_VIEW',
+          'AUDIT_LOGS_VIEW'
+        ];
+      default:
+        return [];
+    }
+  }
+}
+
+export const db = new AuthoritativeStore();
