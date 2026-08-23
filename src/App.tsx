@@ -432,7 +432,6 @@ export function App() {
                   <GuardianDashboard
                     learners={learners}
                     currentUser={currentUser}
-                    onOpenEnrolment={() => setIsEnrolmentOpen(true)}
                     onOpenPanic={() => setIsPanicOpen(true)}
                   />
                 )}

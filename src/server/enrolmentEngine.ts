@@ -1,7 +1,8 @@
 import {
   db,
   maskSaId,
-  maskPhone
+  maskPhone,
+  hashPassword
 } from './dbStore.js';
 import {
   Person,
@@ -679,6 +680,40 @@ export class EnrolmentEngine {
     const lPerson = db.persons.get(learnerPersonId)!;
     const gPerson = db.persons.get(guardianPersonId)!;
 
+    // Automatic Parent/Guardian user account provisioning / linking if email is present
+    if (gPerson && gPerson.email) {
+      const cleanEmail = gPerson.email.trim().toLowerCase();
+      let matchedUser = Array.from(db.users.values()).find(
+        u => u.email.toLowerCase() === cleanEmail || u.aliases?.some(a => a.toLowerCase() === cleanEmail)
+      );
+
+      if (matchedUser) {
+        matchedUser.guardianId = finalGuardianId;
+      } else {
+        const newUserId = 'usr-parent-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+        const parentUser = {
+          id: newUserId,
+          email: cleanEmail,
+          name: `${gPerson.firstName} ${gPerson.lastName}`.trim(),
+          firstName: gPerson.firstName,
+          surname: gPerson.lastName,
+          mobileNumber: gPerson.mobileNumber,
+          role: 'PARENT_GUARDIAN' as const,
+          password: hashPassword('Password123!'),
+          guardianId: finalGuardianId,
+          department: 'Parent & Legal Guardian Community',
+          organization: 'Parent & Legal Guardian Network',
+          permissions: db.getDefaultPermissionsForRole('PARENT_GUARDIAN'),
+          status: 'ACTIVE' as const,
+          isDemoAccount: false,
+          createdAt: now
+        };
+        db.users.set(parentUser.id, parentUser);
+      }
+    }
+
+    db.persistToDisk();
+
     const message = wasExistingGuardian
       ? `Authoritative link created: Added "${lPerson.firstName} ${lPerson.lastName}" to existing guardian "${gPerson.firstName} ${gPerson.lastName}" at ${school.name}.`
       : `Authoritative registration complete for "${lPerson.firstName} ${lPerson.lastName}" and guardian "${gPerson.firstName} ${gPerson.lastName}".`;
@@ -750,6 +785,8 @@ export class EnrolmentEngine {
       ipAddress: params.staffContext.ipAddress
     });
 
+    db.persistToDisk();
+
     return { success: true, newAcademicRecord: newRecord };
   }
 
@@ -803,6 +840,8 @@ export class EnrolmentEngine {
         principal: newSchool.principalName
       }
     });
+
+    db.persistToDisk();
 
     return newSchool;
   }
@@ -898,6 +937,8 @@ export class EnrolmentEngine {
       },
       ipAddress: staffContext.ipAddress
     });
+
+    db.persistToDisk();
 
     return {
       success: true,
@@ -1006,6 +1047,8 @@ export class EnrolmentEngine {
       },
       ipAddress: staffContext.ipAddress
     });
+
+    db.persistToDisk();
 
     return {
       success: true,

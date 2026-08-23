@@ -1,4 +1,6 @@
 import crypto from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   Person,
   Learner,
@@ -21,6 +23,9 @@ import {
   ResponderDeclineReason,
   AccountStatus
 } from '../types.js';
+
+const DATA_DIR = path.resolve(process.cwd(), 'data');
+const DB_FILE_PATH = path.join(DATA_DIR, 'itis_authoritative_db.json');
 
 // Helpers
 export function maskSaId(id: string): string {
@@ -134,6 +139,110 @@ class AuthoritativeStore {
 
   constructor() {
     this.seedAuthoritativeData();
+    this.loadFromDisk();
+  }
+
+  private ensureDataDirectory() {
+    try {
+      if (!fs.existsSync(DATA_DIR)) {
+        fs.mkdirSync(DATA_DIR, { recursive: true });
+      }
+    } catch (err) {
+      console.warn('[AuthoritativeStore] Failed to create data directory:', err);
+    }
+  }
+
+  public persistToDisk() {
+    try {
+      this.ensureDataDirectory();
+      const payload = {
+        version: '1.0.0',
+        savedAt: new Date().toISOString(),
+        persons: Array.from(this.persons.entries()),
+        learners: Array.from(this.learners.entries()),
+        guardians: Array.from(this.guardians.entries()),
+        relationships: Array.from(this.relationships.entries()),
+        schools: Array.from(this.schools.entries()),
+        enrolments: Array.from(this.enrolments.entries()),
+        academicRecords: Array.from(this.academicRecords.entries()),
+        auditLogs: this.auditLogs,
+        incidents: Array.from(this.incidents.entries()),
+        users: Array.from(this.users.entries()),
+        responderUnits: Array.from(this.responderUnits.entries())
+      };
+      fs.writeFileSync(DB_FILE_PATH, JSON.stringify(payload, null, 2), 'utf-8');
+    } catch (err) {
+      console.warn('[AuthoritativeStore] Failed to write database to disk:', err);
+    }
+  }
+
+  private loadFromDisk() {
+    try {
+      if (!fs.existsSync(DB_FILE_PATH)) {
+        // Initial run: persist seed data
+        this.persistToDisk();
+        return;
+      }
+      const raw = fs.readFileSync(DB_FILE_PATH, 'utf-8');
+      if (!raw || !raw.trim()) return;
+      const data = JSON.parse(raw);
+
+      if (Array.isArray(data.persons)) {
+        for (const [k, v] of data.persons) {
+          this.persons.set(k, v);
+        }
+      }
+      if (Array.isArray(data.learners)) {
+        for (const [k, v] of data.learners) {
+          this.learners.set(k, v);
+        }
+      }
+      if (Array.isArray(data.guardians)) {
+        for (const [k, v] of data.guardians) {
+          this.guardians.set(k, v);
+        }
+      }
+      if (Array.isArray(data.relationships)) {
+        for (const [k, v] of data.relationships) {
+          this.relationships.set(k, v);
+        }
+      }
+      if (Array.isArray(data.schools)) {
+        for (const [k, v] of data.schools) {
+          this.schools.set(k, v);
+        }
+      }
+      if (Array.isArray(data.enrolments)) {
+        for (const [k, v] of data.enrolments) {
+          this.enrolments.set(k, v);
+        }
+      }
+      if (Array.isArray(data.academicRecords)) {
+        for (const [k, v] of data.academicRecords) {
+          this.academicRecords.set(k, v);
+        }
+      }
+      if (Array.isArray(data.auditLogs)) {
+        this.auditLogs = data.auditLogs;
+      }
+      if (Array.isArray(data.incidents)) {
+        for (const [k, v] of data.incidents) {
+          this.incidents.set(k, v);
+        }
+      }
+      if (Array.isArray(data.responderUnits)) {
+        for (const [k, v] of data.responderUnits) {
+          this.responderUnits.set(k, v);
+        }
+      }
+      if (Array.isArray(data.users)) {
+        for (const [k, v] of data.users) {
+          this.users.set(k, v);
+        }
+      }
+    } catch (err) {
+      console.warn('[AuthoritativeStore] Failed to load database from disk:', err);
+    }
   }
 
   private seedAuthoritativeData() {
@@ -1262,9 +1371,72 @@ class AuthoritativeStore {
     }
     const hashedPassword = hashPassword(plainPassword);
 
+    const now = new Date().toISOString();
+    const fullName = params.name?.trim() || `${params.firstName || ''} ${params.surname || ''}`.trim() || 'System User';
+
+    let assignedGuardianId = params.guardianId;
+    let assignedSchoolId = params.schoolId;
+    let assignedResponderUnit = params.responderUnit;
+
+    // If PARENT_GUARDIAN, link or create Guardian & Person record
+    if (params.role === 'PARENT_GUARDIAN') {
+      if (!assignedGuardianId) {
+        // Search if Guardian already exists for this email
+        let existingGuardian: Guardian | undefined;
+        for (const g of this.guardians.values()) {
+          const p = this.persons.get(g.personId);
+          if (p && p.email?.toLowerCase() === cleanEmail) {
+            existingGuardian = g;
+            break;
+          }
+        }
+
+        if (existingGuardian) {
+          assignedGuardianId = existingGuardian.id;
+        } else {
+          // Create new Person and Guardian entity
+          const newGPersonId = 'per-g-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+          const newGPerson: Person = {
+            id: newGPersonId,
+            officialId: 'SA-REG-' + Date.now().toString().slice(-8),
+            idType: 'SA_ID',
+            firstName: params.firstName?.trim() || fullName.split(' ')[0] || 'Guardian',
+            lastName: params.surname?.trim() || fullName.split(' ').slice(1).join(' ') || 'User',
+            dateOfBirth: '1985-01-01',
+            gender: 'UNDISCLOSED',
+            mobileNumber: params.mobileNumber?.trim() || '+27 82 000 0000',
+            mobileVerified: true,
+            email: cleanEmail,
+            emailVerified: true,
+            isVerified: true,
+            verificationSource: 'MANUAL_STAFF_VERIFIED',
+            createdAt: now,
+            updatedAt: now
+          };
+          this.persons.set(newGPerson.id, newGPerson);
+
+          const newGuardianId = 'grd-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+          const newGuardian: Guardian = {
+            id: newGuardianId,
+            personId: newGPerson.id,
+            saIdNumber: newGPerson.officialId,
+            saIdMasked: maskSaId(newGPerson.officialId),
+            idVerified: true,
+            mobileNumber: newGPerson.mobileNumber || '+27 82 000 0000',
+            mobileVerified: true,
+            preferredLanguage: 'English',
+            pushNotificationsEnabled: true,
+            createdAt: now,
+            updatedAt: now
+          };
+          this.guardians.set(newGuardian.id, newGuardian);
+          assignedGuardianId = newGuardian.id;
+        }
+      }
+    }
+
     const id = 'usr-' + params.role.toLowerCase().replace(/_/g, '') + '-' + Date.now().toString().slice(-4);
     const roleDef = this.getDefaultPermissionsForRole(params.role);
-    const fullName = params.name?.trim() || `${params.firstName || ''} ${params.surname || ''}`.trim() || 'System User';
 
     const newUser: ServerUserRecord = {
       id,
@@ -1275,18 +1447,19 @@ class AuthoritativeStore {
       mobileNumber: params.mobileNumber?.trim(),
       role: params.role,
       password: hashedPassword,
-      schoolId: params.schoolId,
-      guardianId: params.guardianId,
-      responderUnit: params.responderUnit,
-      department: params.department || 'ITIS Operational Division',
-      organization: params.organization || 'ITIS Platform Network',
+      schoolId: assignedSchoolId,
+      guardianId: assignedGuardianId,
+      responderUnit: assignedResponderUnit,
+      department: params.department || (params.role === 'PARENT_GUARDIAN' ? 'Parent & Guardian Community' : 'ITIS Operational Division'),
+      organization: params.organization || (params.role === 'PARENT_GUARDIAN' ? 'Parent & Legal Guardian Community' : 'ITIS Platform Network'),
       permissions: params.permissions || roleDef,
       status: params.status || 'ACTIVE',
       isDemoAccount: false,
-      createdAt: new Date().toISOString()
+      createdAt: now
     };
 
     this.users.set(newUser.id, newUser);
+    this.persistToDisk();
 
     this.logAuditEvent({
       actionType: 'USER_CREATED',
@@ -1350,6 +1523,7 @@ class AuthoritativeStore {
     }
 
     user.status = newStatus;
+    this.persistToDisk();
 
     this.logAuditEvent({
       actionType: 'SECURITY_POLICY_MODIFIED',
@@ -1402,6 +1576,7 @@ class AuthoritativeStore {
     }
 
     user.status = 'SUSPENDED';
+    this.persistToDisk();
 
     this.logAuditEvent({
       actionType: 'USER_DEACTIVATED',
@@ -1465,6 +1640,7 @@ class AuthoritativeStore {
     // 4. Hash the new password server-side (never stored in plaintext)
     const hashedPassword = hashPassword(newPassword);
     founderRecord.password = hashedPassword;
+    this.persistToDisk();
 
     // 5. Log Authoritative Audit Event (NEVER record the actual password)
     this.logAuditEvent({
@@ -2037,10 +2213,12 @@ class AuthoritativeStore {
       }
     });
 
+    this.persistToDisk();
+
     return incident;
   }
 
-  private getDefaultPermissionsForRole(role: UserRole): string[] {
+  public getDefaultPermissionsForRole(role: UserRole): string[] {
     switch (role) {
       case 'FOUNDER_EXECUTIVE': return ['*'];
       case 'SYSTEM_ADMIN':

@@ -40,7 +40,6 @@ export type GuardianTab =
 interface Props {
   learners: HydratedLearnerRecord[];
   currentUser: ActiveUserSession;
-  onOpenEnrolment: () => void;
   onOpenPanic: () => void;
   initialTab?: GuardianTab;
 }
@@ -48,7 +47,6 @@ interface Props {
 export const GuardianDashboard: React.FC<Props> = ({
   learners = [],
   currentUser,
-  onOpenEnrolment,
   onOpenPanic,
   initialTab = 'MY_CHILDREN'
 }) => {
@@ -106,13 +104,10 @@ export const GuardianDashboard: React.FC<Props> = ({
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={onOpenEnrolment}
-              className="min-h-[44px] px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition-all shadow-md shadow-cyan-950/40 flex items-center gap-2 active:scale-95"
-            >
-              <PlusCircle className="w-4 h-4" />
-              <span>Add Another Child</span>
-            </button>
+            <div className="px-3.5 py-2 rounded-xl bg-slate-800/80 border border-slate-700/60 text-slate-300 text-xs font-semibold flex items-center gap-2">
+              <Shield className="w-4 h-4 text-cyan-400" />
+              <span>School Admin Authoritative Link</span>
+            </div>
           </div>
         </div>
       </div>
@@ -213,18 +208,12 @@ export const GuardianDashboard: React.FC<Props> = ({
           {myChildren.length === 0 ? (
             <div className="p-8 text-center rounded-2xl bg-slate-900 border border-slate-800 space-y-3">
               <Users className="w-8 h-8 text-slate-500 mx-auto" />
-              <strong className="text-white block text-sm">No registered children found</strong>
-              <p className="text-xs text-slate-400 max-w-md mx-auto">
-                WHAT HAPPENED: No active learner records are currently associated with your national ID profile.
+              <strong className="text-white block text-sm">No linked children found</strong>
+              <p className="text-xs text-slate-400 max-w-md mx-auto leading-relaxed">
+                Learners are officially enrolled and verified by school administrative personnel and linked directly to your Department of Home Affairs verified profile.
                 <br />
-                WHAT TO DO NEXT: Tap "Add Another Child" to complete the fast authoritative onboarding wizard.
+                If your child is attending an ITIS-secured institution and does not appear here, please contact the school admissions office to verify your guardian relationship record.
               </p>
-              <button
-                onClick={onOpenEnrolment}
-                className="min-h-[44px] px-4 py-2 rounded-xl bg-cyan-600 text-white text-xs font-bold"
-              >
-                Start Onboarding
-              </button>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
