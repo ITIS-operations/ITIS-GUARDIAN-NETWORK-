@@ -162,7 +162,7 @@ export const Footer: React.FC<Props> = ({
                   onClick={() => navigateToSection('safety-journey')}
                   className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
                 >
-                  Live Transit Notifications
+                  Live Journey Notifications
                 </button>
               </li>
               <li>
@@ -397,7 +397,7 @@ export const Footer: React.FC<Props> = ({
                     Custody Management
                   </button>
                   <button onClick={() => navigateToSection('safety-journey')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
-                    Live Transit Notifications
+                    Live Journey Notifications
                   </button>
                   <button onClick={() => navigateToSection('emergency-response')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
                     24/7 SOS Assistance

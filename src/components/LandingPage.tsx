@@ -152,12 +152,12 @@ export const LandingPage: React.FC<Props> = ({
   // =========================================================================
   if (currentView === 'home') {
     return (
-      <div className="text-slate-100 selection:bg-[#d4af37] selection:text-slate-950 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16 space-y-20 sm:space-y-28">
+      <div className="text-slate-100 selection:bg-[#d4af37] selection:text-slate-950 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16 space-y-16 sm:space-y-24">
         
         {/* ==================================================== */}
         {/* 1. HERO SECTION (2-Column Desktop / Stacked Mobile) */}
         {/* ==================================================== */}
-        <section className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center pt-2 sm:pt-6">
+        <section className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center pt-2 sm:pt-4">
           
           {/* LEFT COLUMN: BRAND & MISSION (7 Cols) */}
           <div className="lg:col-span-7 space-y-6 text-left">
@@ -180,29 +180,37 @@ export const LandingPage: React.FC<Props> = ({
               <span className="text-[#d4af37]">EVERY SECOND.</span>
             </h1>
 
-            {/* Short Supporting Statement */}
+            {/* Short Supporting Statement (Appears ONLY ONCE) */}
             <p className="text-base sm:text-lg text-slate-300 leading-relaxed max-w-2xl">
               A coordinated child-safety network connecting guardians, schools and authorised response partners through intelligent technology and human-led coordination.
             </p>
 
-            {/* Single Restrained Explore Action (NO LOGIN BUTTON IN HERO) */}
-            <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-4">
+            {/* Dual Actions with Clear Hierarchy: PRIMARY: LOGIN, SECONDARY: EXPLORE */}
+            <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5">
+              <button
+                onClick={onOpenLogin}
+                className="min-h-[46px] px-8 py-3 rounded-xl bg-[#d4af37] hover:bg-[#c29f2f] text-slate-950 text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 shadow-lg shadow-[#d4af37]/15 transition-all cursor-pointer active:scale-95"
+              >
+                <LogIn className="w-4 h-4 text-slate-950" />
+                <span>LOGIN</span>
+              </button>
+
               <button
                 onClick={() => openExplore('overview')}
-                className="min-h-[46px] px-7 py-3 rounded-xl bg-[#0a1224] hover:bg-[#0f1a30] border border-[#d4af37]/40 text-slate-100 hover:text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer group shadow-sm"
+                className="min-h-[46px] px-6 py-3 rounded-xl bg-[#0a1224] hover:bg-[#0f1a30] border border-[#d4af37]/40 text-slate-100 hover:text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer group shadow-sm"
               >
-                <span>EXPLORE THE GUARDIAN NETWORK</span>
+                <span>EXPLORE GUARDIAN NETWORK</span>
                 <ArrowRight className="w-4 h-4 text-[#d4af37] group-hover:translate-x-1 transition-transform" />
               </button>
             </div>
 
           </div>
 
-          {/* RIGHT COLUMN: DEDICATED HERO IMAGE PLACEHOLDER (5 Cols) */}
+          {/* RIGHT COLUMN: DEDICATED HERO IMAGE (5 Cols) */}
           <div className="lg:col-span-5 w-full">
             <div className="relative rounded-2xl border border-[#d4af37]/30 bg-[#0a1224] overflow-hidden shadow-2xl shadow-[#040812] aspect-[16/11] sm:aspect-[16/10] lg:aspect-[4/3] flex items-center justify-center group">
               
-              {/* Actual replaceable image: /public/images/itis-hero.jpg */}
+              {/* Actual image */}
               {!heroImgFailed ? (
                 <img
                   src="/images/itis-hero.jpg"
@@ -212,7 +220,7 @@ export const LandingPage: React.FC<Props> = ({
                 />
               ) : null}
 
-              {/* Graceful Fallback Placeholder Frame if image is missing or loading */}
+              {/* Graceful Fallback Frame */}
               {heroImgFailed && (
                 <div className="absolute inset-0 bg-gradient-to-br from-[#0a1224] via-[#060b18] to-[#0a1224] p-6 flex flex-col items-center justify-center text-center space-y-4">
                   <div className="w-16 h-16 rounded-2xl bg-[#060b18] border border-[#d4af37]/50 flex items-center justify-center shadow-lg shadow-[#d4af37]/10">
@@ -228,7 +236,7 @@ export const LandingPage: React.FC<Props> = ({
                   <div className="space-y-1">
                     <h3 className="text-sm font-bold text-white tracking-wide">ITIS GUARDIAN NETWORK</h3>
                     <p className="text-[11px] text-slate-400 max-w-xs font-mono">
-                      National Child Safety &amp; Transit Coordination Infrastructure
+                      National Child Safety &amp; Journey Coordination Infrastructure
                     </p>
                   </div>
                   <span className="text-[10px] text-[#d4af37] bg-[#d4af37]/10 px-2.5 py-1 rounded border border-[#d4af37]/30 font-mono">
@@ -247,7 +255,7 @@ export const LandingPage: React.FC<Props> = ({
         {/* ==================================================== */}
         {/* 2. WHY ITIS (CONCISE & 3 PRINCIPLES) */}
         {/* ==================================================== */}
-        <section id="why-itis" className="space-y-8 pt-10 border-t border-slate-800/80 max-w-5xl mx-auto">
+        <section id="why-itis" className="space-y-8 pt-8 border-t border-slate-800/80 max-w-5xl mx-auto">
           <div className="space-y-2 text-center max-w-2xl mx-auto">
             <span className="text-xs font-mono font-bold uppercase tracking-widest text-[#d4af37]">
               WHY ITIS
@@ -256,7 +264,7 @@ export const LandingPage: React.FC<Props> = ({
               When a learner needs help, every second matters.
             </h2>
             <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
-              ITIS bridges the transit communication gap between home and school gates, replacing uncertainty with verified, immediate coordination.
+              ITIS bridges the communication gap during daily school journeys between home and school gates, replacing uncertainty with verified, immediate coordination.
             </p>
           </div>
 
@@ -269,7 +277,7 @@ export const LandingPage: React.FC<Props> = ({
                 Learner at the Centre
               </h3>
               <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                Every policy, alert and operational procedure is built exclusively to protect the safety and dignity of the learner.
+                Every protocol, alert and operational procedure is built exclusively to protect the physical safety and dignity of the learner.
               </p>
             </div>
 
@@ -302,13 +310,13 @@ export const LandingPage: React.FC<Props> = ({
         {/* ==================================================== */}
         {/* 3. SOLUTIONS (CONCISE SUMMARY OF 3 PILLARS) */}
         {/* ==================================================== */}
-        <section id="solutions" className="space-y-8 pt-10 border-t border-slate-800/80 max-w-5xl mx-auto">
+        <section id="solutions" className="space-y-8 pt-8 border-t border-slate-800/80 max-w-5xl mx-auto">
           <div className="space-y-2 text-center max-w-2xl mx-auto">
             <span className="text-xs font-mono font-bold uppercase tracking-widest text-[#d4af37]">
               SOLUTIONS
             </span>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              Coordinated Safety Across the Entire Journey
+              Coordinated Safety Across Every School Journey
             </h2>
             <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
               Tailored capabilities providing seamless protection for families, institutions and emergency professionals.
@@ -322,7 +330,7 @@ export const LandingPage: React.FC<Props> = ({
               </div>
               <h3 className="text-base font-bold text-white">For Guardians</h3>
               <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                Real-time transit milestone alerts, digital custody delegation, and 24/7 human-assisted emergency support.
+                Real-time journey milestone alerts, digital custody delegation, and 24/7 human-assisted emergency support.
               </p>
               <button
                 onClick={() => openExplore('for-parents')}
@@ -370,38 +378,9 @@ export const LandingPage: React.FC<Props> = ({
         </section>
 
         {/* ==================================================== */}
-        {/* 4. EXPLORE (SINGLE ELEGANT ENTRY POINT) */}
+        {/* 4. COMPANY & PUBLIC INFORMATION */}
         {/* ==================================================== */}
-        <section id="explore" className="space-y-6 pt-10 border-t border-slate-800/80 max-w-5xl mx-auto">
-          <div className="p-8 sm:p-12 rounded-3xl bg-gradient-to-r from-[#0a1224] via-[#0e172e] to-[#0a1224] border border-[#d4af37]/30 text-center space-y-6">
-            <div className="space-y-2 max-w-2xl mx-auto">
-              <span className="text-xs font-mono font-bold uppercase tracking-widest text-[#d4af37]">
-                EXPLORE
-              </span>
-              <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight">
-                Explore the Guardian Network
-              </h2>
-              <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
-                Access detailed technical architecture, the 6-stage transit workflow, school pilot enrolment models, and POPIA §18 governance.
-              </p>
-            </div>
-
-            <div className="pt-2 flex justify-center">
-              <button
-                onClick={() => openExplore('overview')}
-                className="min-h-[46px] px-8 py-3 rounded-xl bg-[#d4af37] hover:bg-[#c29f2f] text-slate-950 text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 shadow-lg shadow-[#d4af37]/20 transition-all cursor-pointer"
-              >
-                <span>OPEN GUARDIAN NETWORK EXPLORER</span>
-                <ArrowRight className="w-4 h-4 text-slate-950" />
-              </button>
-            </div>
-          </div>
-        </section>
-
-        {/* ==================================================== */}
-        {/* 5. COMPANY (CONCISE & ACCESSIBLE) */}
-        {/* ==================================================== */}
-        <section id="company" className="space-y-6 pt-10 border-t border-slate-800/80 max-w-5xl mx-auto">
+        <section id="company" className="space-y-6 pt-8 border-t border-slate-800/80 max-w-5xl mx-auto">
           <div className="space-y-2 text-center max-w-2xl mx-auto">
             <span className="text-xs font-mono font-bold uppercase tracking-widest text-[#d4af37]">
               COMPANY
@@ -431,23 +410,6 @@ export const LandingPage: React.FC<Props> = ({
               </button>
             ))}
           </div>
-        </section>
-
-        {/* ==================================================== */}
-        {/* 6. THE SINGLE LOGIN BUTTON (UNDER COMPANY, BEFORE FOOTER) */}
-        {/* ==================================================== */}
-        <section className="pt-6 pb-2 text-center space-y-3">
-          <div>
-            <button
-              onClick={onOpenLogin}
-              className="h-10 sm:h-11 px-6 rounded-lg bg-[#d4af37] hover:bg-[#c29f2f] text-slate-950 text-xs sm:text-sm font-bold tracking-wide transition-all shadow-md active:scale-95 cursor-pointer"
-            >
-              LOGIN
-            </button>
-          </div>
-          <p className="text-[11px] text-slate-400 font-medium">
-            Authorized access for enrolled guardians, schools, and response personnel.
-          </p>
         </section>
 
       </div>
@@ -560,7 +522,7 @@ export const LandingPage: React.FC<Props> = ({
             </div>
 
             <p className="text-sm sm:text-base text-slate-200 leading-relaxed max-w-3xl">
-              ITIS (Integrated Technology Intelligence & Safety) is South Africa’s dedicated child-safety and transit coordination network. It bridges the critical communication gap between schools, verified guardians, and accredited emergency response services into an active protection ecosystem. By combining automated campus gate access, secure transit verification, and a 24/7 human-command operations centre, ITIS ensures rapid, verified coordination during critical transit moments. Engineered with privacy-first standards, ITIS maintains strict POPIA §18 minor data protection with sovereign local hosting and a 0% autonomous dispatch mandate.
+              ITIS (Integrated Technology Intelligence &amp; Safety) is South Africa’s dedicated child-safety and journey coordination network. It bridges the critical communication gap between schools, verified guardians, and accredited emergency response services into an active protection ecosystem. By combining automated campus gate access, secure journey verification, and a 24/7 human-command operations centre, ITIS ensures rapid, verified coordination during critical school journey moments. Engineered with privacy-first standards, ITIS maintains strict POPIA §18 minor data protection with sovereign local hosting and a 0% autonomous dispatch mandate.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-800/80">
@@ -593,17 +555,17 @@ export const LandingPage: React.FC<Props> = ({
             </div>
 
             <p className="text-sm sm:text-base text-slate-200 leading-relaxed max-w-3xl">
-              South African learners encounter high daily transit vulnerabilities: long commuting distances, informal scholar transport networks, delayed emergency reporting, and disconnected communications between schools and parents.
+              South African learners encounter significant daily vulnerabilities during school journeys: long travel distances, informal scholar transport arrangements, delayed emergency reporting, and disconnected communications between schools and parents.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2">
               <div className="p-5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <Clock className="w-4 h-4 text-amber-400" />
-                  <span>The Transit Communication Gap</span>
+                  <span>The Daily Journey Communication Gap</span>
                 </h3>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  When a child is delayed or in distress during transit, schools and parents often don't find out for hours. ITIS eliminates this blind spot with instantaneous corridor alerts.
+                  When a child is delayed or in distress during school travel, schools and parents often don't find out for hours. ITIS eliminates this blind spot with instantaneous corridor alerts.
                 </p>
               </div>
 
@@ -630,7 +592,7 @@ export const LandingPage: React.FC<Props> = ({
               <div className="p-5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <Lock className="w-4 h-4 text-emerald-400" />
-                  <span>Data Sovereignty & Child Privacy</span>
+                  <span>Data Sovereignty &amp; Child Privacy</span>
                 </h3>
                 <p className="text-xs text-slate-300 leading-relaxed">
                   Consumer tracking applications monetize location data. ITIS is non-commercial, fully POPIA §18 compliant, and hosted exclusively within South Africa.
@@ -660,7 +622,7 @@ export const LandingPage: React.FC<Props> = ({
                 {
                   step: '01',
                   name: 'LEARNER',
-                  desc: 'A transit corridor entry/exit is recorded or a silent distress signal is initiated via smart wearable or safe check-in point.'
+                  desc: 'A safe journey corridor check-in is recorded or a silent distress signal is initiated via smart wearable or safe check-in point.'
                 },
                 {
                   step: '02',
@@ -670,7 +632,7 @@ export const LandingPage: React.FC<Props> = ({
                 {
                   step: '03',
                   name: 'GUARDIAN',
-                  desc: 'Verified legal guardians receive real-time notification of departures, arrivals, and transit milestones.'
+                  desc: 'Verified legal guardians receive real-time notification of departures, arrivals, and safe journey milestones.'
                 },
                 {
                   step: '04',
@@ -710,7 +672,7 @@ export const LandingPage: React.FC<Props> = ({
                 Guardian Experience
               </span>
               <h2 className="text-xl sm:text-2xl font-extrabold text-white">
-                Reassuring Peace of Mind for Parents & Guardians
+                Reassuring Peace of Mind for Parents &amp; Guardians
               </h2>
             </div>
 
@@ -722,7 +684,7 @@ export const LandingPage: React.FC<Props> = ({
               <div className="p-5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1.5">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <CheckCircle2 className="w-4 h-4 text-cyan-400" />
-                  <span>Real-Time Transit Milestone Notifications</span>
+                  <span>Real-Time Safe Journey Milestone Notifications</span>
                 </h3>
                 <p className="text-xs text-slate-300 leading-relaxed">
                   Receive instant alerts when your child safely enters school gates, boards designated transport, or arrives back home.
@@ -760,7 +722,7 @@ export const LandingPage: React.FC<Props> = ({
                 School Coordination
               </span>
               <h2 className="text-xl sm:text-2xl font-extrabold text-white">
-                Streamlined Campus Safety & Capture-Once Enrolment
+                Streamlined Campus Safety &amp; Capture-Once Enrolment
               </h2>
             </div>
 
@@ -815,7 +777,7 @@ export const LandingPage: React.FC<Props> = ({
             </div>
 
             <p className="text-sm text-slate-300 leading-relaxed max-w-3xl">
-              ITIS operates a dedicated 24/7 National Operations Command centre that coordinates with verified emergency partners across South Africa to resolve transit incidents swiftly.
+              ITIS operates a dedicated 24/7 National Operations Command centre that coordinates with verified emergency partners across South Africa to resolve school journey incidents swiftly.
             </p>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 pt-2">
@@ -845,7 +807,7 @@ export const LandingPage: React.FC<Props> = ({
                   <span>Tactical GPS Precision</span>
                 </h3>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  First responders receive verified situational coordinates and emergency contact details to minimize transit and locate minors rapidly.
+                  First responders receive verified situational coordinates and emergency contact details to minimize response times and locate minors rapidly.
                 </p>
               </div>
 
@@ -867,7 +829,7 @@ export const LandingPage: React.FC<Props> = ({
           <div className="p-6 sm:p-10 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-6">
             <div className="space-y-2">
               <span className="text-xs font-mono font-bold uppercase tracking-widest text-emerald-400">
-                Governance & Privacy
+                Governance &amp; Privacy
               </span>
               <h2 className="text-xl sm:text-2xl font-extrabold text-white">
                 Built Upon Uncompromising Standards of Trust
@@ -885,7 +847,7 @@ export const LandingPage: React.FC<Props> = ({
                   <h3 className="text-sm font-bold text-white">1. Child-First Protection</h3>
                 </div>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Every technical capability is designed exclusively to protect the physical safety and dignity of the learner. Data is collected only during transit corridors and active emergencies.
+                  Every technical capability is designed exclusively to protect the physical safety and dignity of the learner. Data is collected only during designated school travel corridors and active emergencies.
                 </p>
               </div>
 

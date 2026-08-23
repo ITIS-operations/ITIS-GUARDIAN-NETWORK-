@@ -1,29 +1,21 @@
 import React, { useState } from 'react';
 import { 
   ShieldCheck, 
-  Radio, 
   UserCheck, 
   Users, 
   School, 
   Building2, 
-  Navigation, 
   Lock, 
-  PlusCircle,
   LogOut, 
   LogIn, 
   User,
   Menu,
   X,
-  ChevronRight,
-  ChevronDown,
-  Phone,
-  Newspaper,
-  Briefcase,
-  HelpCircle,
   Layers,
   HeartHandshake
 } from 'lucide-react';
 import { UserRole, ActiveUserSession } from '../types.js';
+import { PublicNavigationDrawer } from './PublicNavigationDrawer.js';
 
 export type AppTab = 
   | 'LANDING_PAGE' 
@@ -57,13 +49,10 @@ export const Header: React.FC<Props> = ({
   currentUser,
   onOpenLogin,
   onLogout,
-  onOpenEnrolment,
-  onOpenPanic,
-  activePanicCount,
-  activeLandingSection = 'overview',
+  activeLandingSection = 'home',
   onSelectLandingSection
 }) => {
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const getRoleBadge = (role: UserRole) => {
     switch (role) {
@@ -95,24 +84,17 @@ export const Header: React.FC<Props> = ({
     }
   };
 
-  const navigateToSection = (sectionId: string) => {
-    setMobileMenuOpen(false);
+  const handleNavClick = (sectionId: string) => {
     if (onSelectLandingSection) {
       onSelectLandingSection(sectionId);
     }
     if (activeTab !== 'LANDING_PAGE') {
       setActiveTab('LANDING_PAGE');
     }
-    setTimeout(() => {
-      const el = document.getElementById(sectionId);
-      if (el) {
-        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }
-    }, 100);
   };
 
   return (
-    <header className="sticky top-0 z-50 bg-[#060b18]/95 backdrop-blur-md border-b border-slate-800/80 w-full transition-all">
+    <header className="sticky top-0 z-40 bg-[#060b18]/95 backdrop-blur-md border-b border-slate-800/80 w-full transition-all">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-20 gap-2 sm:gap-4">
           
@@ -126,6 +108,7 @@ export const Header: React.FC<Props> = ({
               window.scrollTo({ top: 0, behavior: 'smooth' });
             }}
             className="flex items-center gap-2.5 sm:gap-3.5 shrink-0 cursor-pointer group select-none min-w-0"
+            title="ITIS Guardian Network — Return to Homepage"
           >
             <div className="relative shrink-0">
               <img 
@@ -151,29 +134,29 @@ export const Header: React.FC<Props> = ({
           </div>
 
           {/* ==================================================== */}
-          {/* CENTRE / RIGHT: PREMIUM NAVIGATION (DESKTOP) */}
+          {/* CENTRE: RESTRAINED PUBLIC NAVIGATION (DESKTOP) */}
           {/* ==================================================== */}
-          <nav className="hidden md:flex items-center gap-2 lg:gap-4 text-xs lg:text-sm font-bold tracking-wide text-slate-300">
+          <nav className="hidden lg:flex items-center gap-1 xl:gap-2 text-xs font-bold tracking-wider text-slate-300">
             <button
-              onClick={() => navigateToSection('why-itis')}
+              onClick={() => handleNavClick('why-itis')}
               className="px-3 py-2 rounded-lg hover:text-[#d4af37] hover:bg-[#0a1224] transition-colors cursor-pointer"
             >
               WHY ITIS
             </button>
             <button
-              onClick={() => navigateToSection('solutions')}
+              onClick={() => handleNavClick('solutions')}
               className="px-3 py-2 rounded-lg hover:text-[#d4af37] hover:bg-[#0a1224] transition-colors cursor-pointer"
             >
               SOLUTIONS
             </button>
             <button
-              onClick={() => navigateToSection('overview')}
+              onClick={() => handleNavClick('overview')}
               className="px-3 py-2 rounded-lg hover:text-[#d4af37] hover:bg-[#0a1224] transition-colors cursor-pointer"
             >
               EXPLORE
             </button>
             <button
-              onClick={() => navigateToSection('company')}
+              onClick={() => handleNavClick('company')}
               className="px-3 py-2 rounded-lg hover:text-[#d4af37] hover:bg-[#0a1224] transition-colors cursor-pointer"
             >
               COMPANY
@@ -181,12 +164,12 @@ export const Header: React.FC<Props> = ({
           </nav>
 
           {/* ==================================================== */}
-          {/* RIGHT: UTILITY & AUTHENTICATED USER STATUS (NO LOGIN BUTTON) */}
+          {/* RIGHT: SINGLE LOGIN BUTTON & TOP-RIGHT DRAWER BUTTON */}
           {/* ==================================================== */}
           <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             
             {/* Authenticated Portal Badge (Only when logged in) */}
-            {currentUser && (
+            {currentUser ? (
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <button
                   onClick={() => setActiveTab(getPrimaryPortalTab(currentUser.role))}
@@ -209,15 +192,26 @@ export const Header: React.FC<Props> = ({
                   <LogOut className="w-4 h-4" />
                 </button>
               </div>
+            ) : (
+              /* Public Visitor: Single Authoritative Login Button */
+              <button
+                onClick={onOpenLogin}
+                className="min-h-[40px] px-4 sm:px-5 py-2 rounded-xl bg-[#d4af37] hover:bg-[#c29f2f] text-slate-950 text-xs sm:text-sm font-extrabold tracking-wide transition-all shadow-md shadow-[#d4af37]/15 flex items-center gap-2 cursor-pointer active:scale-95"
+              >
+                <LogIn className="w-4 h-4 text-slate-950 shrink-0" />
+                <span>LOGIN</span>
+              </button>
             )}
 
-            {/* Mobile Hamburger Toggle Button (Min 44x44 Touch Target) */}
+            {/* Top-Right Secondary Information Drawer Trigger (All Screen Sizes) */}
             <button
-              onClick={() => setMobileMenuOpen(true)}
-              className="md:hidden min-h-[44px] min-w-[44px] p-2.5 rounded-xl bg-[#0a1224] border border-slate-800 text-slate-200 hover:text-[#d4af37] hover:bg-slate-900 transition-colors flex items-center justify-center cursor-pointer active:scale-95"
-              aria-label="Open Navigation Menu"
+              onClick={() => setDrawerOpen(true)}
+              className="min-h-[40px] min-w-[40px] px-2.5 sm:px-3 py-2 rounded-xl bg-[#0a1224] hover:bg-slate-900 border border-slate-800 hover:border-[#d4af37]/40 text-slate-200 hover:text-[#d4af37] transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+              aria-label="Open Public Information Menu"
+              title="Public Information Menu"
             >
-              <Menu className="w-5 h-5 text-[#d4af37]" />
+              <Menu className="w-4 h-4 sm:w-5 sm:h-5 text-[#d4af37]" />
+              <span className="hidden sm:inline text-xs font-bold font-mono tracking-wider">MENU</span>
             </button>
           </div>
 
@@ -225,130 +219,18 @@ export const Header: React.FC<Props> = ({
       </div>
 
       {/* ==================================================== */}
-      {/* FULL-EXPERIENCE MOBILE NAVIGATION DRAWER */}
+      {/* PUBLIC INFORMATION & NAVIGATION DRAWER */}
       {/* ==================================================== */}
-      {mobileMenuOpen && (
-        <div className="fixed inset-0 z-50 bg-[#060b18] overflow-y-auto flex flex-col animate-in fade-in duration-150">
-          
-          {/* Mobile Drawer Top Bar */}
-          <div className="sticky top-0 z-10 bg-[#060b18]/95 backdrop-blur-md border-b border-slate-800 px-4 py-3.5 flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <img 
-                src="/branding/itis-logo.png" 
-                alt="ITIS Emblem" 
-                className="w-8 h-8 rounded-lg border border-[#d4af37]/40 object-cover aspect-square"
-                onError={(e) => {
-                  (e.target as HTMLElement).style.display = 'none';
-                }}
-              />
-              <div>
-                <span className="font-extrabold text-white text-sm tracking-tight block">ITIS GUARDIAN NETWORK</span>
-                <span className="text-[10px] text-cyan-400 font-mono">Mobile Navigation Hub</span>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setMobileMenuOpen(false)}
-              className="min-h-[44px] min-w-[44px] p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 hover:text-white flex items-center justify-center cursor-pointer active:scale-95"
-              aria-label="Close Navigation Menu"
-            >
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-
-          {/* Mobile Drawer Body */}
-          <div className="flex-1 p-4 sm:p-6 space-y-6 max-w-md mx-auto w-full">
-            
-            {/* Authenticated user status if logged in */}
-            {currentUser && (
-              <div className="p-4 rounded-2xl bg-[#0a1224] border border-[#d4af37]/40 space-y-2">
-                <div className="flex items-center justify-between text-xs text-slate-400">
-                  <span>Signed in as <strong className="text-white">{currentUser.name}</strong></span>
-                  <span className={`px-2 py-0.5 rounded text-[10px] font-mono border ${getRoleBadge(currentUser.role).color}`}>
-                    {getRoleBadge(currentUser.role).label}
-                  </span>
-                </div>
-                <button
-                  onClick={() => {
-                    setMobileMenuOpen(false);
-                    setActiveTab(getPrimaryPortalTab(currentUser.role));
-                  }}
-                  className="w-full min-h-[44px] py-2 rounded-xl bg-[#d4af37]/15 hover:bg-[#d4af37]/25 border border-[#d4af37]/40 text-[#f3d368] text-xs font-bold flex items-center justify-center gap-2"
-                >
-                  <UserCheck className="w-4 h-4 text-[#d4af37]" />
-                  <span>Go to My Authorized Portal</span>
-                </button>
-              </div>
-            )}
-
-            {/* Structured Mobile Menu Items */}
-            <div className="space-y-2">
-              <div className="text-[11px] font-mono uppercase text-[#d4af37] font-bold px-2 mb-1">
-                Navigation
-              </div>
-
-              {[
-                { id: 'why-itis', title: 'Why ITIS', desc: 'Child-first protection & response coordination', icon: Building2 },
-                { id: 'solutions', title: 'Solutions', desc: 'Guardians, schools & accredited responders', icon: Layers },
-                { id: 'overview', title: 'Explore', desc: 'Comprehensive Guardian Network documentation', icon: ShieldCheck },
-                { id: 'company', title: 'Company', desc: 'About, leadership, careers, news & contact', icon: Users },
-              ].map((item) => {
-                const ItemIcon = item.icon;
-                const isActive = activeLandingSection === item.id;
-
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => navigateToSection(item.id)}
-                    className={`w-full min-h-[52px] p-3.5 rounded-xl text-left flex items-center justify-between gap-3 border transition-colors cursor-pointer active:scale-98 ${
-                      isActive 
-                        ? 'bg-[#0a1224] border-[#d4af37]/60 text-white' 
-                        : 'bg-[#0a1224]/70 border-slate-800 text-slate-300 hover:bg-[#0a1224] hover:text-white'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-8 h-8 rounded-lg bg-[#060b18] flex items-center justify-center shrink-0 border border-[#d4af37]/30 text-[#d4af37]">
-                        <ItemIcon className="w-4 h-4" />
-                      </div>
-                      <div className="min-w-0">
-                        <div className="text-sm font-bold text-white tracking-wide">
-                          {item.title}
-                        </div>
-                        <div className="text-[11px] text-slate-400 truncate">
-                          {item.desc}
-                        </div>
-                      </div>
-                    </div>
-
-                    <ChevronRight className="w-4 h-4 text-slate-500 shrink-0" />
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Quick Actions at Bottom of Menu */}
-            <div className="pt-2 border-t border-slate-800 space-y-3">
-              <div className="flex items-center justify-between text-xs text-slate-400 px-1">
-                <span>24/7 Operations Hotline</span>
-                <span className="text-emerald-400 font-mono font-bold">+27 (0) 12 004 8890</span>
-              </div>
-
-              <button
-                onClick={() => {
-                  setMobileMenuOpen(false);
-                  onOpenPanic();
-                }}
-                className="w-full min-h-[44px] py-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs font-bold flex items-center justify-center gap-2 active:scale-95"
-              >
-                <Radio className="w-4 h-4 text-rose-400" />
-                <span>Test Emergency SOS Response Simulation</span>
-              </button>
-            </div>
-
-          </div>
-
-        </div>
-      )}
+      <PublicNavigationDrawer
+        isOpen={drawerOpen}
+        onClose={() => setDrawerOpen(false)}
+        onOpenLogin={onOpenLogin}
+        onSelectCategory={(catId) => {
+          if (onSelectLandingSection) onSelectLandingSection(catId);
+          if (activeTab !== 'LANDING_PAGE') setActiveTab('LANDING_PAGE');
+        }}
+        currentUser={currentUser}
+      />
     </header>
   );
 };

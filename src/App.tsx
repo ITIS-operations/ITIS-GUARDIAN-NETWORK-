@@ -57,7 +57,7 @@ const TAB_TO_ROUTE_MAP: Record<AppTab, string> = {
 export function App() {
   // Start on the approved public Landing Page by default for all visitors
   const [activeTab, setActiveTab] = useState<AppTab>('LANDING_PAGE');
-  const [activeLandingSection, setActiveLandingSection] = useState<string>('overview');
+  const [activeLandingSection, setActiveLandingSection] = useState<string>('home');
   
   // Authoritative Session State
   const [currentUser, setCurrentUser] = useState<ActiveUserSession | null>(null);
