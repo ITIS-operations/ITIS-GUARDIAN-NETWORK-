@@ -171,7 +171,7 @@ export const TechnicianPortal: React.FC<Props> = ({
               </span>
             </div>
             <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-              Live telemetry monitoring for wearable beacons, school RFID gates, and tactical vehicle beacons.
+              Diagnostics and device monitoring for optional school check-in gateways, support beacons, and vehicle units.
             </p>
           </div>
         </div>

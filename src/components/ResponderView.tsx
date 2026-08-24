@@ -84,7 +84,7 @@ export const ResponderView: React.FC<Props> = ({
     handoverPersonName: '',
     handoverPersonContact: '',
     caseReferenceNumber: 'OB-2026-SUNNYSIDE-4491',
-    sceneStatusSummary: 'Child intercepted safely on Safe Corridor 4B. Visual identity verified against biometric dossier. Handed over to verified legal guardian.'
+    sceneStatusSummary: 'Learner located safely on school journey route. Identity verified against registered safety profile. Handed over to verified legal guardian.'
   });
 
   // Radio VoIP Call Simulation

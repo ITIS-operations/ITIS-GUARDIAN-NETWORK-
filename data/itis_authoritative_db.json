@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "savedAt": "2026-08-24T07:59:04.820Z",
+  "savedAt": "2026-08-24T17:02:08.670Z",
   "persons": [
     [
       "per-g-001",
@@ -417,6 +417,23 @@
     ]
   ],
   "auditLogs": [
+    {
+      "id": "aud-mt7hhg65-3iqdr",
+      "timestamp": "2026-08-24T17:02:08.669Z",
+      "actionType": "PERSON_CREATED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Executive Founder / SuperAdmin",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "PERSON",
+      "targetId": "USR-SUPER-001",
+      "details": {
+        "event": "USER_AUTHENTICATED",
+        "role": "FOUNDER_EXECUTIVE",
+        "authScope": {}
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_0495c3a9_mt7hhg65"
+    },
     {
       "id": "aud-mt6y32b8-4spbh",
       "timestamp": "2026-08-24T07:59:04.820Z",
@@ -867,7 +884,8 @@
         ],
         "status": "ACTIVE",
         "isDemoAccount": true,
-        "createdAt": "2026-01-15T08:00:00.000Z"
+        "createdAt": "2026-01-15T08:00:00.000Z",
+        "normalizedEmail": "grace.molefe@safetynet.co.za"
       }
     ],
     [
@@ -896,7 +914,8 @@
         ],
         "status": "ACTIVE",
         "isDemoAccount": true,
-        "createdAt": "2026-01-10T08:00:00.000Z"
+        "createdAt": "2026-01-10T08:00:00.000Z",
+        "normalizedEmail": "admin@pbhs.co.za"
       }
     ],
     [
@@ -925,7 +944,8 @@
         ],
         "status": "ACTIVE",
         "isDemoAccount": true,
-        "createdAt": "2026-01-12T08:00:00.000Z"
+        "createdAt": "2026-01-12T08:00:00.000Z",
+        "normalizedEmail": "safety@sowetohigh.edu.za"
       }
     ],
     [
@@ -956,7 +976,8 @@
         ],
         "status": "ACTIVE",
         "isDemoAccount": true,
-        "createdAt": "2026-01-01T08:00:00.000Z"
+        "createdAt": "2026-01-01T08:00:00.000Z",
+        "normalizedEmail": "command@itis.safety.za"
       }
     ],
     [
@@ -984,7 +1005,8 @@
         ],
         "status": "ACTIVE",
         "isDemoAccount": true,
-        "createdAt": "2026-01-05T08:00:00.000Z"
+        "createdAt": "2026-01-05T08:00:00.000Z",
+        "normalizedEmail": "thabo.tech@itis.safety.za"
       }
     ],
     [
@@ -1020,7 +1042,8 @@
         ],
         "status": "ACTIVE",
         "isDemoAccount": true,
-        "createdAt": "2026-01-01T08:00:00.000Z"
+        "createdAt": "2026-01-01T08:00:00.000Z",
+        "normalizedEmail": "sysadmin@itis.safety.za"
       }
     ],
     [
@@ -1051,7 +1074,8 @@
         ],
         "status": "ACTIVE",
         "isDemoAccount": true,
-        "createdAt": "2026-01-08T08:00:00.000Z"
+        "createdAt": "2026-01-08T08:00:00.000Z",
+        "normalizedEmail": "responder@itis.safety.za"
       }
     ],
     [
@@ -1080,7 +1104,8 @@
         ],
         "status": "ACTIVE",
         "isDemoAccount": true,
-        "createdAt": "2026-01-03T08:00:00.000Z"
+        "createdAt": "2026-01-03T08:00:00.000Z",
+        "normalizedEmail": "audit@dbe.gov.za"
       }
     ],
     [
@@ -1095,7 +1120,7 @@
           "director@itis.safety.za",
           "usr-founder-01"
         ],
-        "password": "cad8a08b342ff4691572e570134b4ca69de6038d519bf3754bf41bb7cabaa288",
+        "password": "6787a55cfdc8d038bfd61cd17a980331fd6e79026031b568a2fd11faf6ee1f2e",
         "name": "Executive Founder / SuperAdmin",
         "firstName": "Executive",
         "surname": "Founder",
@@ -1136,7 +1161,12 @@
         ],
         "status": "ACTIVE",
         "isDemoAccount": true,
-        "createdAt": "2026-01-01T00:00:00.000Z"
+        "createdAt": "2026-01-01T00:00:00.000Z",
+        "normalizedEmail": "founder@itis365.co.za",
+        "passwordSalt": "itis_salt_0193fc4c2bb1ab8911d1b79a90881235",
+        "passwordHash": "6787a55cfdc8d038bfd61cd17a980331fd6e79026031b568a2fd11faf6ee1f2e",
+        "failedLoginAttempts": 0,
+        "updatedAt": "2026-08-24T17:02:08.661Z"
       }
     ]
   ],

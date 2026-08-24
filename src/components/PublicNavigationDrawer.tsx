@@ -119,7 +119,7 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
         {
           id: 'for-schools',
           title: 'For Schools',
-          description: 'Where deployed, gate scanners and geofenced zones streamline morning entry, afternoon departure, and verified attendance records.',
+          description: 'Where deployed, school check-ins and safety zones streamline morning arrival, afternoon departure, and attendance coordination.',
           targetCategory: 'for-schools'
         },
         {

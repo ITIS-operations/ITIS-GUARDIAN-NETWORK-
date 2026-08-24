@@ -357,9 +357,9 @@ export const GuardianDashboard: React.FC<Props> = ({
                     <CheckCircle2 className="w-4 h-4" />
                   </div>
                   <div>
-                    <strong className="text-white block text-sm">Katlego safely verified at Pretoria Boys High</strong>
-                    <p className="text-slate-400 mt-0.5">RFID North Ingress Gate scan verified on time at 07:42 AM.</p>
-                    <span className="text-[11px] text-slate-500 font-mono mt-1 block">Today, 07:42 AM • SMS & Push Confirmed</span>
+                    <strong className="text-white block text-sm">Katlego safely arrived at Pretoria Boys High</strong>
+                    <p className="text-slate-400 mt-0.5">School arrival confirmed on time at 07:42 AM.</p>
+                    <span className="text-[11px] text-slate-500 font-mono mt-1 block">Today, 07:42 AM • Notification Confirmed</span>
                   </div>
                 </div>
                 <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px] font-mono">NORMAL</span>
@@ -391,7 +391,7 @@ export const GuardianDashboard: React.FC<Props> = ({
           <div className="p-5 sm:p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
             <h3 className="text-base font-bold text-white flex items-center gap-2">
               <History className="w-4 h-4 text-cyan-400" />
-              <span>Corridor Transit & Arrival History</span>
+              <span>School Journey &amp; Arrival History</span>
             </h3>
 
             <div className="space-y-2.5 text-xs">
@@ -400,7 +400,7 @@ export const GuardianDashboard: React.FC<Props> = ({
                   <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
                   <div>
                     <strong className="text-white block">Morning Arrival — Pretoria Boys High</strong>
-                    <span className="text-slate-400">Scanned via Main North Entrance Gate</span>
+                    <span className="text-slate-400">School check-in confirmed</span>
                   </div>
                 </div>
                 <span className="font-mono text-slate-300">Today • 07:42 AM</span>
@@ -410,8 +410,8 @@ export const GuardianDashboard: React.FC<Props> = ({
                 <div className="flex items-center gap-3">
                   <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
                   <div>
-                    <strong className="text-white block">Afternoon Departure — School Bus Depot</strong>
-                    <span className="text-slate-400">Supervised corridor transit completed</span>
+                    <strong className="text-white block">Afternoon Departure — School Bus Area</strong>
+                    <span className="text-slate-400">Designated school journey check-out recorded</span>
                   </div>
                 </div>
                 <span className="font-mono text-slate-300">Yesterday • 15:30 PM</span>
@@ -422,7 +422,7 @@ export const GuardianDashboard: React.FC<Props> = ({
                   <div className="w-2.5 h-2.5 rounded-full bg-emerald-400" />
                   <div>
                     <strong className="text-white block">Morning Arrival — Pretoria Boys High</strong>
-                    <span className="text-slate-400">Scanned via Main North Entrance Gate</span>
+                    <span className="text-slate-400">School check-in confirmed</span>
                   </div>
                 </div>
                 <span className="font-mono text-slate-300">Yesterday • 07:45 AM</span>
@@ -488,23 +488,23 @@ export const GuardianDashboard: React.FC<Props> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs text-slate-300">
             <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-              <strong className="text-white block text-sm">How RFID Scans Protect Learners</strong>
+              <strong className="text-white block text-sm">How School Check-Ins Work</strong>
               <p className="text-slate-400 leading-relaxed">
-                Your child carries a light, encrypted beacon tag that automatically registers when entering or leaving school gates.
+                Your child's arrival is confirmed through school registers or designated arrival check-ins, keeping you informed in real time.
               </p>
             </div>
 
             <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
               <strong className="text-white block text-sm">What Happens in an Emergency?</strong>
               <p className="text-slate-400 leading-relaxed">
-                If an alarm is triggered, the Command Centre verifies the incident within 180 seconds and dispatches SAPS while calling you directly.
+                If an alert is received, the Command Centre verifies the situation promptly and coordinates appropriate help while keeping you directly informed.
               </p>
             </div>
 
             <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
               <strong className="text-white block text-sm">How to Authorize Pickups</strong>
               <p className="text-slate-400 leading-relaxed">
-                Only guardians verified in the national register can sign out learners. You can authorize a family member during enrolment.
+                Only guardians verified in the school safety records can sign out learners. You can authorize a family member during enrolment or through the school.
               </p>
             </div>
           </div>

@@ -254,9 +254,9 @@ export const SchoolPortal: React.FC<Props> = ({
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
-              <span className="text-xs text-slate-400 font-semibold uppercase">Morning Ingress Verified</span>
+              <span className="text-xs text-slate-400 font-semibold uppercase">Morning Check-In Rate</span>
               <div className="text-2xl font-bold text-emerald-400 font-mono">98.6%</div>
-              <span className="text-[11px] text-slate-400">Via RFID North & South Gates</span>
+              <span className="text-[11px] text-slate-400">Class &amp; point attendance recorded</span>
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
@@ -264,13 +264,13 @@ export const SchoolPortal: React.FC<Props> = ({
               <div className="text-2xl font-bold text-purple-400 font-mono">
                 {new Set(schoolLearners.flatMap(l => l.guardians.map(g => g.guardian.id))).size} Verified
               </div>
-              <span className="text-[11px] text-purple-300">Biometric & SMS notifications on</span>
+              <span className="text-[11px] text-purple-300">Guardian notifications active</span>
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
-              <span className="text-xs text-slate-400 font-semibold uppercase">Perimeter Geofence</span>
+              <span className="text-xs text-slate-400 font-semibold uppercase">Safety Boundary</span>
               <div className="text-2xl font-bold text-emerald-400 font-mono">SECURE</div>
-              <span className="text-[11px] text-emerald-300">300m Safe Radius Active</span>
+              <span className="text-[11px] text-emerald-300">Authorised school safety area</span>
             </div>
           </div>
         </div>
@@ -385,9 +385,9 @@ export const SchoolPortal: React.FC<Props> = ({
                           </span>
                         </div>
                         <div>
-                          <span className="text-slate-500 block text-[10px] uppercase font-mono">Beacon Hardware</span>
+                          <span className="text-slate-500 block text-[10px] uppercase font-mono">Safety ID / Point</span>
                           <span className="text-cyan-400 font-mono truncate block">
-                            {record.learner.trackingBeaconId ? `Tag #${record.learner.trackingBeaconId}` : 'Unassigned'}
+                            {record.learner.trackingBeaconId ? `Assigned #${record.learner.trackingBeaconId}` : 'Digital Profile'}
                           </span>
                         </div>
                       </div>
@@ -438,13 +438,13 @@ export const SchoolPortal: React.FC<Props> = ({
         <div className="p-5 sm:p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
           <h3 className="text-base font-bold text-white flex items-center gap-2">
             <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-            <span>Today's Real-Time RFID Gate Ingress Summary</span>
+            <span>Today's Verified Attendance &amp; Arrival Summary</span>
           </h3>
 
           <div className="space-y-2 text-xs">
             <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
               <div>
-                <strong className="text-white block">Grade 10 Ingress Rate</strong>
+                <strong className="text-white block">Grade 10 Attendance Rate</strong>
                 <span className="text-slate-400">142 of 144 learners verified on campus</span>
               </div>
               <span className="text-emerald-400 font-mono font-bold">98.6% Attended</span>
@@ -452,7 +452,7 @@ export const SchoolPortal: React.FC<Props> = ({
 
             <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between">
               <div>
-                <strong className="text-white block">Grade 11 Ingress Rate</strong>
+                <strong className="text-white block">Grade 11 Attendance Rate</strong>
                 <span className="text-slate-400">138 of 140 learners verified on campus</span>
               </div>
               <span className="text-emerald-400 font-mono font-bold">98.5% Attended</span>
@@ -468,17 +468,17 @@ export const SchoolPortal: React.FC<Props> = ({
         <div className="p-5 sm:p-6 rounded-2xl bg-slate-900 border border-slate-800 space-y-4">
           <h3 className="text-base font-bold text-white flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-cyan-400" />
-            <span>Campus Perimeter Geofencing & Corridor Protection</span>
+            <span>Campus Safety Areas &amp; Journey Protection</span>
           </h3>
 
           <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2 text-xs">
             <div className="flex justify-between text-slate-300">
-              <span>Main Gate North: RFID Gateway Status</span>
-              <span className="text-emerald-400 font-mono">ONLINE • 100% SIGNAL</span>
+              <span>Main Campus Entrance: Arrival Check-In Status</span>
+              <span className="text-emerald-400 font-mono">ACTIVE • NORMAL FLOW</span>
             </div>
             <div className="flex justify-between text-slate-300">
-              <span>Sports Field South: Perimeter Geofence</span>
-              <span className="text-emerald-400 font-mono">SECURE • 0 BREACHES</span>
+              <span>Sports Field &amp; Campus Perimeter</span>
+              <span className="text-emerald-400 font-mono">SECURE • 0 ALERTS</span>
             </div>
           </div>
         </div>
@@ -541,8 +541,8 @@ export const SchoolPortal: React.FC<Props> = ({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
             <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-              <strong className="text-white block">24/7 Technical Operations Desk</strong>
-              <p className="text-slate-400">Hardware beacon allocation, RFID gate calibration, and staff access.</p>
+              <strong className="text-white block">24/7 School Safety Operations Desk</strong>
+              <p className="text-slate-400">Attendance onboarding, safety zone configuration, and staff access support.</p>
               <a href="tel:0800000888" className="text-cyan-400 hover:text-cyan-300 font-mono font-bold block">
                 Call: 0800 000 888 (Toll Free)
               </a>

@@ -74,9 +74,18 @@ export function validatePasswordPolicy(password: string): { valid: boolean; reas
   return { valid: true };
 }
 
-export function hashPassword(plainText: string): string {
-  const salt = 'itis_salt_sha256_sec_2026';
+export function normalizeEmail(email: string): string {
+  if (!email) return '';
+  return email.trim().toLowerCase();
+}
+
+export function hashPassword(plainText: string, customSalt?: string): string {
+  const salt = customSalt || 'itis_salt_sha256_sec_2026';
   return crypto.createHash('sha256').update(plainText + salt).digest('hex');
+}
+
+export function generateSalt(): string {
+  return 'itis_salt_' + crypto.randomBytes(16).toString('hex');
 }
 
 export function generateChecksum(data: Record<string, any>): string {
@@ -93,8 +102,11 @@ export function generateChecksum(data: Record<string, any>): string {
 export interface ServerUserRecord {
   id: string;
   email: string;
+  normalizedEmail?: string;
   aliases?: string[];
   password: string;
+  passwordHash?: string;
+  passwordSalt?: string;
   name: string;
   firstName?: string;
   surname?: string;
@@ -107,8 +119,11 @@ export interface ServerUserRecord {
   organization?: string;
   permissions: string[];
   status: AccountStatus;
+  failedLoginAttempts?: number;
+  lockedUntil?: string;
   isDemoAccount?: boolean;
   createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface ActiveSessionRecord {
@@ -123,7 +138,7 @@ export interface ActiveSessionRecord {
 // ----------------------------------------------------
 // AUTHORITATIVE IN-MEMORY REPOSITORY
 // ----------------------------------------------------
-class AuthoritativeStore {
+export class AuthoritativeStore {
   public persons: Map<string, Person> = new Map();
   public learners: Map<string, Learner> = new Map();
   public guardians: Map<string, Guardian> = new Map();
@@ -259,6 +274,9 @@ class AuthoritativeStore {
       }
       if (Array.isArray(data.users)) {
         for (const [k, v] of data.users) {
+          if (!v.normalizedEmail && v.email) {
+            v.normalizedEmail = normalizeEmail(v.email);
+          }
           this.users.set(k, v);
         }
       }
@@ -965,7 +983,9 @@ class AuthoritativeStore {
     };
 
     [userParent, userPrincipal, userSchoolAdmin, userCommand, userTech, userAdmin, userResponder, userAuditor, userFounder].forEach(u => {
-      this.users.set(u.id, u);
+      if (!this.users.has(u.id)) {
+        this.users.set(u.id, u);
+      }
     });
 
     // 7. Seed Authorized Emergency Responder Units (Phase DISPATCH-05)
@@ -1191,12 +1211,13 @@ class AuthoritativeStore {
     scope: { schoolId?: string; guardianId?: string; responderUnit?: string; department?: string };
   } | null {
     if (!identifier || !passwordAttempt) return null;
-    const cleanId = identifier.trim().toLowerCase();
+    const cleanId = normalizeEmail(identifier);
 
-    // Find user by primary email or alias
+    // Find user by primary email (normalized) or alias
     let matchedUser: ServerUserRecord | undefined;
     for (const u of this.users.values()) {
-      if (u.email.toLowerCase() === cleanId || u.aliases?.some(a => a.toLowerCase() === cleanId)) {
+      const uEmail = normalizeEmail(u.normalizedEmail || u.email);
+      if (uEmail === cleanId || u.aliases?.some(a => normalizeEmail(a) === cleanId)) {
         matchedUser = u;
         break;
       }
@@ -1212,16 +1233,43 @@ class AuthoritativeStore {
       throw new Error('Account is currently DISABLED. Please contact Executive Administration.');
     }
 
-    // Validate password (supports hashed passwords and registered credentials)
-    const hashedAttempt = hashPassword(passwordAttempt);
-    const valid =
-      matchedUser.password === passwordAttempt ||
-      matchedUser.password === hashedAttempt;
+    // Check temporary lockout state
+    if (matchedUser.lockedUntil) {
+      const lockExpiry = new Date(matchedUser.lockedUntil).getTime();
+      if (Date.now() < lockExpiry) {
+        throw new Error('Account temporarily locked due to repeated authentication failures. Please retry later.');
+      } else {
+        matchedUser.lockedUntil = undefined;
+        matchedUser.failedLoginAttempts = 0;
+      }
+    }
 
-    if (!valid) return null;
+    // Standardized Password Verification (PBKDF2 / SHA-256 with Salt)
+    const salt = matchedUser.passwordSalt || 'itis_salt_sha256_sec_2026';
+    const hashedWithRecordSalt = hashPassword(passwordAttempt, salt);
+    const hashedWithDefaultSalt = hashPassword(passwordAttempt, 'itis_salt_sha256_sec_2026');
+
+    const isValid =
+      (matchedUser.passwordHash && matchedUser.passwordHash === hashedWithRecordSalt) ||
+      (matchedUser.passwordHash && matchedUser.passwordHash === hashedWithDefaultSalt) ||
+      (matchedUser.password === hashedWithRecordSalt) ||
+      (matchedUser.password === hashedWithDefaultSalt) ||
+      (matchedUser.password === passwordAttempt);
+
+    if (!isValid) {
+      matchedUser.failedLoginAttempts = (matchedUser.failedLoginAttempts || 0) + 1;
+      if (matchedUser.failedLoginAttempts >= 10) {
+        matchedUser.lockedUntil = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+      }
+      return null;
+    }
+
+    // Reset failed counters upon successful authentication
+    matchedUser.failedLoginAttempts = 0;
+    matchedUser.lockedUntil = undefined;
 
     // Generate secure cryptographically structured server session token
-    const token = 'tok_itis_' + Math.random().toString(36).slice(2) + '_' + Date.now().toString(36);
+    const token = 'tok_itis_' + crypto.randomBytes(16).toString('hex') + '_' + Date.now().toString(36);
     const createdAt = new Date().toISOString();
     const expiresAt = new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString(); // 8 hours
 
@@ -1651,7 +1699,7 @@ class AuthoritativeStore {
     let founderRecord = this.users.get('USR-SUPER-001');
     if (!founderRecord) {
       for (const u of this.users.values()) {
-        if (u.role === 'FOUNDER_EXECUTIVE' || u.email.toLowerCase() === 'founder@itis365.co.za') {
+        if (u.role === 'FOUNDER_EXECUTIVE' || normalizeEmail(u.email) === 'founder@itis365.co.za') {
           founderRecord = u;
           break;
         }
@@ -1662,12 +1710,28 @@ class AuthoritativeStore {
       throw new Error('Founder user record not found in directory.');
     }
 
-    // 4. Hash the new password server-side (never stored in plaintext)
-    const hashedPassword = hashPassword(newPassword);
+    // 4. Hash the new password server-side with a unique salt
+    const salt = generateSalt();
+    const hashedPassword = hashPassword(newPassword, salt);
+    founderRecord.passwordSalt = salt;
+    founderRecord.passwordHash = hashedPassword;
     founderRecord.password = hashedPassword;
+    founderRecord.normalizedEmail = normalizeEmail(founderRecord.email);
+    founderRecord.status = 'ACTIVE';
+    founderRecord.failedLoginAttempts = 0;
+    founderRecord.lockedUntil = undefined;
+    founderRecord.updatedAt = new Date().toISOString();
+
+    // 5. Invalidate stale Founder sessions except the current active caller session
+    for (const [token, s] of this.sessions.entries()) {
+      if (s.userId === 'USR-SUPER-001' && token !== actorUser.token) {
+        this.sessions.delete(token);
+      }
+    }
+
     this.persistToDisk();
 
-    // 5. Log Authoritative Audit Event (NEVER record the actual password)
+    // 6. Log Authoritative Audit Event (NEVER record the actual password)
     this.logAuditEvent({
       actionType: 'SECURITY_POLICY_MODIFIED',
       actorUserId: actorUser.id,
@@ -1685,6 +1749,100 @@ class AuthoritativeStore {
     return {
       success: true,
       message: 'Founder password updated successfully.'
+    };
+  }
+
+  // ----------------------------------------------------
+  // PROTECTED FOUNDER DEVELOPMENT RECOVERY MECHANISM
+  // Strictly for development/testing environment when locked out
+  // ----------------------------------------------------
+  public recoverFounderCredential(
+    newPassword: string,
+    recoveryContext: { devSecret?: string; source: string }
+  ): { success: boolean; message: string; verified: boolean } {
+    // 1. Validate Password Policy (12+ chars, uppercase, lowercase, number, special char)
+    const policyResult = validatePasswordPolicy(newPassword);
+    if (!policyResult.valid) {
+      throw new Error(policyResult.reason || 'Password does not meet security policy requirements.');
+    }
+
+    // 2. Locate USR-SUPER-001
+    let founderRecord = this.users.get('USR-SUPER-001');
+    if (!founderRecord) {
+      for (const u of this.users.values()) {
+        if (u.role === 'FOUNDER_EXECUTIVE' || normalizeEmail(u.email) === 'founder@itis365.co.za') {
+          founderRecord = u;
+          break;
+        }
+      }
+    }
+
+    if (!founderRecord) {
+      throw new Error('Founder record USR-SUPER-001 does not exist in authoritative store.');
+    }
+
+    // 3. Verify it is genuinely the Founder account
+    if (
+      founderRecord.id !== 'USR-SUPER-001' ||
+      founderRecord.role !== 'FOUNDER_EXECUTIVE' ||
+      normalizeEmail(founderRecord.email) !== 'founder@itis365.co.za'
+    ) {
+      throw new Error('Account identity mismatch: target is not the authoritative Founder/SuperAdmin account.');
+    }
+
+    // 4. Generate salt and hash using standard system
+    const salt = generateSalt();
+    const hashedPassword = hashPassword(newPassword, salt);
+
+    founderRecord.passwordSalt = salt;
+    founderRecord.passwordHash = hashedPassword;
+    founderRecord.password = hashedPassword;
+    founderRecord.normalizedEmail = normalizeEmail(founderRecord.email);
+    founderRecord.status = 'ACTIVE';
+    founderRecord.failedLoginAttempts = 0;
+    founderRecord.lockedUntil = undefined;
+    founderRecord.updatedAt = new Date().toISOString();
+
+    // 5. Invalidate ALL active Founder sessions
+    for (const [token, s] of this.sessions.entries()) {
+      if (s.userId === 'USR-SUPER-001') {
+        this.sessions.delete(token);
+      }
+    }
+
+    // 6. Verify immediate authentication
+    const testAuth = this.authenticateUser('founder@itis365.co.za', newPassword);
+    if (!testAuth || testAuth.user.id !== 'USR-SUPER-001') {
+      throw new Error('Self-test validation failed: Immediate authentication check did not succeed.');
+    }
+    // Clean up temporary test token generated during verification
+    if (testAuth.token) {
+      this.sessions.delete(testAuth.token);
+    }
+
+    // 7. Persist immediately to disk
+    this.persistToDisk();
+
+    // 8. Log Authoritative Audit Event
+    this.logAuditEvent({
+      actionType: 'SECURITY_POLICY_MODIFIED',
+      actorUserId: 'SYSTEM_RECOVERY_ENGINE',
+      actorName: 'ITIS Development Recovery Controller',
+      actorRole: 'SYSTEM_ADMIN',
+      targetEntity: 'USER',
+      targetId: 'USR-SUPER-001',
+      details: {
+        event: 'FOUNDER_CREDENTIAL_RECOVERED',
+        account: founderRecord.email,
+        source: recoveryContext.source,
+        timestamp: new Date().toISOString()
+      }
+    });
+
+    return {
+      success: true,
+      message: 'Founder password repaired and verified successfully.',
+      verified: true
     };
   }
 

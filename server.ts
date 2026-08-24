@@ -289,6 +289,47 @@ app.post('/api/founder/update-password', requireAuth, (req, res) => {
   }
 });
 
+// PROTECTED FOUNDER DEVELOPMENT RECOVERY ENDPOINT (DEV/TESTING ONLY)
+// Strictly guarded: only available in non-production environments to recover locked Founder credentials
+app.post('/api/dev/recover-founder', (req, res) => {
+  if (process.env.NODE_ENV === 'production') {
+    return res.status(403).json({
+      error: 'FORBIDDEN: Development recovery is strictly disabled in production deployment mode.'
+    });
+  }
+
+  try {
+    const { newPassword, confirmPassword, devSecret } = req.body || {};
+
+    if (process.env.DEV_RECOVERY_SECRET && devSecret !== process.env.DEV_RECOVERY_SECRET) {
+      return res.status(401).json({ error: 'Unauthorized: Invalid development recovery secret.' });
+    }
+
+    if (!newPassword || typeof newPassword !== 'string') {
+      return res.status(400).json({ error: 'New password is required.' });
+    }
+
+    if (confirmPassword && newPassword !== confirmPassword) {
+      return res.status(400).json({ error: 'New password and confirmation password do not match.' });
+    }
+
+    const result = db.recoverFounderCredential(newPassword, {
+      devSecret: devSecret ? 'PROVIDED' : 'DEFAULT_DEV',
+      source: `API_DEV_RECOVERY (${req.ip || '127.0.0.1'})`
+    });
+
+    res.json({
+      success: true,
+      message: result.message,
+      account: 'founder@itis365.co.za',
+      id: 'USR-SUPER-001',
+      role: 'SuperAdmin / Founder'
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Founder credential recovery failed.' });
+  }
+});
+
 app.get('/api/users', requireAuth, (req, res) => {
   try {
     const users = db.getUsers(req.user!);

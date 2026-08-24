@@ -441,30 +441,30 @@ export const LandingPage: React.FC<Props> = ({
         <section id="why-itis" className="space-y-8 pt-8 border-t border-slate-800/80 max-w-5xl mx-auto">
           <div className="space-y-3 text-center max-w-3xl mx-auto">
             <span className="text-xs font-mono font-bold uppercase tracking-widest text-[#d4af37]">
-              CORE SAFETY CONCEPT
+              RESOURCE-INCLUSIVE ARCHITECTURE
             </span>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              A Coordinated Geospatial Safety Network
+              A Coordinated School Safety Network
             </h2>
             <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
-              ITIS is more than a GPS tracking platform. The underlying safety model uses authorised geofences, school gates, transport points and approved journey safety zones to understand a learner's movement between trusted locations.
+              ITIS is a comprehensive safety and coordination platform. It adapts to school environments across South Africa, supporting schools with or without specialised gate infrastructure through verified locations, check-in points, and authorised safety zones.
             </p>
             <p className="text-xs sm:text-sm text-slate-400 leading-relaxed font-mono">
-              ITIS uses authorised locations, school gates, transport points and geofenced safety zones to help establish whether a learner has arrived, departed or moved through an expected safety point.
+              ITIS uses authorised locations, school check-in points, transport routes, and safety areas to help confirm whether a learner has arrived, departed, or is moving along an expected route.
             </p>
           </div>
 
           {/* 8 Coordinated Elements working as one safety network */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
             {[
-              { label: 'SCHOOL GATE SCANNERS', desc: 'Contactless gate check-in' },
-              { label: 'TRANSPORT SCANNERS', desc: 'Verified boarding points' },
-              { label: 'AUTHORISED DEVICES', desc: 'Secure learner identifiers' },
-              { label: 'GEOSPATIAL GEOFENCES', desc: 'Approved safety perimeters' },
-              { label: 'LEARNER / SCHOOL RECORDS', desc: 'Sovereign verified custody' },
-              { label: 'GUARDIAN INFORMATION', desc: 'Real-time family updates' },
-              { label: 'COMMAND CENTRE', desc: '24/7 certified specialists' },
-              { label: 'RESPONSE PARTNERS', desc: 'Accredited multi-agency dispatch' },
+              { label: 'SCHOOL CHECK-INS', desc: 'Gate points & register support' },
+              { label: 'TRANSPORT COORDINATION', desc: 'Verified transport & stops' },
+              { label: 'OPTIONAL IDENTIFIERS', desc: 'Smart cards, beacons, or app' },
+              { label: 'LOCATION SAFETY AREAS', desc: 'Approved school & corridor zones' },
+              { label: 'LEARNER & SCHOOL RECORDS', desc: 'Authoritative student profiles' },
+              { label: 'GUARDIAN COMMUNICATION', desc: 'Real-time parent notifications' },
+              { label: 'COMMAND CENTRE', desc: '24/7 trained response officers' },
+              { label: 'RESPONSE PARTNERS', desc: 'Police, EMS & verified security' },
             ].map((elem, idx) => (
               <div 
                 key={elem.label} 
@@ -536,21 +536,21 @@ export const LandingPage: React.FC<Props> = ({
               Verified Attendance &amp; Journey Intelligence
             </h2>
             <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
-              Where deployed, ITIS school gate and transport scanning can work with authorised geofenced locations to support verified attendance and journey records.
+              Where deployed, school check-ins, transport coordination, and authorised safety zones work together to support verified attendance and safe journey records.
             </p>
           </div>
 
           {/* Conceptual Flow Diagram */}
           <div className="p-6 sm:p-8 rounded-2xl bg-[#0a1224] border border-slate-800 space-y-6">
             <div className="text-xs font-mono font-bold text-[#d4af37] uppercase tracking-wider text-center">
-              VERIFIED LOCATION EVENT LIFECYCLE
+              VERIFIED LOCATION &amp; ATTENDANCE LIFECYCLE
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 items-center">
               {[
                 { title: 'LEARNER', desc: 'Authorised safety profile' },
-                { title: 'AUTHORISED DEVICE', desc: 'Gate scanner / card / app' },
-                { title: 'GEOFENCED LOCATION', desc: 'Approved boundary' },
+                { title: 'CHECK-IN POINT', desc: 'School, app, or card point' },
+                { title: 'SAFETY AREA', desc: 'Approved boundary' },
                 { title: 'VERIFIED EVENT', desc: 'Arrival / Departure' },
                 { title: 'JOURNEY RECORD', desc: 'Attendance generated' },
                 { title: 'GUARDIAN & SCHOOL', desc: 'Instant visibility' },
@@ -685,7 +685,7 @@ export const LandingPage: React.FC<Props> = ({
               </div>
               <h3 className="text-base font-bold text-white">For Responders</h3>
               <p className="text-xs sm:text-sm text-slate-400 leading-relaxed">
-                Direct tactical dispatch, live situational coordinates, and accredited multi-agency emergency coordination.
+                Direct emergency dispatch, live location coordinates, and accredited multi-agency emergency coordination.
               </p>
               <button
                 onClick={() => openExplore('emergency-response')}
@@ -1049,7 +1049,7 @@ export const LandingPage: React.FC<Props> = ({
             </div>
 
             <p className="text-sm text-slate-300 leading-relaxed max-w-3xl">
-              ITIS empowers schools with fast, contactless campus gate management and seamless student safety coordination without adding administrative workload for teachers or staff.
+              ITIS empowers schools with smooth campus arrival management and learner safety coordination, supporting both digital registers and automated points without adding administrative workload.
             </p>
 
             <div className="space-y-4 pt-2">
@@ -1059,17 +1059,17 @@ export const LandingPage: React.FC<Props> = ({
                   <span>Capture-Once Enrolment Architecture</span>
                 </h3>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  A single enrolment transaction links the learner, verified legal guardians, and authorized transport providers into a secure custody record.
+                  A single enrolment links the learner, verified legal guardians, and authorized transport contacts into an authoritative safety record.
                 </p>
               </div>
 
               <div className="p-5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1.5">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <SchoolIcon className="w-4 h-4 text-blue-400" />
-                  <span>High-Throughput Gate Verification</span>
+                  <span>Flexible Arrival &amp; Departure Coordination</span>
                 </h3>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Automated gate readers process hundreds of arrivals per minute, ensuring zero congestion during morning peak hours.
+                  Supports progressive deployment—from digital attendance lists to optional automated check-ins—ensuring smooth flow during morning peak hours.
                 </p>
               </div>
 
@@ -1079,7 +1079,7 @@ export const LandingPage: React.FC<Props> = ({
                   <span>Dispute-Free Custody Assurance</span>
                 </h3>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Gate security personnel instantly verify whether an individual collecting a child is currently authorized, preventing custody disputes at the school gates.
+                  School staff and security quickly verify whether an individual collecting a child is currently authorized, preventing custody disputes at the school gates.
                 </p>
               </div>
             </div>
@@ -1109,7 +1109,7 @@ export const LandingPage: React.FC<Props> = ({
                   <span>Human-Verified Triage</span>
                 </h3>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Certified operators verify distress signals within 15 seconds, eliminating false panic while ensuring authentic emergencies receive immediate attention.
+                  Certified operators verify distress signals within 15 seconds, eliminating false alarms while ensuring authentic emergencies receive immediate attention.
                 </p>
               </div>
 
@@ -1119,17 +1119,17 @@ export const LandingPage: React.FC<Props> = ({
                   <span>Accredited Partner Interoperability</span>
                 </h3>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Command staff directly dispatch accredited SAPS units, vetted private armed response fleets, and EMS paramedics based on exact incident requirements.
+                  Command staff directly dispatch accredited SAPS units, vetted private security fleets, and EMS paramedics based on exact incident requirements.
                 </p>
               </div>
 
               <div className="p-5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2">
                 <h3 className="text-sm font-bold text-white flex items-center gap-2">
                   <Navigation className="w-4 h-4 text-purple-400" />
-                  <span>Tactical GPS Precision</span>
+                  <span>Precise Location Navigation</span>
                 </h3>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  First responders receive verified situational coordinates and emergency contact details to minimize response times and locate minors rapidly.
+                  First responders receive verified location coordinates and emergency contact details to minimize response times and reach learners rapidly.
                 </p>
               </div>
 
@@ -1139,7 +1139,7 @@ export const LandingPage: React.FC<Props> = ({
                   <span>Strict Operational Privacy</span>
                 </h3>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Tactical response channels are cryptographically restricted to authorized personnel, safeguarding minor identities at all times.
+                  Emergency response channels are cryptographically restricted to authorized personnel, safeguarding minor identities at all times.
                 </p>
               </div>
             </div>

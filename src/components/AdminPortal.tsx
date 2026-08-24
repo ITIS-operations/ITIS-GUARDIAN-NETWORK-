@@ -166,7 +166,7 @@ export const AdminPortal: React.FC<Props> = ({
               </span>
             </div>
             <p className="text-xs sm:text-sm text-slate-400 mt-0.5">
-              Operational administration for school entities, registry enrolments, IoT devices, and institutional telemetry.
+              Operational administration for schools, learner enrolment coordination, optional devices, and institutional system settings.
             </p>
           </div>
         </div>

@@ -30,8 +30,8 @@ export const SafetyJourneySection: React.FC = () => {
       icon: User,
       iconColor: 'text-cyan-400',
       bgGlow: 'bg-cyan-500/10 border-cyan-500/30',
-      description: 'A learner activates a silent distress signal, encounters a route deviation, or faces a medical/transit emergency during their school journey.',
-      details: 'Instant geo-location timestamp, battery telemetry, and verified identity signal sent without noisy panic sirens that could escalate danger.'
+      description: 'A learner activates an assistance signal, encounters a route delay, or faces a medical or transit concern during their school journey.',
+      details: 'Instant location coordinates, status information, and verified identity details sent to coordinate support quickly and safely.'
     },
     {
       id: 'step-school',
@@ -41,19 +41,19 @@ export const SafetyJourneySection: React.FC = () => {
       icon: School,
       iconColor: 'text-blue-400',
       bgGlow: 'bg-blue-500/10 border-blue-500/30',
-      description: 'The school administration and safety officer receive an immediate status notice confirming whether the incident is on campus or in transit.',
-      details: 'EMIS class attendance records and campus security gate logs automatically correlate to verify last known authorized custody status.'
+      description: 'School leadership and designated safety coordinators receive a status update confirming whether the learner is on campus or in transit.',
+      details: 'School records and attendance information correlate to provide immediate context for student safety.'
     },
     {
       id: 'step-guardian',
       stepNumber: '03',
       title: 'GUARDIAN',
-      subtitle: 'Real-Time Notification',
+      subtitle: 'Reassuring Real-Time Update',
       icon: HeartHandshake,
       iconColor: 'text-cyan-400',
       bgGlow: 'bg-cyan-500/10 border-cyan-500/30',
-      description: 'Verified legal parents and guardians receive instant encrypted mobile alerts with live tracking coordinates and direct status updates.',
-      details: 'No frantic confusion or delayed phone trees. Guardians see the exact situation and know command officers are actively managing the event.'
+      description: 'Verified legal parents and guardians receive clear, reassuring mobile notifications with location context and direct coordination status.',
+      details: 'Eliminates confusion and anxiety. Guardians see that help is being coordinated and the situation is actively managed.'
     },
     {
       id: 'step-command',
@@ -63,8 +63,8 @@ export const SafetyJourneySection: React.FC = () => {
       icon: Radio,
       iconColor: 'text-[#d4af37]',
       bgGlow: 'bg-[#d4af37]/10 border-[#d4af37]/40 ring-1 ring-[#d4af37]/40',
-      description: 'A certified 24/7 National Operations Officer assesses the live telemetry, verifies the incident, and makes the critical operational dispatch decision.',
-      details: 'Crucial human-in-the-loop guarantee: Automated algorithms alert officers in seconds, but only trained human professionals authorise and direct live emergency dispatch.'
+      description: 'A certified 24/7 National Operations Officer assesses verified location information, confirms the alert, and coordinates the required response.',
+      details: 'Crucial human-in-the-loop guarantee: Automated systems alert officers in seconds, but only trained human professionals authorise and direct emergency response.'
     },
     {
       id: 'step-responder',
@@ -74,8 +74,8 @@ export const SafetyJourneySection: React.FC = () => {
       icon: Siren,
       iconColor: 'text-rose-400',
       bgGlow: 'bg-rose-500/10 border-rose-500/30',
-      description: 'The Command Centre coordinates and routes the closest vetted responder directly to the live verified coordinates with learner profile dossiers.',
-      details: 'Includes SAPS (Police), EMS Medical Paramedics, Armed Response, and Community Safety Partners based on the exact emergency classification.'
+      description: 'The Command Centre coordinates and routes the closest vetted responder directly to the verified location with essential learner details.',
+      details: 'Includes SAPS (Police), EMS Medical Paramedics, Security Response, and Community Safety Partners based on the exact situation.'
     },
     {
       id: 'step-safe',
@@ -85,8 +85,8 @@ export const SafetyJourneySection: React.FC = () => {
       icon: CheckCircle2,
       iconColor: 'text-emerald-400',
       bgGlow: 'bg-emerald-500/10 border-emerald-500/30 ring-1 ring-emerald-500/40',
-      description: 'The child is secured, medical care is provided if needed, physical custody is handed back to verified guardians, and an audit report is generated.',
-      details: 'Complete end-to-end statutory audit log created for the school, SAPS, and family under strict POPIA privacy protection protocols.'
+      description: 'The child is confirmed safe, medical care is provided if needed, physical custody is handed back to verified guardians, and an audit summary is recorded.',
+      details: 'Complete end-to-end audit log created for the school, SAPS, and family under strict POPIA privacy protection protocols.'
     }
   ];
 
@@ -100,21 +100,21 @@ export const SafetyJourneySection: React.FC = () => {
     },
     {
       title: 'EMS (Paramedics)',
-      description: 'State and private ambulance & medical trauma dispatch.',
+      description: 'State and private ambulance & medical emergency response.',
       icon: Activity,
       badge: 'Medical',
       color: 'text-rose-400 bg-rose-950/60 border-rose-500/30'
     },
     {
       title: 'Security Response',
-      description: 'Vetted private armed response & patrol fleets.',
+      description: 'Vetted private security & patrol services.',
       icon: Lock,
       badge: 'Area Security',
       color: 'text-amber-400 bg-amber-950/60 border-amber-500/30'
     },
     {
       title: 'Community Safety',
-      description: 'Community Policing Forums (CPFs) & neighborhood watches.',
+      description: 'Community Policing Forums (CPFs) & neighbourhood watches.',
       icon: Users2,
       badge: 'Local Eyes',
       color: 'text-emerald-400 bg-emerald-950/60 border-emerald-500/30'
