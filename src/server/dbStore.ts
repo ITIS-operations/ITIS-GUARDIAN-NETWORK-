@@ -21,7 +21,13 @@ import {
   EligibleResponderRanking,
   IncidentOutcomeReport,
   ResponderDeclineReason,
-  AccountStatus
+  AccountStatus,
+  PaginationMetadata,
+  PaginatedResponse,
+  LearnerQueryOptions,
+  SchoolQueryOptions,
+  IncidentQueryOptions,
+  AuditLogQueryOptions
 } from '../types.js';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');

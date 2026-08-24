@@ -713,3 +713,68 @@ export interface RoleMatrixDefinition {
   permissions: PermissionKey[];
   isSoleUserCreator: boolean;
 }
+
+// ----------------------------------------------------
+// LIGHTWEIGHT PAGINATION & HIGH-SCALE QUERY MODELS
+// ----------------------------------------------------
+export interface PaginationMetadata {
+  total: number;
+  limit: number;
+  offset: number;
+  page: number;
+  totalPages: number;
+  hasMore: boolean;
+  nextCursor?: string | null;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: PaginationMetadata;
+}
+
+export interface LearnerQueryOptions {
+  schoolId?: string;
+  guardianId?: string;
+  grade?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+  page?: number;
+  cursor?: string;
+  status?: string;
+}
+
+export interface SchoolQueryOptions {
+  search?: string;
+  province?: string;
+  district?: string;
+  limit?: number;
+  offset?: number;
+  page?: number;
+}
+
+export interface IncidentQueryOptions {
+  status?: string;
+  severity?: string;
+  schoolId?: string;
+  responderUnit?: string;
+  learnerId?: string;
+  activeOnly?: boolean;
+  limit?: number;
+  offset?: number;
+  page?: number;
+}
+
+export interface AuditLogQueryOptions {
+  actionType?: string;
+  actorUserId?: string;
+  targetEntity?: string;
+  targetId?: string;
+  startDate?: string;
+  endDate?: string;
+  search?: string;
+  limit?: number;
+  offset?: number;
+  page?: number;
+  cursor?: string;
+}
