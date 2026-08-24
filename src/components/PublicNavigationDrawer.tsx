@@ -2,22 +2,15 @@ import React, { useState } from 'react';
 import { 
   X, 
   ChevronDown, 
-  ChevronRight, 
   ShieldCheck, 
   Building2, 
-  Shield, 
   Lock, 
   Users, 
-  BookOpen, 
   Briefcase, 
-  HeartHandshake, 
   Radio, 
   School as SchoolIcon, 
-  FileCheck2, 
-  HelpCircle, 
-  Phone, 
+  HeartHandshake,
   LogIn, 
-  ExternalLink,
   ArrowRight
 } from 'lucide-react';
 import { ActiveUserSession } from '../types.js';
@@ -52,45 +45,44 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
   currentUser
 }) => {
   const [expandedCategory, setExpandedCategory] = useState<string | null>('ABOUT ITIS');
-  const [selectedSubItem, setSelectedSubItem] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
   const categories: DrawerCategory[] = [
     {
-      id: 'about',
+      id: 'about-itis',
       title: 'ABOUT ITIS',
       icon: Building2,
       items: [
         {
           id: 'who-we-are',
-          title: 'Who ITIS is',
+          title: 'Who We Are',
           description: 'South Africa’s dedicated national child-safety network connecting guardians, schools, and accredited response partners into a coordinated protection ecosystem.',
           targetCategory: 'why-itis'
         },
         {
           id: 'why-exists',
-          title: 'Why ITIS exists',
+          title: 'Why ITIS Exists',
           description: 'To eliminate safety blind spots during daily school journeys and replace uncertainty with verified, immediate human coordination.',
           targetCategory: 'why-itis'
         },
         {
-          id: 'mission',
-          title: 'Our mission',
+          id: 'our-mission',
+          title: 'Our Mission',
           description: 'Ensuring every learner experiences safe movement between home and school through responsible technology and certified human oversight.',
           targetCategory: 'overview'
         }
       ]
     },
     {
-      id: 'safety',
-      title: 'SAFETY',
+      id: 'safety-network',
+      title: 'SAFETY NETWORK',
       icon: ShieldCheck,
       items: [
         {
           id: 'learner-safety',
           title: 'Learner Safety',
-          description: 'Non-intrusive safety checkpoints and silent distress capabilities built specifically for children navigating daily school journeys.',
+          description: 'Authorised devices, school access points and safety zones help provide a clearer picture of a learner\'s expected journey.',
           targetCategory: 'how-it-works'
         },
         {
@@ -102,14 +94,51 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
         {
           id: 'school-safety',
           title: 'School Safety',
-          description: 'High-throughput campus gate verification, automated attendance reconciliation, and dispute-free student pickup confirmation.',
+          description: 'Schools can use verified gate and attendance events to improve visibility of learner presence and safety.',
           targetCategory: 'for-schools'
+        },
+        {
+          id: 'geofenced-safety',
+          title: 'Geofenced Safety',
+          description: 'Approved locations can define trusted safety areas and help identify meaningful arrival, departure and movement events.',
+          targetCategory: 'how-it-works'
         },
         {
           id: 'emergency-response',
           title: 'Emergency Response',
-          description: 'Certified national operations command coordinating directly with SAPS, private armed responders, and medical emergency services (EMS).',
+          description: 'When a genuine emergency is identified, authorised Command personnel coordinate the appropriate response.',
           targetCategory: 'emergency-response'
+        }
+      ]
+    },
+    {
+      id: 'schools-partners',
+      title: 'SCHOOLS & PARTNERS',
+      icon: Users,
+      items: [
+        {
+          id: 'for-schools',
+          title: 'For Schools',
+          description: 'Where deployed, gate scanners and geofenced zones streamline morning entry, afternoon departure, and verified attendance records.',
+          targetCategory: 'for-schools'
+        },
+        {
+          id: 'for-guardians',
+          title: 'For Guardians',
+          description: 'Verified legal guardians receive milestone updates as learners move between home, transit points, and school grounds.',
+          targetCategory: 'for-parents'
+        },
+        {
+          id: 'for-emergency-partners',
+          title: 'For Emergency Partners',
+          description: 'Accredited responders receive verified situational coordinates and emergency contact details for swift coordination.',
+          targetCategory: 'emergency-response'
+        },
+        {
+          id: 'for-government',
+          title: 'For Government',
+          description: 'Provincial education and safety alignment with sovereign data hosting and verifiable POPIA compliance.',
+          targetCategory: 'trust-safety'
         }
       ]
     },
@@ -139,64 +168,8 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
         {
           id: 'accountability',
           title: 'Accountability',
-          description: 'Cryptographic SHA-256 audit trails documenting every verification and dispatch event for complete institutional transparency.',
+          description: 'Cryptographic audit trails documenting every verification and dispatch event for complete institutional transparency.',
           targetCategory: 'trust-safety'
-        }
-      ]
-    },
-    {
-      id: 'for-partners',
-      title: 'FOR PARTNERS',
-      icon: Users,
-      items: [
-        {
-          id: 'schools-partner',
-          title: 'Schools',
-          description: 'Fast campus gate verification, digital custody rosters, and automated attendance reporting that reduces administrative overhead.',
-          targetCategory: 'for-schools'
-        },
-        {
-          id: 'emergency-partner',
-          title: 'Emergency Services',
-          description: 'Direct situational coordinates and verified incident data delivered straight to accredited emergency responders.',
-          targetCategory: 'emergency-response'
-        },
-        {
-          id: 'government-partner',
-          title: 'Government',
-          description: 'Provincial and national education department alignment with transparent compliance reporting and safety audits.',
-          targetCategory: 'trust-safety'
-        },
-        {
-          id: 'community-partner',
-          title: 'Community Safety Partners',
-          description: 'Structured collaboration with vetted community policing forums (CPFs) and accredited neighborhood watch groups.',
-          targetCategory: 'why-itis'
-        }
-      ]
-    },
-    {
-      id: 'resources',
-      title: 'RESOURCES',
-      icon: BookOpen,
-      items: [
-        {
-          id: 'news-updates',
-          title: 'News & Updates',
-          description: 'National safety bulletins, institutional pilot milestones, and verified educational updates.',
-          targetCategory: 'overview'
-        },
-        {
-          id: 'faqs',
-          title: 'FAQs',
-          description: 'Frequently asked questions regarding guardian registration, school onboarding, hardware requirements, and data privacy.',
-          targetCategory: 'how-it-works'
-        },
-        {
-          id: 'request-demo-item',
-          title: 'Request a Demonstration',
-          description: 'Schedule a tailored campus demonstration and technical consultation with our institutional safety team.',
-          targetCategory: 'request-demo'
         }
       ]
     },
@@ -212,9 +185,15 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
           targetCategory: 'why-itis'
         },
         {
+          id: 'news',
+          title: 'News',
+          description: 'National safety bulletins, institutional pilot milestones, and verified educational updates.',
+          targetCategory: 'overview'
+        },
+        {
           id: 'careers',
           title: 'Careers',
-          description: 'Explore opportunities across safety engineering, 24/7 command operations, and school partnership coordination.',
+          description: 'Opportunities across safety engineering, 24/7 command operations, and school partnership coordination.',
           targetCategory: 'overview'
         },
         {
@@ -229,11 +208,6 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
 
   const toggleCategory = (title: string) => {
     setExpandedCategory(prev => prev === title ? null : title);
-    setSelectedSubItem(null);
-  };
-
-  const handleItemClick = (item: DrawerSubItem) => {
-    setSelectedSubItem(prev => prev === item.id ? null : item.id);
   };
 
   const handleOpenDetailedSection = (targetCategory?: string) => {
@@ -253,7 +227,7 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
       />
 
       {/* Slide-over Drawer Panel */}
-      <div className="absolute inset-y-0 right-0 max-w-full flex pl-10">
+      <div className="absolute inset-y-0 right-0 max-w-full flex pl-6 sm:pl-10">
         <div className="w-screen max-w-md bg-[#060b18] border-l border-slate-800 shadow-2xl flex flex-col">
           
           {/* Top Header Bar */}
@@ -289,18 +263,6 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
           {/* Drawer Body — Organized Public Categories */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-3">
             
-            {/* Quick Public Explorer Link */}
-            <button
-              onClick={() => handleOpenDetailedSection('overview')}
-              className="w-full min-h-[46px] p-3 rounded-xl bg-[#0a1224] hover:bg-[#0f1a30] border border-[#d4af37]/40 text-[#f3d368] text-xs font-bold flex items-center justify-between gap-2 transition-all cursor-pointer group mb-2"
-            >
-              <div className="flex items-center gap-2.5">
-                <ShieldCheck className="w-4 h-4 text-[#d4af37]" />
-                <span>Open Guardian Network Explorer</span>
-              </div>
-              <ArrowRight className="w-4 h-4 text-[#d4af37] group-hover:translate-x-1 transition-transform" />
-            </button>
-
             {/* Category Accordion */}
             {categories.map((cat) => {
               const Icon = cat.icon;
@@ -309,18 +271,18 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
               return (
                 <div 
                   key={cat.id}
-                  className="rounded-xl bg-[#0a1224]/80 border border-slate-800/90 overflow-hidden transition-colors"
+                  className="rounded-xl bg-[#0a1224]/90 border border-slate-800/90 overflow-hidden transition-all duration-200"
                 >
-                  {/* Category Header */}
+                  {/* Category Header Button */}
                   <button
                     onClick={() => toggleCategory(cat.title)}
-                    className="w-full min-h-[48px] px-4 py-3 text-left flex items-center justify-between gap-3 text-xs font-bold text-slate-200 hover:text-[#d4af37] transition-colors cursor-pointer"
+                    className="w-full min-h-[48px] px-4 py-3.5 text-left flex items-center justify-between gap-3 text-xs font-bold text-slate-200 hover:text-[#d4af37] transition-colors cursor-pointer"
                   >
                     <div className="flex items-center gap-2.5">
                       <div className="w-6 h-6 rounded-md bg-[#060b18] border border-slate-700/80 flex items-center justify-center text-[#d4af37]">
                         <Icon className="w-3.5 h-3.5" />
                       </div>
-                      <span className="tracking-wide uppercase font-mono text-[11px] sm:text-xs text-white">
+                      <span className="tracking-wider uppercase font-mono text-[11px] sm:text-xs text-white">
                         {cat.title}
                       </span>
                     </div>
@@ -332,45 +294,35 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
                     />
                   </button>
 
-                  {/* Category Items */}
+                  {/* Category Content: Instantly revealed with clean spacing & readable typography */}
                   {isExpanded && (
-                    <div className="px-3 pb-3 space-y-1.5 border-t border-slate-800/80 pt-2 bg-[#060b18]/60">
-                      {cat.items.map((item) => {
-                        const isSubSelected = selectedSubItem === item.id;
-                        return (
-                          <div 
-                            key={item.id}
-                            className="rounded-lg bg-[#0a1224] border border-slate-800/60 p-2.5 space-y-1.5 transition-all"
-                          >
-                            <button
-                              onClick={() => handleItemClick(item)}
-                              className="w-full text-left flex items-center justify-between text-xs font-semibold text-slate-200 hover:text-[#f3d368] transition-colors cursor-pointer"
-                            >
-                              <span className="flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-[#d4af37]/80" />
-                                <span>{item.title}</span>
-                              </span>
-                              <ChevronRight className={`w-3.5 h-3.5 text-slate-500 transition-transform ${isSubSelected ? 'rotate-90 text-[#d4af37]' : ''}`} />
-                            </button>
-
-                            {/* Expandable sub-item description */}
-                            {isSubSelected && (
-                              <div className="pl-3 pr-1 pt-1 space-y-2 text-[11px] text-slate-300 leading-relaxed border-t border-slate-800/60 mt-1.5">
-                                <p>{item.description}</p>
-                                {item.targetCategory && (
-                                  <button
-                                    onClick={() => handleOpenDetailedSection(item.targetCategory)}
-                                    className="text-[10px] font-bold font-mono text-[#d4af37] hover:text-[#f3d368] flex items-center gap-1 cursor-pointer pt-0.5"
-                                  >
-                                    <span>Read full section in explorer</span>
-                                    <ArrowRight className="w-3 h-3" />
-                                  </button>
-                                )}
-                              </div>
+                    <div className="px-3 pb-3.5 space-y-2 border-t border-slate-800/80 pt-2.5 bg-[#060b18]/70">
+                      {cat.items.map((item) => (
+                        <div 
+                          key={item.id}
+                          className="rounded-lg bg-[#0a1224] border border-slate-800/70 p-3 space-y-1.5 transition-all"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#d4af37]" />
+                              <span>{item.title}</span>
+                            </span>
+                            {item.targetCategory && (
+                              <button
+                                onClick={() => handleOpenDetailedSection(item.targetCategory)}
+                                className="text-[10px] font-mono text-[#d4af37] hover:text-[#f3d368] inline-flex items-center gap-0.5 cursor-pointer"
+                                title="View in Explorer"
+                              >
+                                <span>Explore</span>
+                                <ArrowRight className="w-3 h-3" />
+                              </button>
                             )}
                           </div>
-                        );
-                      })}
+                          <p className="text-[11px] text-slate-300 leading-relaxed pl-3">
+                            {item.description}
+                          </p>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
@@ -379,7 +331,7 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
 
           </div>
 
-          {/* Drawer Bottom Bar: Single Login CTA & Contact */}
+          {/* Drawer Bottom Bar: Single Login CTA & National Support */}
           <div className="p-4 sm:p-5 bg-[#0a1224] border-t border-slate-800 space-y-3 shrink-0">
             <div className="flex items-center justify-between text-[11px] text-slate-400">
               <span>National Operations Support</span>

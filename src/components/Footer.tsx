@@ -41,7 +41,7 @@ export const Footer: React.FC<Props> = ({
   };
 
   return (
-    <footer className="w-full bg-[#040812] border-t border-slate-800/80 text-slate-400 text-xs selection:bg-cyan-500 selection:text-white">
+    <footer className="w-full bg-[#040812] border-t border-slate-800/80 text-slate-400 text-xs selection:bg-[#d4af37] selection:text-slate-950">
       
       {/* MAIN FOOTER CONTAINER */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
@@ -94,8 +94,8 @@ export const Footer: React.FC<Props> = ({
             <ul className="space-y-2 text-xs">
               <li>
                 <button 
-                  onClick={() => navigateToSection('four-answers')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
+                  onClick={() => navigateToSection('overview')}
+                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
                   Learner Safety
                 </button>
@@ -103,7 +103,7 @@ export const Footer: React.FC<Props> = ({
               <li>
                 <button 
                   onClick={() => navigateToSection('for-parents')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
+                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
                   Guardian Hub
                 </button>
@@ -111,25 +111,25 @@ export const Footer: React.FC<Props> = ({
               <li>
                 <button 
                   onClick={() => navigateToSection('for-schools')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
+                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
-                  Campus Gate Defence
+                  Campus Gate Scanners
                 </button>
               </li>
               <li>
                 <button 
                   onClick={() => navigateToSection('emergency-response')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
+                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
                   Emergency Response
                 </button>
               </li>
               <li>
                 <button 
-                  onClick={() => navigateToSection('solutions')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
+                  onClick={() => navigateToSection('how-it-works')}
+                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
-                  Smart Wearables
+                  Geospatial Safety Zones
                 </button>
               </li>
             </ul>
@@ -144,23 +144,23 @@ export const Footer: React.FC<Props> = ({
               <li>
                 <button 
                   onClick={() => navigateToSection('for-parents')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
+                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
-                  Parent & Guardian Hub
+                  Parent &amp; Guardian Hub
                 </button>
               </li>
               <li>
                 <button 
                   onClick={() => navigateToSection('for-parents')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
+                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
                   Custody Management
                 </button>
               </li>
               <li>
                 <button 
-                  onClick={() => navigateToSection('safety-journey')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
+                  onClick={() => navigateToSection('how-it-works')}
+                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
                   Live Journey Notifications
                 </button>
@@ -168,7 +168,7 @@ export const Footer: React.FC<Props> = ({
               <li>
                 <button 
                   onClick={() => navigateToSection('emergency-response')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
+                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
                   24/7 SOS Assistance
                 </button>
@@ -185,7 +185,7 @@ export const Footer: React.FC<Props> = ({
               <li>
                 <button 
                   onClick={() => navigateToSection('for-schools')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
+                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
                   School Safety Portal
                 </button>
@@ -193,7 +193,7 @@ export const Footer: React.FC<Props> = ({
               <li>
                 <button 
                   onClick={() => navigateToSection('for-schools')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
+                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
                   Attendance Reconciliation
                 </button>
@@ -201,7 +201,7 @@ export const Footer: React.FC<Props> = ({
               <li>
                 <button 
                   onClick={() => navigateToSection('request-demo')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
+                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
                   Request School Pilot
                 </button>
@@ -209,7 +209,7 @@ export const Footer: React.FC<Props> = ({
               <li>
                 <button 
                   onClick={() => navigateToSection('trust-safety')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
+                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
                   Campus Perimeter Audits
                 </button>
@@ -225,34 +225,26 @@ export const Footer: React.FC<Props> = ({
             <ul className="space-y-2 text-xs">
               <li>
                 <button 
-                  onClick={() => navigateToSection('safety-journey')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
+                  onClick={() => navigateToSection('how-it-works')}
+                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
                   How It Works
                 </button>
               </li>
               <li>
                 <button 
-                  onClick={() => navigateToSection('resources')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
+                  onClick={() => navigateToSection('trust-safety')}
+                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
-                  FAQs
+                  POPIA &amp; Privacy
                 </button>
               </li>
               <li>
                 <button 
-                  onClick={() => navigateToSection('security')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
+                  onClick={() => navigateToSection('trust-safety')}
+                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
-                  POPIA & Privacy
-                </button>
-              </li>
-              <li>
-                <button 
-                  onClick={() => navigateToSection('security')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
-                >
-                  Terms of Use
+                  Governance
                 </button>
               </li>
             </ul>
@@ -267,41 +259,25 @@ export const Footer: React.FC<Props> = ({
               <li>
                 <button 
                   onClick={() => navigateToSection('why-itis')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
+                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
                   About ITIS
                 </button>
               </li>
               <li>
                 <button 
-                  onClick={() => navigateToSection('news')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
+                  onClick={() => navigateToSection('overview')}
+                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
-                  News
-                </button>
-              </li>
-              <li>
-                <button 
-                  onClick={() => navigateToSection('careers')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
-                >
-                  Careers
+                  Mission
                 </button>
               </li>
               <li>
                 <button 
                   onClick={() => navigateToSection('request-demo')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
+                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
                   Contact
-                </button>
-              </li>
-              <li>
-                <button 
-                  onClick={() => navigateToSection('security')}
-                  className="hover:text-cyan-300 transition-colors text-left cursor-pointer"
-                >
-                  Disclosure
                 </button>
               </li>
             </ul>
@@ -355,24 +331,24 @@ export const Footer: React.FC<Props> = ({
                 className="w-full py-3.5 flex items-center justify-between text-xs font-bold text-white uppercase font-mono tracking-wider text-left cursor-pointer"
               >
                 <span>SOLUTIONS</span>
-                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'solutions' ? 'rotate-180 text-cyan-400' : ''}`} />
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'solutions' ? 'rotate-180 text-[#d4af37]' : ''}`} />
               </button>
               {expandedSection === 'solutions' && (
                 <div className="pb-3.5 space-y-2 text-xs pl-2">
-                  <button onClick={() => navigateToSection('four-answers')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
+                  <button onClick={() => navigateToSection('overview')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
                     Learner Safety
                   </button>
-                  <button onClick={() => navigateToSection('for-parents')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
+                  <button onClick={() => navigateToSection('for-parents')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
                     Guardian Hub
                   </button>
-                  <button onClick={() => navigateToSection('for-schools')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
-                    Campus Gate Defence
+                  <button onClick={() => navigateToSection('for-schools')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
+                    Campus Gate Scanners
                   </button>
-                  <button onClick={() => navigateToSection('emergency-response')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
+                  <button onClick={() => navigateToSection('emergency-response')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
                     Emergency Response
                   </button>
-                  <button onClick={() => navigateToSection('solutions')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
-                    Smart Wearables
+                  <button onClick={() => navigateToSection('how-it-works')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
+                    Geospatial Safety Zones
                   </button>
                 </div>
               )}
@@ -386,20 +362,20 @@ export const Footer: React.FC<Props> = ({
                 className="w-full py-3.5 flex items-center justify-between text-xs font-bold text-white uppercase font-mono tracking-wider text-left cursor-pointer"
               >
                 <span>FOR PARENTS</span>
-                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'parents' ? 'rotate-180 text-cyan-400' : ''}`} />
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'parents' ? 'rotate-180 text-[#d4af37]' : ''}`} />
               </button>
               {expandedSection === 'parents' && (
                 <div className="pb-3.5 space-y-2 text-xs pl-2">
-                  <button onClick={() => navigateToSection('for-parents')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
-                    Parent & Guardian Hub
+                  <button onClick={() => navigateToSection('for-parents')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
+                    Parent &amp; Guardian Hub
                   </button>
-                  <button onClick={() => navigateToSection('for-parents')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
+                  <button onClick={() => navigateToSection('for-parents')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
                     Custody Management
                   </button>
-                  <button onClick={() => navigateToSection('safety-journey')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
+                  <button onClick={() => navigateToSection('how-it-works')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
                     Live Journey Notifications
                   </button>
-                  <button onClick={() => navigateToSection('emergency-response')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
+                  <button onClick={() => navigateToSection('emergency-response')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
                     24/7 SOS Assistance
                   </button>
                 </div>
@@ -414,20 +390,20 @@ export const Footer: React.FC<Props> = ({
                 className="w-full py-3.5 flex items-center justify-between text-xs font-bold text-white uppercase font-mono tracking-wider text-left cursor-pointer"
               >
                 <span>FOR SCHOOLS</span>
-                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'schools' ? 'rotate-180 text-cyan-400' : ''}`} />
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'schools' ? 'rotate-180 text-[#d4af37]' : ''}`} />
               </button>
               {expandedSection === 'schools' && (
                 <div className="pb-3.5 space-y-2 text-xs pl-2">
-                  <button onClick={() => navigateToSection('for-schools')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
+                  <button onClick={() => navigateToSection('for-schools')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
                     School Safety Portal
                   </button>
-                  <button onClick={() => navigateToSection('for-schools')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
+                  <button onClick={() => navigateToSection('for-schools')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
                     Attendance Reconciliation
                   </button>
-                  <button onClick={() => navigateToSection('request-demo')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
+                  <button onClick={() => navigateToSection('request-demo')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
                     Request School Pilot
                   </button>
-                  <button onClick={() => navigateToSection('trust-safety')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
+                  <button onClick={() => navigateToSection('trust-safety')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
                     Campus Perimeter Audits
                   </button>
                 </div>
@@ -442,21 +418,18 @@ export const Footer: React.FC<Props> = ({
                 className="w-full py-3.5 flex items-center justify-between text-xs font-bold text-white uppercase font-mono tracking-wider text-left cursor-pointer"
               >
                 <span>RESOURCES</span>
-                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'resources' ? 'rotate-180 text-cyan-400' : ''}`} />
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'resources' ? 'rotate-180 text-[#d4af37]' : ''}`} />
               </button>
               {expandedSection === 'resources' && (
                 <div className="pb-3.5 space-y-2 text-xs pl-2">
-                  <button onClick={() => navigateToSection('safety-journey')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
+                  <button onClick={() => navigateToSection('how-it-works')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
                     How It Works
                   </button>
-                  <button onClick={() => navigateToSection('resources')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
-                    FAQs
+                  <button onClick={() => navigateToSection('trust-safety')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
+                    POPIA &amp; Privacy
                   </button>
-                  <button onClick={() => navigateToSection('security')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
-                    POPIA & Privacy
-                  </button>
-                  <button onClick={() => navigateToSection('security')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
-                    Terms of Use
+                  <button onClick={() => navigateToSection('trust-safety')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
+                    Governance
                   </button>
                 </div>
               )}
@@ -470,24 +443,18 @@ export const Footer: React.FC<Props> = ({
                 className="w-full py-3.5 flex items-center justify-between text-xs font-bold text-white uppercase font-mono tracking-wider text-left cursor-pointer"
               >
                 <span>COMPANY</span>
-                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'company' ? 'rotate-180 text-cyan-400' : ''}`} />
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'company' ? 'rotate-180 text-[#d4af37]' : ''}`} />
               </button>
               {expandedSection === 'company' && (
                 <div className="pb-3.5 space-y-2 text-xs pl-2">
-                  <button onClick={() => navigateToSection('why-itis')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
+                  <button onClick={() => navigateToSection('why-itis')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
                     About ITIS
                   </button>
-                  <button onClick={() => navigateToSection('news')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
-                    News
+                  <button onClick={() => navigateToSection('overview')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
+                    Mission
                   </button>
-                  <button onClick={() => navigateToSection('careers')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
-                    Careers
-                  </button>
-                  <button onClick={() => navigateToSection('request-demo')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
+                  <button onClick={() => navigateToSection('request-demo')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
                     Contact
-                  </button>
-                  <button onClick={() => navigateToSection('security')} className="py-1 text-slate-300 hover:text-cyan-300 block w-full text-left">
-                    Responsible Disclosure
                   </button>
                 </div>
               )}
@@ -507,29 +474,29 @@ export const Footer: React.FC<Props> = ({
 
           <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-2">
             <button 
-              onClick={() => navigateToSection('security')}
-              className="hover:text-cyan-300 transition-colors cursor-pointer"
+              onClick={() => navigateToSection('trust-safety')}
+              className="hover:text-[#d4af37] transition-colors cursor-pointer"
             >
               Privacy Policy
             </button>
             <span>•</span>
             <button 
-              onClick={() => navigateToSection('security')}
-              className="hover:text-cyan-300 transition-colors cursor-pointer"
+              onClick={() => navigateToSection('trust-safety')}
+              className="hover:text-[#d4af37] transition-colors cursor-pointer"
             >
               Terms of Use
             </button>
             <span>•</span>
             <button 
-              onClick={() => navigateToSection('resources')}
-              className="hover:text-cyan-300 transition-colors cursor-pointer"
+              onClick={() => navigateToSection('trust-safety')}
+              className="hover:text-[#d4af37] transition-colors cursor-pointer"
             >
               POPIA Governance
             </button>
             <span>•</span>
             <button 
-              onClick={() => navigateToSection('security')}
-              className="hover:text-cyan-300 transition-colors cursor-pointer"
+              onClick={() => navigateToSection('trust-safety')}
+              className="hover:text-[#d4af37] transition-colors cursor-pointer"
             >
               Responsible Disclosure
             </button>

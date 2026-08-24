@@ -1,18 +1,11 @@
 import React, { useState } from 'react';
 import { 
   ShieldCheck, 
-  UserCheck, 
-  Users, 
-  School, 
-  Building2, 
-  Lock, 
   LogOut, 
   LogIn, 
   User,
   Menu,
-  X,
-  Layers,
-  HeartHandshake
+  ChevronRight
 } from 'lucide-react';
 import { UserRole, ActiveUserSession } from '../types.js';
 import { PublicNavigationDrawer } from './PublicNavigationDrawer.js';
@@ -57,9 +50,9 @@ export const Header: React.FC<Props> = ({
   const getRoleBadge = (role: UserRole) => {
     switch (role) {
       case 'PARENT_GUARDIAN': return { label: 'Guardian', color: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40' };
-      case 'SCHOOL_PRINCIPAL': return { label: 'Principal', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' };
+      case 'SCHOOL_PRINCIPAL': return { label: 'Principal', color: 'bg-[#d4af37]/20 text-[#f3d368] border-[#d4af37]/40' };
       case 'SCHOOL_ADMIN_STAFF': return { label: 'School Admin', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' };
-      case 'COMMAND_OPERATOR': return { label: 'Command Officer', color: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40' };
+      case 'COMMAND_OPERATOR': return { label: 'Command Officer', color: 'bg-[#d4af37]/25 text-[#f3d368] border-[#d4af37]/50' };
       case 'TECHNICIAN': return { label: 'Hardware Tech', color: 'bg-slate-800 text-cyan-300 border-cyan-500/30' };
       case 'SYSTEM_ADMIN': return { label: 'System Admin', color: 'bg-slate-800 text-slate-200 border-slate-700' };
       case 'FIELD_RESPONDER': return { label: 'Field Responder', color: 'bg-blue-500/20 text-blue-300 border-blue-500/40' };
@@ -94,7 +87,7 @@ export const Header: React.FC<Props> = ({
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-[#060b18]/95 backdrop-blur-md border-b border-slate-800/80 w-full transition-all">
+    <header className="sticky top-0 z-40 bg-[#060b18]/95 backdrop-blur-md border-b border-[#d4af37]/20 shadow-lg shadow-[#040812]/50 w-full transition-all">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 sm:h-20 gap-2 sm:gap-4">
           
@@ -114,20 +107,18 @@ export const Header: React.FC<Props> = ({
               <img 
                 src="/branding/itis-logo.png" 
                 alt="ITIS Official Emblem" 
-                className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl border border-[#d4af37]/40 object-cover shadow-lg shadow-[#060b18]/80 group-hover:border-[#d4af37] group-hover:scale-105 transition-all duration-200 aspect-square"
+                className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl border border-[#d4af37]/50 object-cover shadow-lg shadow-[#060b18]/80 group-hover:border-[#d4af37] group-hover:scale-105 transition-all duration-200 aspect-square"
                 onError={(e) => {
                   (e.target as HTMLElement).style.display = 'none';
                 }}
               />
             </div>
             
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <span className="font-extrabold tracking-tight text-white text-sm sm:text-base md:text-lg">
-                  ITIS GUARDIAN NETWORK
-                </span>
-              </div>
-              <span className="text-[9px] sm:text-[10px] text-slate-400 font-mono tracking-wider uppercase hidden sm:block -mt-0.5 truncate">
+            <div className="min-w-0 flex flex-col justify-center">
+              <span className="font-extrabold tracking-tight text-white text-sm sm:text-base md:text-lg leading-tight">
+                ITIS GUARDIAN NETWORK
+              </span>
+              <span className="text-[9px] sm:text-[10.5px] font-bold text-[#d4af37] font-mono tracking-wider uppercase hidden sm:block leading-tight pt-0.5 truncate">
                 INTEGRATED TECHNOLOGY INTELLIGENCE &amp; SAFETY
               </span>
             </div>
@@ -139,25 +130,25 @@ export const Header: React.FC<Props> = ({
           <nav className="hidden lg:flex items-center gap-1 xl:gap-2 text-xs font-bold tracking-wider text-slate-300">
             <button
               onClick={() => handleNavClick('why-itis')}
-              className="px-3 py-2 rounded-lg hover:text-[#d4af37] hover:bg-[#0a1224] transition-colors cursor-pointer"
+              className="min-h-[44px] px-3.5 py-2 rounded-lg hover:text-[#d4af37] hover:bg-[#0a1224] transition-colors cursor-pointer"
             >
               WHY ITIS
             </button>
             <button
               onClick={() => handleNavClick('solutions')}
-              className="px-3 py-2 rounded-lg hover:text-[#d4af37] hover:bg-[#0a1224] transition-colors cursor-pointer"
+              className="min-h-[44px] px-3.5 py-2 rounded-lg hover:text-[#d4af37] hover:bg-[#0a1224] transition-colors cursor-pointer"
             >
               SOLUTIONS
             </button>
             <button
               onClick={() => handleNavClick('overview')}
-              className="px-3 py-2 rounded-lg hover:text-[#d4af37] hover:bg-[#0a1224] transition-colors cursor-pointer"
+              className="min-h-[44px] px-3.5 py-2 rounded-lg hover:text-[#d4af37] hover:bg-[#0a1224] transition-colors cursor-pointer"
             >
               EXPLORE
             </button>
             <button
               onClick={() => handleNavClick('company')}
-              className="px-3 py-2 rounded-lg hover:text-[#d4af37] hover:bg-[#0a1224] transition-colors cursor-pointer"
+              className="min-h-[44px] px-3.5 py-2 rounded-lg hover:text-[#d4af37] hover:bg-[#0a1224] transition-colors cursor-pointer"
             >
               COMPANY
             </button>
@@ -173,7 +164,7 @@ export const Header: React.FC<Props> = ({
               <div className="flex items-center gap-1.5 sm:gap-2">
                 <button
                   onClick={() => setActiveTab(getPrimaryPortalTab(currentUser.role))}
-                  className="min-h-[40px] px-3 py-1.5 rounded-xl bg-[#0a1224] hover:bg-slate-900 border border-[#d4af37]/40 text-xs font-semibold text-[#f3d368] flex items-center gap-2 cursor-pointer transition-colors shadow-sm"
+                  className="min-h-[44px] px-3.5 py-2 rounded-xl bg-[#0a1224] hover:bg-slate-900 border border-[#d4af37]/40 text-xs font-semibold text-[#f3d368] flex items-center gap-2 cursor-pointer transition-colors shadow-sm"
                   title="Open Authorized Portal"
                 >
                   <User className="w-3.5 h-3.5 text-[#d4af37] shrink-0" />
@@ -185,7 +176,7 @@ export const Header: React.FC<Props> = ({
 
                 <button
                   onClick={onLogout}
-                  className="min-h-[40px] min-w-[40px] p-2 rounded-xl bg-[#0a1224] hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-slate-800 transition-colors flex items-center justify-center cursor-pointer"
+                  className="min-h-[44px] min-w-[44px] p-2.5 rounded-xl bg-[#0a1224] hover:bg-rose-500/20 text-slate-400 hover:text-rose-300 border border-slate-800 transition-colors flex items-center justify-center cursor-pointer"
                   title="Sign Out"
                   aria-label="Sign Out"
                 >
@@ -196,7 +187,7 @@ export const Header: React.FC<Props> = ({
               /* Public Visitor: Single Authoritative Login Button */
               <button
                 onClick={onOpenLogin}
-                className="min-h-[40px] px-4 sm:px-5 py-2 rounded-xl bg-[#d4af37] hover:bg-[#c29f2f] text-slate-950 text-xs sm:text-sm font-extrabold tracking-wide transition-all shadow-md shadow-[#d4af37]/15 flex items-center gap-2 cursor-pointer active:scale-95"
+                className="min-h-[44px] px-4 sm:px-6 py-2.5 rounded-xl bg-[#d4af37] hover:bg-[#c29f2f] text-slate-950 text-xs sm:text-sm font-extrabold tracking-wide transition-all shadow-md shadow-[#d4af37]/20 flex items-center gap-2 cursor-pointer active:scale-95"
               >
                 <LogIn className="w-4 h-4 text-slate-950 shrink-0" />
                 <span>LOGIN</span>
@@ -206,7 +197,7 @@ export const Header: React.FC<Props> = ({
             {/* Top-Right Secondary Information Drawer Trigger (All Screen Sizes) */}
             <button
               onClick={() => setDrawerOpen(true)}
-              className="min-h-[40px] min-w-[40px] px-2.5 sm:px-3 py-2 rounded-xl bg-[#0a1224] hover:bg-slate-900 border border-slate-800 hover:border-[#d4af37]/40 text-slate-200 hover:text-[#d4af37] transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+              className="min-h-[44px] min-w-[44px] px-3 sm:px-3.5 py-2.5 rounded-xl bg-[#0a1224] hover:bg-slate-900 border border-slate-800 hover:border-[#d4af37]/50 text-slate-200 hover:text-[#d4af37] transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
               aria-label="Open Public Information Menu"
               title="Public Information Menu"
             >

@@ -152,52 +152,59 @@ export const LandingPage: React.FC<Props> = ({
   // =========================================================================
   if (currentView === 'home') {
     return (
-      <div className="text-slate-100 selection:bg-[#d4af37] selection:text-slate-950 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16 space-y-16 sm:space-y-24">
+      <div className="text-slate-100 selection:bg-[#d4af37] selection:text-slate-950 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-16 space-y-16 sm:space-y-24">
         
         {/* ==================================================== */}
-        {/* 1. HERO SECTION (2-Column Desktop / Stacked Mobile) */}
+        {/* 1. HERO SECTION: DESKTOP & DEDICATED RESPONSIVE MOBILE */}
         {/* ==================================================== */}
-        <section className="grid grid-cols-1 lg:grid-cols-12 gap-10 lg:gap-12 items-center pt-2 sm:pt-4">
+        
+        {/* --- DESKTOP HERO (Hidden on mobile, lg:grid) --- */}
+        <section className="hidden lg:grid grid-cols-12 gap-10 xl:gap-14 items-center pt-2 sm:pt-4">
           
           {/* LEFT COLUMN: BRAND & MISSION (7 Cols) */}
-          <div className="lg:col-span-7 space-y-6 text-left">
+          <div className="col-span-7 space-y-6 text-left">
             
-            {/* Official Brand Identity */}
-            <div className="space-y-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-md bg-[#0a1224] border border-[#d4af37]/40 text-[#f3d368] text-xs font-mono font-bold tracking-wider uppercase">
-                <ShieldCheck className="w-3.5 h-3.5 text-[#d4af37]" />
+            {/* Official Brand Identity Hierarchy */}
+            <div className="space-y-2.5">
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-[#0a1224] border border-[#d4af37]/40 text-[#f3d368] text-xs font-mono font-bold tracking-wider uppercase shadow-sm">
+                <img 
+                  src="/branding/itis-logo.png" 
+                  alt="ITIS Emblem" 
+                  className="w-4 h-4 rounded object-cover"
+                  onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                />
                 <span>ITIS GUARDIAN NETWORK</span>
               </div>
-              <p className="text-xs sm:text-sm font-semibold tracking-widest text-slate-400 uppercase font-mono">
+              <p className="text-sm font-bold tracking-widest text-[#d4af37] uppercase font-mono">
                 INTEGRATED TECHNOLOGY INTELLIGENCE &amp; SAFETY
               </p>
             </div>
 
             {/* Primary Mission Headline */}
-            <h1 className="text-3xl sm:text-5xl lg:text-6xl font-extrabold text-white tracking-tight leading-[1.1]">
+            <h1 className="text-4xl xl:text-5xl 2xl:text-6xl font-extrabold text-white tracking-tight leading-[1.1]">
               PROTECTING EVERY LEARNER.<br />
               EVERY JOURNEY.<br />
               <span className="text-[#d4af37]">EVERY SECOND.</span>
             </h1>
 
-            {/* Short Supporting Statement (Appears ONLY ONCE) */}
-            <p className="text-base sm:text-lg text-slate-300 leading-relaxed max-w-2xl">
+            {/* Short Supporting Statement */}
+            <p className="text-base xl:text-lg text-slate-300 leading-relaxed max-w-2xl">
               A coordinated child-safety network connecting guardians, schools and authorised response partners through intelligent technology and human-led coordination.
             </p>
 
             {/* Dual Actions with Clear Hierarchy: PRIMARY: LOGIN, SECONDARY: EXPLORE */}
-            <div className="pt-2 flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5">
+            <div className="pt-2 flex items-center gap-4">
               <button
                 onClick={onOpenLogin}
-                className="min-h-[46px] px-8 py-3 rounded-xl bg-[#d4af37] hover:bg-[#c29f2f] text-slate-950 text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 shadow-lg shadow-[#d4af37]/15 transition-all cursor-pointer active:scale-95"
+                className="min-h-[48px] px-8 py-3 rounded-xl bg-[#d4af37] hover:bg-[#c29f2f] text-slate-950 text-sm font-extrabold flex items-center justify-center gap-2.5 shadow-lg shadow-[#d4af37]/20 transition-all cursor-pointer active:scale-95"
               >
-                <LogIn className="w-4 h-4 text-slate-950" />
+                <LogIn className="w-4 h-4 text-slate-950 shrink-0" />
                 <span>LOGIN</span>
               </button>
 
               <button
                 onClick={() => openExplore('overview')}
-                className="min-h-[46px] px-6 py-3 rounded-xl bg-[#0a1224] hover:bg-[#0f1a30] border border-[#d4af37]/40 text-slate-100 hover:text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer group shadow-sm"
+                className="min-h-[48px] px-6 py-3 rounded-xl bg-[#0a1224] hover:bg-[#0f1a30] border border-[#d4af37]/40 text-slate-100 hover:text-white text-sm font-bold flex items-center justify-center gap-2.5 transition-all cursor-pointer group shadow-sm"
               >
                 <span>EXPLORE GUARDIAN NETWORK</span>
                 <ArrowRight className="w-4 h-4 text-[#d4af37] group-hover:translate-x-1 transition-transform" />
@@ -206,46 +213,139 @@ export const LandingPage: React.FC<Props> = ({
 
           </div>
 
-          {/* RIGHT COLUMN: DEDICATED HERO IMAGE (5 Cols) */}
-          <div className="lg:col-span-5 w-full">
-            <div className="relative rounded-2xl border border-[#d4af37]/30 bg-[#0a1224] overflow-hidden shadow-2xl shadow-[#040812] aspect-[16/11] sm:aspect-[16/10] lg:aspect-[4/3] flex items-center justify-center group">
+          {/* RIGHT COLUMN: SUBSTANTIAL CINEMATIC HERO VISUAL (5 Cols) */}
+          <div className="col-span-5 w-full">
+            <div className="relative rounded-2xl border border-[#d4af37]/35 bg-[#0a1224] overflow-hidden shadow-2xl shadow-[#040812] aspect-[4/3] flex items-center justify-center group">
               
-              {/* Actual image */}
               {!heroImgFailed ? (
                 <img
                   src="/images/itis-hero.jpg"
-                  alt="ITIS Guardian Network"
+                  alt="South African School Safety & Connected Entrance"
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                   onError={() => setHeroImgFailed(true)}
                 />
               ) : null}
 
-              {/* Graceful Fallback Frame */}
+              {/* Graceful Institutional Fallback Frame */}
               {heroImgFailed && (
-                <div className="absolute inset-0 bg-gradient-to-br from-[#0a1224] via-[#060b18] to-[#0a1224] p-6 flex flex-col items-center justify-center text-center space-y-4">
-                  <div className="w-16 h-16 rounded-2xl bg-[#060b18] border border-[#d4af37]/50 flex items-center justify-center shadow-lg shadow-[#d4af37]/10">
+                <div className="absolute inset-0 bg-gradient-to-br from-[#0a1224] via-[#060b18] to-[#0a1224] p-8 flex flex-col items-center justify-center text-center space-y-4">
+                  <div className="w-20 h-20 rounded-2xl bg-[#060b18] border border-[#d4af37]/50 flex items-center justify-center shadow-xl shadow-[#d4af37]/15">
                     <img 
                       src="/branding/itis-logo.png" 
                       alt="ITIS Emblem" 
-                      className="w-10 h-10 object-contain"
-                      onError={(e) => {
-                        (e.target as HTMLElement).style.display = 'none';
-                      }}
+                      className="w-12 h-12 object-contain"
+                      onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
                     />
                   </div>
-                  <div className="space-y-1">
-                    <h3 className="text-sm font-bold text-white tracking-wide">ITIS GUARDIAN NETWORK</h3>
-                    <p className="text-[11px] text-slate-400 max-w-xs font-mono">
+                  <div className="space-y-1.5">
+                    <h3 className="text-base font-extrabold text-white tracking-wide">ITIS GUARDIAN NETWORK</h3>
+                    <p className="text-xs text-[#d4af37] font-mono font-semibold">
+                      INTEGRATED TECHNOLOGY INTELLIGENCE &amp; SAFETY
+                    </p>
+                    <p className="text-xs text-slate-400 max-w-xs font-mono">
                       National Child Safety &amp; Journey Coordination Infrastructure
                     </p>
                   </div>
-                  <span className="text-[10px] text-[#d4af37] bg-[#d4af37]/10 px-2.5 py-1 rounded border border-[#d4af37]/30 font-mono">
+                  <span className="text-[10px] text-[#f3d368] bg-[#d4af37]/10 px-3 py-1 rounded-full border border-[#d4af37]/30 font-mono font-bold uppercase tracking-wider">
                     Republic of South Africa
                   </span>
                 </div>
               )}
 
-              {/* Subtle Gold Edge Highlight */}
+              {/* Subtle Gold Edge & Shadow Overlay */}
+              <div className="absolute inset-0 rounded-2xl border border-[#d4af37]/20 pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#060b18]/60 via-transparent to-transparent pointer-events-none" />
+            </div>
+          </div>
+
+        </section>
+
+        {/* --- DEDICATED RESPONSIVE MOBILE HERO (Visible only below lg) --- */}
+        <section className="lg:hidden flex flex-col space-y-6 pt-2 text-left">
+          
+          {/* 1. ITIS LOGO */}
+          <div className="flex items-center gap-3">
+            <img 
+              src="/branding/itis-logo.png" 
+              alt="ITIS Emblem" 
+              className="w-10 h-10 rounded-xl border border-[#d4af37]/40 object-cover shadow-md shrink-0"
+              onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+            />
+            <div>
+              {/* 2. ITIS GUARDIAN NETWORK */}
+              <span className="font-extrabold text-white text-base tracking-tight block">
+                ITIS GUARDIAN NETWORK
+              </span>
+              {/* 3. INTEGRATED TECHNOLOGY INTELLIGENCE & SAFETY */}
+              <span className="text-[10px] font-bold text-[#d4af37] font-mono tracking-wider uppercase block">
+                INTEGRATED TECHNOLOGY INTELLIGENCE &amp; SAFETY
+              </span>
+            </div>
+          </div>
+
+          {/* 4. PROTECTING EVERY LEARNER. EVERY JOURNEY. EVERY SECOND. */}
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-white tracking-tight leading-[1.15]">
+            PROTECTING EVERY LEARNER.<br />
+            EVERY JOURNEY.<br />
+            <span className="text-[#d4af37]">EVERY SECOND.</span>
+          </h1>
+
+          {/* 5. Short supporting statement */}
+          <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
+            A coordinated child-safety network connecting guardians, schools and authorised response partners through intelligent technology and human-led coordination.
+          </p>
+
+          {/* 6 & 7. Dual Action Buttons: LOGIN & EXPLORE */}
+          <div className="flex flex-col sm:flex-row gap-3 pt-1">
+            {/* LOGIN */}
+            <button
+              onClick={onOpenLogin}
+              className="min-h-[46px] w-full px-6 py-3 rounded-xl bg-[#d4af37] hover:bg-[#c29f2f] text-slate-950 text-xs sm:text-sm font-extrabold flex items-center justify-center gap-2 shadow-md shadow-[#d4af37]/15 transition-all cursor-pointer active:scale-95"
+            >
+              <LogIn className="w-4 h-4 text-slate-950 shrink-0" />
+              <span>LOGIN</span>
+            </button>
+
+            {/* EXPLORE GUARDIAN NETWORK (Only One on Landing Page) */}
+            <button
+              onClick={() => openExplore('overview')}
+              className="min-h-[46px] w-full px-5 py-3 rounded-xl bg-[#0a1224] hover:bg-[#0f1a30] border border-[#d4af37]/40 text-slate-100 hover:text-white text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
+            >
+              <span>EXPLORE GUARDIAN NETWORK</span>
+              <ArrowRight className="w-4 h-4 text-[#d4af37]" />
+            </button>
+          </div>
+
+          {/* 8. Hero Image (Clean mobile crop, no overflow) */}
+          <div className="pt-2">
+            <div className="relative rounded-2xl border border-[#d4af37]/30 bg-[#0a1224] overflow-hidden shadow-xl shadow-[#040812] aspect-[16/10] flex items-center justify-center">
+              {!heroImgFailed ? (
+                <img
+                  src="/images/itis-hero.jpg"
+                  alt="ITIS Guardian Network"
+                  className="w-full h-full object-cover"
+                  onError={() => setHeroImgFailed(true)}
+                />
+              ) : null}
+
+              {heroImgFailed && (
+                <div className="absolute inset-0 bg-gradient-to-br from-[#0a1224] to-[#060b18] p-6 flex flex-col items-center justify-center text-center space-y-3">
+                  <div className="w-14 h-14 rounded-xl bg-[#060b18] border border-[#d4af37]/40 flex items-center justify-center">
+                    <img 
+                      src="/branding/itis-logo.png" 
+                      alt="ITIS Emblem" 
+                      className="w-9 h-9 object-contain"
+                      onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }}
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <h3 className="text-sm font-bold text-white">ITIS GUARDIAN NETWORK</h3>
+                    <p className="text-[11px] text-slate-400 font-mono">
+                      National Child Safety &amp; Journey Coordination Infrastructure
+                    </p>
+                  </div>
+                </div>
+              )}
               <div className="absolute inset-0 rounded-2xl border border-[#d4af37]/20 pointer-events-none" />
             </div>
           </div>
@@ -253,22 +353,56 @@ export const LandingPage: React.FC<Props> = ({
         </section>
 
         {/* ==================================================== */}
-        {/* 2. WHY ITIS (CONCISE & 3 PRINCIPLES) */}
+        {/* 2. GEOSPATIAL SAFETY NETWORK & CO-ORDINATED INFRASTRUCTURE */}
         {/* ==================================================== */}
         <section id="why-itis" className="space-y-8 pt-8 border-t border-slate-800/80 max-w-5xl mx-auto">
-          <div className="space-y-2 text-center max-w-2xl mx-auto">
+          <div className="space-y-3 text-center max-w-3xl mx-auto">
             <span className="text-xs font-mono font-bold uppercase tracking-widest text-[#d4af37]">
-              WHY ITIS
+              CORE SAFETY CONCEPT
             </span>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              When a learner needs help, every second matters.
+              A Coordinated Geospatial Safety Network
             </h2>
             <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
-              ITIS bridges the communication gap during daily school journeys between home and school gates, replacing uncertainty with verified, immediate coordination.
+              ITIS is more than a GPS tracking platform. The underlying safety model uses authorised geofences, school gates, transport points and approved journey safety zones to understand a learner's movement between trusted locations.
+            </p>
+            <p className="text-xs sm:text-sm text-slate-400 leading-relaxed font-mono">
+              ITIS uses authorised locations, school gates, transport points and geofenced safety zones to help establish whether a learner has arrived, departed or moved through an expected safety point.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+          {/* 8 Coordinated Elements working as one safety network */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+            {[
+              { label: 'SCHOOL GATE SCANNERS', desc: 'Contactless gate check-in' },
+              { label: 'TRANSPORT SCANNERS', desc: 'Verified boarding points' },
+              { label: 'AUTHORISED DEVICES', desc: 'Secure learner identifiers' },
+              { label: 'GEOSPATIAL GEOFENCES', desc: 'Approved safety perimeters' },
+              { label: 'LEARNER / SCHOOL RECORDS', desc: 'Sovereign verified custody' },
+              { label: 'GUARDIAN INFORMATION', desc: 'Real-time family updates' },
+              { label: 'COMMAND CENTRE', desc: '24/7 certified specialists' },
+              { label: 'RESPONSE PARTNERS', desc: 'Accredited multi-agency dispatch' },
+            ].map((elem, idx) => (
+              <div 
+                key={elem.label} 
+                className="p-4 rounded-xl bg-[#0a1224] border border-slate-800 hover:border-[#d4af37]/40 transition-colors space-y-1 text-left"
+              >
+                <div className="text-[10px] font-mono font-bold text-[#d4af37] flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#d4af37]" />
+                  <span>0{idx + 1}</span>
+                </div>
+                <h4 className="text-xs font-bold text-white tracking-tight font-mono">
+                  {elem.label}
+                </h4>
+                <p className="text-[11px] text-slate-400 leading-tight">
+                  {elem.desc}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          {/* 3 Core Principles */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
             <div className="p-6 rounded-2xl bg-[#0a1224] border border-slate-800 space-y-2.5">
               <div className="text-[#d4af37] font-mono text-xs font-bold uppercase tracking-wider">
                 CHILD-FIRST
@@ -308,7 +442,111 @@ export const LandingPage: React.FC<Props> = ({
         </section>
 
         {/* ==================================================== */}
-        {/* 3. SOLUTIONS (CONCISE SUMMARY OF 3 PILLARS) */}
+        {/* 3. ATTENDANCE + GEOFENCE INTELLIGENCE & SAFETY CYCLE */}
+        {/* ==================================================== */}
+        <section className="space-y-8 pt-8 border-t border-slate-800/80 max-w-5xl mx-auto">
+          <div className="space-y-3 text-center max-w-3xl mx-auto">
+            <span className="text-xs font-mono font-bold uppercase tracking-widest text-[#d4af37]">
+              OPERATIONAL INTELLIGENCE
+            </span>
+            <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
+              Verified Attendance &amp; Journey Intelligence
+            </h2>
+            <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
+              Where deployed, ITIS school gate and transport scanning can work with authorised geofenced locations to support verified attendance and journey records.
+            </p>
+          </div>
+
+          {/* Conceptual Flow Diagram */}
+          <div className="p-6 sm:p-8 rounded-2xl bg-[#0a1224] border border-slate-800 space-y-6">
+            <div className="text-xs font-mono font-bold text-[#d4af37] uppercase tracking-wider text-center">
+              VERIFIED LOCATION EVENT LIFECYCLE
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 items-center">
+              {[
+                { title: 'LEARNER', desc: 'Authorised safety profile' },
+                { title: 'AUTHORISED DEVICE', desc: 'Gate scanner / card / app' },
+                { title: 'GEOFENCED LOCATION', desc: 'Approved boundary' },
+                { title: 'VERIFIED EVENT', desc: 'Arrival / Departure' },
+                { title: 'JOURNEY RECORD', desc: 'Attendance generated' },
+                { title: 'GUARDIAN & SCHOOL', desc: 'Instant visibility' },
+                { title: 'SAFETY INTELLIGENCE', desc: 'Accountable history' }
+              ].map((step, idx) => (
+                <div 
+                  key={step.title}
+                  className="p-3 rounded-xl bg-[#060b18] border border-slate-800 text-center space-y-1 h-full flex flex-col justify-center"
+                >
+                  <div className="text-[10px] font-mono text-[#d4af37] font-bold">
+                    STEP {idx + 1}
+                  </div>
+                  <div className="text-xs font-bold text-white font-mono leading-tight">
+                    {step.title}
+                  </div>
+                  <div className="text-[10px] text-slate-400 leading-tight">
+                    {step.desc}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* The Connected School Day Cycle: HOME -> TRANSPORT -> GATE -> SCHOOL -> AFTER-SCHOOL -> SAFE LOCATION -> HOME */}
+            <div className="pt-4 border-t border-slate-800/80 space-y-4">
+              <div className="text-xs font-mono font-bold text-slate-300 text-center uppercase tracking-wider">
+                THE CONNECTED SAFETY CYCLE (HOME TO HOME)
+              </div>
+              
+              <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-mono font-bold text-slate-200">
+                <span className="px-3 py-1.5 rounded-lg bg-[#060b18] border border-slate-700">HOME</span>
+                <span className="text-[#d4af37]">→</span>
+                <span className="px-3 py-1.5 rounded-lg bg-[#060b18] border border-slate-700">TRANSPORT</span>
+                <span className="text-[#d4af37]">→</span>
+                <span className="px-3 py-1.5 rounded-lg bg-[#060b18] border border-[#d4af37]/40 text-[#f3d368]">SCHOOL GATE</span>
+                <span className="text-[#d4af37]">→</span>
+                <span className="px-3 py-1.5 rounded-lg bg-[#060b18] border border-slate-700">SCHOOL</span>
+                <span className="text-[#d4af37]">→</span>
+                <span className="px-3 py-1.5 rounded-lg bg-[#060b18] border border-slate-700">AFTER-SCHOOL JOURNEY</span>
+                <span className="text-[#d4af37]">→</span>
+                <span className="px-3 py-1.5 rounded-lg bg-[#060b18] border border-slate-700">SAFE LOCATION</span>
+                <span className="text-[#d4af37]">→</span>
+                <span className="px-3 py-1.5 rounded-lg bg-[#060b18] border border-slate-700">HOME</span>
+              </div>
+
+              {/* Expected vs Unexpected Event Responses */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2">
+                <div className="p-4 rounded-xl bg-[#060b18]/80 border border-emerald-500/30 space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-mono font-bold text-emerald-400">
+                    <CheckCircle2 className="w-4 h-4 shrink-0" />
+                    <span>WHEN AN EXPECTED EVENT OCCURS</span>
+                  </div>
+                  <ul className="text-xs text-slate-300 space-y-1 pl-6 list-disc marker:text-emerald-500">
+                    <li>Attendance is recorded automatically</li>
+                    <li>Guardian information is updated in real time</li>
+                    <li>School campus visibility is maintained</li>
+                    <li>Verified safety history is documented</li>
+                  </ul>
+                </div>
+
+                <div className="p-4 rounded-xl bg-[#060b18]/80 border border-[#d4af37]/40 space-y-2">
+                  <div className="flex items-center gap-2 text-xs font-mono font-bold text-[#f3d368]">
+                    <ShieldCheck className="w-4 h-4 shrink-0 text-[#d4af37]" />
+                    <span>WHEN AN UNEXPECTED EVENT OCCURS</span>
+                  </div>
+                  <ul className="text-xs text-slate-300 space-y-1 pl-6 list-disc marker:text-[#d4af37]">
+                    <li>Safety rules identify an exception instantly</li>
+                    <li>A verified safety alert is generated</li>
+                    <li>Command specialists assess the situation</li>
+                    <li>Authorised response partners are coordinated</li>
+                  </ul>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </section>
+
+        {/* ==================================================== */}
+        {/* 4. SOLUTIONS (CONCISE SUMMARY OF 3 PILLARS) */}
         {/* ==================================================== */}
         <section id="solutions" className="space-y-8 pt-8 border-t border-slate-800/80 max-w-5xl mx-auto">
           <div className="space-y-2 text-center max-w-2xl mx-auto">
@@ -378,7 +616,7 @@ export const LandingPage: React.FC<Props> = ({
         </section>
 
         {/* ==================================================== */}
-        {/* 4. COMPANY & PUBLIC INFORMATION */}
+        {/* 5. COMPANY & PUBLIC INFORMATION */}
         {/* ==================================================== */}
         <section id="company" className="space-y-6 pt-8 border-t border-slate-800/80 max-w-5xl mx-auto">
           <div className="space-y-2 text-center max-w-2xl mx-auto">
@@ -415,6 +653,7 @@ export const LandingPage: React.FC<Props> = ({
       </div>
     );
   }
+
 
   // =========================================================================
   // VIEW 2: DEDICATED "EXPLORE THE GUARDIAN NETWORK" PUBLIC INFORMATION HUB
@@ -458,7 +697,7 @@ export const LandingPage: React.FC<Props> = ({
       {/* ==================================================== */}
       {/* CATEGORY NAVIGATION (Desktop Tabs / Mobile Segmented Grid) */}
       {/* ==================================================== */}
-      <div className="bg-slate-900/90 border border-slate-800 rounded-2xl p-1.5">
+      <div className="bg-[#0a1224] border border-[#d4af37]/30 rounded-2xl p-1.5 shadow-lg shadow-[#040812]">
         {/* Desktop Tabs */}
         <div className="hidden lg:grid grid-cols-4 gap-1.5">
           {exploreNavItems.map((item) => {
@@ -470,11 +709,11 @@ export const LandingPage: React.FC<Props> = ({
                 onClick={() => setSelectedCategory(item.id)}
                 className={`min-h-[44px] px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer ${
                   isSelected
-                    ? 'bg-cyan-500 text-slate-950 shadow-md font-extrabold'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    ? 'bg-[#d4af37] text-slate-950 shadow-md font-extrabold'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5 shrink-0" />
+                <Icon className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-slate-950' : 'text-[#d4af37]'}`} />
                 <span className="truncate">{item.label}</span>
               </button>
             );
@@ -492,11 +731,11 @@ export const LandingPage: React.FC<Props> = ({
                 onClick={() => setSelectedCategory(item.id)}
                 className={`min-h-[44px] px-3 py-2 rounded-xl text-[11px] font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer text-center ${
                   isSelected
-                    ? 'bg-cyan-500 text-slate-950 shadow-md font-extrabold'
-                    : 'text-slate-400 hover:text-white hover:bg-slate-800/60'
+                    ? 'bg-[#d4af37] text-slate-950 shadow-md font-extrabold'
+                    : 'text-slate-300 hover:text-white hover:bg-slate-800/60'
                 }`}
               >
-                <Icon className="w-3.5 h-3.5 shrink-0" />
+                <Icon className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-slate-950' : 'text-[#d4af37]'}`} />
                 <span className="truncate">{item.label}</span>
               </button>
             );
@@ -511,9 +750,9 @@ export const LandingPage: React.FC<Props> = ({
 
         {/* 1. OVERVIEW (~100 words concise overview) */}
         {selectedCategory === 'overview' && (
-          <div className="p-6 sm:p-10 rounded-2xl bg-slate-900/60 border border-slate-800 space-y-6">
+          <div className="p-6 sm:p-10 rounded-2xl bg-[#0a1224] border border-[#d4af37]/30 space-y-6">
             <div className="space-y-2">
-              <span className="text-xs font-mono font-bold uppercase tracking-widest text-cyan-400">
+              <span className="text-xs font-mono font-bold uppercase tracking-widest text-[#d4af37]">
                 Institutional Summary
               </span>
               <h2 className="text-xl sm:text-2xl font-extrabold text-white">
@@ -527,7 +766,7 @@ export const LandingPage: React.FC<Props> = ({
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-800/80">
               <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1">
-                <div className="text-cyan-400 text-xs font-mono font-bold">IDENTITY</div>
+                <div className="text-[#d4af37] text-xs font-mono font-bold">IDENTITY</div>
                 <div className="text-xs text-slate-300">National child-safety coordination infrastructure.</div>
               </div>
               <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1">
@@ -535,7 +774,7 @@ export const LandingPage: React.FC<Props> = ({
                 <div className="text-xs text-slate-300">24/7 human-verified emergency triage.</div>
               </div>
               <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-1">
-                <div className="text-amber-400 text-xs font-mono font-bold">GOVERNANCE</div>
+                <div className="text-[#f3d368] text-xs font-mono font-bold">GOVERNANCE</div>
                 <div className="text-xs text-slate-300">Sovereign South African POPIA §18 compliance.</div>
               </div>
             </div>
