@@ -138,8 +138,21 @@ class AuthoritativeStore {
   public responderUnits: Map<string, ResponderUnit> = new Map();
 
   constructor() {
-    this.seedAuthoritativeData();
-    this.loadFromDisk();
+    this.ensureDataDirectory();
+    if (fs.existsSync(DB_FILE_PATH)) {
+      const loadedSuccessfully = this.loadFromDisk();
+      if (!loadedSuccessfully || this.users.size === 0) {
+        console.log('[AuthoritativeStore] Persisted DB missing or invalid. Seeding initial authoritative dataset...');
+        this.seedAuthoritativeData();
+        this.persistToDisk();
+      } else {
+        console.log(`[AuthoritativeStore] Successfully loaded authoritative database from disk (${this.users.size} users, ${this.schools.size} schools).`);
+      }
+    } else {
+      console.log('[AuthoritativeStore] Initializing new authoritative database with seed dataset...');
+      this.seedAuthoritativeData();
+      this.persistToDisk();
+    }
   }
 
   private ensureDataDirectory() {
@@ -176,16 +189,25 @@ class AuthoritativeStore {
     }
   }
 
-  private loadFromDisk() {
+  private loadFromDisk(): boolean {
     try {
       if (!fs.existsSync(DB_FILE_PATH)) {
-        // Initial run: persist seed data
-        this.persistToDisk();
-        return;
+        return false;
       }
       const raw = fs.readFileSync(DB_FILE_PATH, 'utf-8');
-      if (!raw || !raw.trim()) return;
+      if (!raw || !raw.trim()) return false;
       const data = JSON.parse(raw);
+
+      this.persons.clear();
+      this.learners.clear();
+      this.guardians.clear();
+      this.relationships.clear();
+      this.schools.clear();
+      this.enrolments.clear();
+      this.academicRecords.clear();
+      this.incidents.clear();
+      this.responderUnits.clear();
+      this.users.clear();
 
       if (Array.isArray(data.persons)) {
         for (const [k, v] of data.persons) {
@@ -240,8 +262,11 @@ class AuthoritativeStore {
           this.users.set(k, v);
         }
       }
+
+      return this.users.size > 0;
     } catch (err) {
       console.warn('[AuthoritativeStore] Failed to load database from disk:', err);
+      return false;
     }
   }
 

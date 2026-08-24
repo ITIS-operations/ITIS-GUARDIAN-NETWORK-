@@ -1,0 +1,1272 @@
+{
+  "version": "1.0.0",
+  "savedAt": "2026-08-24T07:59:04.820Z",
+  "persons": [
+    [
+      "per-g-001",
+      {
+        "id": "per-g-001",
+        "officialId": "8204155192084",
+        "idType": "SA_ID",
+        "firstName": "Grace",
+        "lastName": "Molefe",
+        "dateOfBirth": "1982-04-15",
+        "gender": "FEMALE",
+        "mobileNumber": "+27821234567",
+        "mobileVerified": true,
+        "email": "grace.molefe@safetynet.co.za",
+        "emailVerified": true,
+        "physicalAddress": "42 Lynnwood Rd, Hatfield, Pretoria",
+        "isVerified": true,
+        "verificationSource": "DHA_NPR_LOOKUP",
+        "createdAt": "2025-01-10T08:00:00.000Z",
+        "updatedAt": "2026-01-15T10:00:00.000Z"
+      }
+    ],
+    [
+      "per-l-001",
+      {
+        "id": "per-l-001",
+        "officialId": "0905125890081",
+        "idType": "SA_ID",
+        "firstName": "Thabo",
+        "lastName": "Molefe",
+        "dateOfBirth": "2009-05-12",
+        "gender": "MALE",
+        "isVerified": true,
+        "verificationSource": "EMIS_VERIFIED",
+        "createdAt": "2025-01-10T08:00:00.000Z",
+        "updatedAt": "2026-01-15T10:00:00.000Z",
+        "mobileVerified": false,
+        "emailVerified": false
+      }
+    ],
+    [
+      "per-l-002",
+      {
+        "id": "per-l-002",
+        "officialId": "1109235890082",
+        "idType": "SA_ID",
+        "firstName": "Kgomotso",
+        "lastName": "Molefe",
+        "dateOfBirth": "2011-09-23",
+        "gender": "FEMALE",
+        "isVerified": true,
+        "verificationSource": "EMIS_VERIFIED",
+        "createdAt": "2026-01-12T09:00:00.000Z",
+        "updatedAt": "2026-01-12T09:00:00.000Z",
+        "mobileVerified": false,
+        "emailVerified": false
+      }
+    ],
+    [
+      "per-g-002",
+      {
+        "id": "per-g-002",
+        "officialId": "7811055890089",
+        "idType": "SA_ID",
+        "firstName": "Sipho",
+        "lastName": "Dlamini",
+        "dateOfBirth": "1978-11-05",
+        "gender": "MALE",
+        "mobileNumber": "+27839876543",
+        "mobileVerified": true,
+        "email": "sipho.dlamini@transnet.co.za",
+        "emailVerified": true,
+        "physicalAddress": "109 Vilakazi St, Orlando West, Soweto",
+        "isVerified": true,
+        "verificationSource": "DHA_NPR_LOOKUP",
+        "createdAt": "2025-02-01T08:00:00.000Z",
+        "updatedAt": "2026-01-10T08:00:00.000Z"
+      }
+    ],
+    [
+      "per-l-003",
+      {
+        "id": "per-l-003",
+        "officialId": "0812045890084",
+        "idType": "SA_ID",
+        "firstName": "Zola",
+        "lastName": "Dlamini",
+        "dateOfBirth": "2008-12-04",
+        "gender": "FEMALE",
+        "isVerified": true,
+        "verificationSource": "EMIS_VERIFIED",
+        "createdAt": "2025-02-01T08:00:00.000Z",
+        "updatedAt": "2026-01-10T08:00:00.000Z",
+        "mobileVerified": false,
+        "emailVerified": false
+      }
+    ]
+  ],
+  "learners": [
+    [
+      "lrn-001",
+      {
+        "id": "lrn-001",
+        "personId": "per-l-001",
+        "emisId": "LRN-2025-PBHS-0481",
+        "admissionNumber": "PBHS-9842",
+        "medicalNotes": "Asthmatic. Carries Ventolin inhaler.",
+        "bloodType": "O+",
+        "allergies": [
+          "Peanuts",
+          "Bee Stings"
+        ],
+        "trackingBeaconId": "BCN-ITIS-9941",
+        "photoUrl": "https://images.unsplash.com/photo-1539571696357-5a69c17a67c6?w=200&auto=format&fit=crop&q=80",
+        "specialSafetyNotes": "Authorized to commute on Route 4B Safe Corridor.",
+        "createdAt": "2025-01-10T08:00:00.000Z",
+        "updatedAt": "2026-01-15T10:00:00.000Z"
+      }
+    ],
+    [
+      "lrn-002",
+      {
+        "id": "lrn-002",
+        "personId": "per-l-002",
+        "emisId": "LRN-2026-PBHS-0899",
+        "admissionNumber": "PBHS-10442",
+        "bloodType": "O+",
+        "trackingBeaconId": "BCN-ITIS-9942",
+        "photoUrl": "https://images.unsplash.com/photo-1517841905240-472988babdf9?w=200&auto=format&fit=crop&q=80",
+        "createdAt": "2026-01-12T09:00:00.000Z",
+        "updatedAt": "2026-01-12T09:00:00.000Z"
+      }
+    ],
+    [
+      "lrn-003",
+      {
+        "id": "lrn-003",
+        "personId": "per-l-003",
+        "emisId": "LRN-2025-SOW-0199",
+        "admissionNumber": "SOW-5512",
+        "bloodType": "A+",
+        "trackingBeaconId": "BCN-ITIS-8819",
+        "photoUrl": "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=200&auto=format&fit=crop&q=80",
+        "createdAt": "2025-02-01T08:00:00.000Z",
+        "updatedAt": "2026-01-10T08:00:00.000Z"
+      }
+    ]
+  ],
+  "guardians": [
+    [
+      "grd-001",
+      {
+        "id": "grd-001",
+        "personId": "per-g-001",
+        "saIdNumber": "8204155192084",
+        "saIdMasked": "820415*****84",
+        "idVerified": true,
+        "mobileNumber": "+27821234567",
+        "mobileVerified": true,
+        "alternatePhone": "+27123456789",
+        "employerName": "Department of Health (Gauteng)",
+        "preferredLanguage": "English / Sesotho",
+        "pushNotificationsEnabled": true,
+        "createdAt": "2025-01-10T08:00:00.000Z",
+        "updatedAt": "2026-01-15T10:00:00.000Z"
+      }
+    ],
+    [
+      "grd-002",
+      {
+        "id": "grd-002",
+        "personId": "per-g-002",
+        "saIdNumber": "7811055890089",
+        "saIdMasked": "781105*****89",
+        "idVerified": true,
+        "mobileNumber": "+27839876543",
+        "mobileVerified": true,
+        "employerName": "Transnet Rail Logistics",
+        "preferredLanguage": "isiZulu / English",
+        "pushNotificationsEnabled": true,
+        "createdAt": "2025-02-01T08:00:00.000Z",
+        "updatedAt": "2026-01-10T08:00:00.000Z"
+      }
+    ]
+  ],
+  "relationships": [
+    [
+      "rel-001",
+      {
+        "id": "rel-001",
+        "guardianId": "grd-001",
+        "learnerId": "lrn-001",
+        "relationshipType": "MOTHER",
+        "isPrimary": true,
+        "legalCustodyVerified": true,
+        "authorizedForPickup": true,
+        "receiveSosAlerts": true,
+        "verificationStatus": "VERIFIED",
+        "establishedAt": "2025-01-10T08:00:00.000Z",
+        "establishedByStaffUserId": "usr-admin-01",
+        "establishedByStaffName": "M. Ndlovu (Registrar)",
+        "establishedBySchoolId": "sch-001",
+        "auditTrailId": "aud-seed-001"
+      }
+    ],
+    [
+      "rel-002",
+      {
+        "id": "rel-002",
+        "guardianId": "grd-001",
+        "learnerId": "lrn-002",
+        "relationshipType": "MOTHER",
+        "isPrimary": true,
+        "legalCustodyVerified": true,
+        "authorizedForPickup": true,
+        "receiveSosAlerts": true,
+        "verificationStatus": "VERIFIED",
+        "establishedAt": "2026-01-12T09:00:00.000Z",
+        "establishedByStaffUserId": "usr-admin-01",
+        "establishedByStaffName": "M. Ndlovu (Registrar)",
+        "establishedBySchoolId": "sch-001",
+        "auditTrailId": "aud-seed-002"
+      }
+    ],
+    [
+      "rel-003",
+      {
+        "id": "rel-003",
+        "guardianId": "grd-002",
+        "learnerId": "lrn-003",
+        "relationshipType": "FATHER",
+        "isPrimary": true,
+        "legalCustodyVerified": true,
+        "authorizedForPickup": true,
+        "receiveSosAlerts": true,
+        "verificationStatus": "VERIFIED",
+        "establishedAt": "2025-02-01T08:00:00.000Z",
+        "establishedByStaffUserId": "usr-admin-02",
+        "establishedByStaffName": "P. Sithole",
+        "establishedBySchoolId": "sch-002",
+        "auditTrailId": "aud-seed-003"
+      }
+    ]
+  ],
+  "schools": [
+    [
+      "sch-001",
+      {
+        "id": "sch-001",
+        "name": "Pretoria Boys High School",
+        "emisCode": "EMIS-70012490",
+        "district": "Tshwane South (D4)",
+        "province": "GAUTENG",
+        "address": "Roper St & Brooklyn Rd, Brooklyn, Pretoria, 0181",
+        "principalName": "Dr. Gregory Hassenkamp",
+        "contactPhone": "+27 12 460 2246",
+        "contactEmail": "admin@pbhs.co.za",
+        "activeLearnersCount": 1450,
+        "totalGuardiansLinkedCount": 1390,
+        "geofenceCenter": {
+          "lat": -25.7601,
+          "lng": 28.2355,
+          "radiusMeters": 450
+        }
+      }
+    ],
+    [
+      "sch-002",
+      {
+        "id": "sch-002",
+        "name": "Soweto Community High School",
+        "emisCode": "EMIS-70088120",
+        "district": "Johannesburg West (D12)",
+        "province": "GAUTENG",
+        "address": "Vilakazi St & Moema St, Orlando West, Soweto, 1804",
+        "principalName": "Mrs. Nomvula Sithole",
+        "contactPhone": "+27 11 936 4100",
+        "contactEmail": "safety@sowetohigh.edu.za",
+        "activeLearnersCount": 980,
+        "totalGuardiansLinkedCount": 920,
+        "geofenceCenter": {
+          "lat": -26.2372,
+          "lng": 27.9056,
+          "radiusMeters": 500
+        }
+      }
+    ],
+    [
+      "sch-003",
+      {
+        "id": "sch-003",
+        "name": "Cape Town Central Secondary",
+        "emisCode": "EMIS-10029381",
+        "district": "Metro Central",
+        "province": "WESTERN_CAPE",
+        "address": "Hatfield St, Gardens, Cape Town, 8001",
+        "principalName": "Mr. David Van Der Merwe",
+        "contactPhone": "+27 21 461 7000",
+        "contactEmail": "admin@capetownsec.edu.za",
+        "activeLearnersCount": 820,
+        "totalGuardiansLinkedCount": 790,
+        "geofenceCenter": {
+          "lat": -33.9315,
+          "lng": 18.4172,
+          "radiusMeters": 400
+        }
+      }
+    ]
+  ],
+  "enrolments": [
+    [
+      "enr-001",
+      {
+        "id": "enr-001",
+        "learnerId": "lrn-001",
+        "schoolId": "sch-001",
+        "admissionDate": "2025-01-15",
+        "enrolmentStatus": "ACTIVE",
+        "currentAcademicYear": 2026,
+        "enrolledByStaffId": "usr-admin-01",
+        "createdAt": "2025-01-15T08:00:00.000Z",
+        "updatedAt": "2026-01-15T08:00:00.000Z"
+      }
+    ],
+    [
+      "enr-002",
+      {
+        "id": "enr-002",
+        "learnerId": "lrn-002",
+        "schoolId": "sch-001",
+        "admissionDate": "2026-01-12",
+        "enrolmentStatus": "ACTIVE",
+        "currentAcademicYear": 2026,
+        "enrolledByStaffId": "usr-admin-01",
+        "createdAt": "2026-01-12T09:00:00.000Z",
+        "updatedAt": "2026-01-12T09:00:00.000Z"
+      }
+    ],
+    [
+      "enr-003",
+      {
+        "id": "enr-003",
+        "learnerId": "lrn-003",
+        "schoolId": "sch-002",
+        "admissionDate": "2025-02-01",
+        "enrolmentStatus": "ACTIVE",
+        "currentAcademicYear": 2026,
+        "enrolledByStaffId": "usr-admin-02",
+        "createdAt": "2025-02-01T08:00:00.000Z",
+        "updatedAt": "2026-01-10T08:00:00.000Z"
+      }
+    ]
+  ],
+  "academicRecords": [
+    [
+      "acd-001-2025",
+      {
+        "id": "acd-001-2025",
+        "learnerId": "lrn-001",
+        "schoolId": "sch-001",
+        "academicYear": 2025,
+        "grade": "Grade 9",
+        "classSection": "9-C",
+        "homeroomTeacher": "Mr. J. Botha",
+        "attendanceRate": 98.4,
+        "status": "PROMOTED",
+        "updatedAt": "2025-12-10T12:00:00.000Z"
+      }
+    ],
+    [
+      "acd-001-2026",
+      {
+        "id": "acd-001-2026",
+        "learnerId": "lrn-001",
+        "schoolId": "sch-001",
+        "academicYear": 2026,
+        "grade": "Grade 10",
+        "classSection": "10-A",
+        "homeroomTeacher": "Mrs. S. Khumalo",
+        "attendanceRate": 99.1,
+        "status": "CURRENT",
+        "updatedAt": "2026-01-15T08:00:00.000Z"
+      }
+    ],
+    [
+      "acd-002-2026",
+      {
+        "id": "acd-002-2026",
+        "learnerId": "lrn-002",
+        "schoolId": "sch-001",
+        "academicYear": 2026,
+        "grade": "Grade 8",
+        "classSection": "8-B",
+        "homeroomTeacher": "Mr. P. Dlamini",
+        "attendanceRate": 100,
+        "status": "CURRENT",
+        "updatedAt": "2026-01-12T09:00:00.000Z"
+      }
+    ],
+    [
+      "acd-003-2026",
+      {
+        "id": "acd-003-2026",
+        "learnerId": "lrn-003",
+        "schoolId": "sch-002",
+        "academicYear": 2026,
+        "grade": "Grade 11",
+        "classSection": "11-Science",
+        "homeroomTeacher": "Mr. K. Radebe",
+        "attendanceRate": 97.8,
+        "status": "CURRENT",
+        "updatedAt": "2026-01-10T08:00:00.000Z"
+      }
+    ]
+  ],
+  "auditLogs": [
+    {
+      "id": "aud-mt6y32b8-4spbh",
+      "timestamp": "2026-08-24T07:59:04.820Z",
+      "actionType": "PERSON_CREATED",
+      "actorUserId": "usr-systemadmin-4811",
+      "actorName": "Persistence Test User",
+      "actorRole": "SYSTEM_ADMIN",
+      "targetEntity": "PERSON",
+      "targetId": "usr-systemadmin-4811",
+      "details": {
+        "event": "USER_AUTHENTICATED",
+        "role": "SYSTEM_ADMIN",
+        "authScope": {}
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_337e05b3_mt6y32b8"
+    },
+    {
+      "id": "aud-mt6y32b7-mhg6z",
+      "timestamp": "2026-08-24T07:59:04.819Z",
+      "actionType": "SECURITY_POLICY_MODIFIED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Sovereign Executive Director",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "USER",
+      "targetId": "USR-SUPER-001",
+      "details": {
+        "event": "FOUNDER_PASSWORD_UPDATED",
+        "account": "founder@itis365.co.za",
+        "timestamp": "2026-08-24T07:59:04.819Z"
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_688a4e0a_mt6y32b7"
+    },
+    {
+      "id": "aud-mt6y32b6-u78wx",
+      "timestamp": "2026-08-24T07:59:04.818Z",
+      "actionType": "PERSON_CREATED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Executive Founder / SuperAdmin",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "PERSON",
+      "targetId": "USR-SUPER-001",
+      "details": {
+        "event": "USER_AUTHENTICATED",
+        "role": "FOUNDER_EXECUTIVE",
+        "authScope": {}
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_34d101c1_mt6y32b6"
+    },
+    {
+      "id": "aud-mt6y32b6-5f5l7",
+      "timestamp": "2026-08-24T07:59:04.818Z",
+      "actionType": "SECURITY_POLICY_MODIFIED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Sovereign Executive Director",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "USER",
+      "targetId": "USR-SUPER-001",
+      "details": {
+        "event": "FOUNDER_PASSWORD_UPDATED",
+        "account": "founder@itis365.co.za",
+        "timestamp": "2026-08-24T07:59:04.818Z"
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_307970d2_mt6y32b6"
+    },
+    {
+      "id": "aud-mt6y32b5-f5xjd",
+      "timestamp": "2026-08-24T07:59:04.817Z",
+      "actionType": "RELATIONSHIP_ESTABLISHED",
+      "actorUserId": "usr-admin-01",
+      "actorName": "M. Ndlovu (Registrar)",
+      "actorRole": "SCHOOL_ADMIN_STAFF",
+      "targetEntity": "RELATIONSHIP",
+      "targetId": "rel-001",
+      "details": {
+        "guardian": "Grace Molefe",
+        "learner": "Thabo Molefe",
+        "rel": "MOTHER",
+        "isPrimary": true
+      },
+      "ipAddress": "196.25.1.10",
+      "checksum": "HEX_4c82ce78_mt6y32b5"
+    },
+    {
+      "id": "aud-mt6y32b5-wbg65",
+      "timestamp": "2026-08-24T07:59:04.817Z",
+      "actionType": "PERSON_CREATED",
+      "actorUserId": "system-init",
+      "actorName": "System Bootstrapper",
+      "actorRole": "SYSTEM",
+      "targetEntity": "PERSON",
+      "targetId": "per-g-001",
+      "details": {
+        "name": "Grace Molefe",
+        "officialId": "820415*****84"
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_1140974e_mt6y32b5"
+    },
+    {
+      "id": "aud-mt6y32b4-c7rtz",
+      "timestamp": "2026-08-24T07:59:04.816Z",
+      "actionType": "PERSON_CREATED",
+      "actorUserId": "usr-systemadmin-4811",
+      "actorName": "Persistence Test User",
+      "actorRole": "SYSTEM_ADMIN",
+      "targetEntity": "PERSON",
+      "targetId": "usr-systemadmin-4811",
+      "details": {
+        "event": "USER_AUTHENTICATED",
+        "role": "SYSTEM_ADMIN",
+        "authScope": {}
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_6be3e163_mt6y32b4"
+    },
+    {
+      "id": "aud-mt6y32b3-bcext",
+      "timestamp": "2026-08-24T07:59:04.815Z",
+      "actionType": "PERSON_CREATED",
+      "actorUserId": "usr-systemadmin-4811",
+      "actorName": "Persistence Test User",
+      "actorRole": "SYSTEM_ADMIN",
+      "targetEntity": "PERSON",
+      "targetId": "usr-systemadmin-4811",
+      "details": {
+        "event": "USER_AUTHENTICATED",
+        "role": "SYSTEM_ADMIN",
+        "authScope": {}
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_6b8187e9_mt6y32b3"
+    },
+    {
+      "id": "aud-mt6y32b2-ty2yv",
+      "timestamp": "2026-08-24T07:59:04.814Z",
+      "actionType": "PERSON_CREATED",
+      "actorUserId": "usr-systemadmin-4811",
+      "actorName": "Persistence Test User",
+      "actorRole": "SYSTEM_ADMIN",
+      "targetEntity": "PERSON",
+      "targetId": "usr-systemadmin-4811",
+      "details": {
+        "event": "USER_AUTHENTICATED",
+        "role": "SYSTEM_ADMIN",
+        "authScope": {}
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_60d5a001_mt6y32b3"
+    },
+    {
+      "id": "aud-mt6y32b1-9ar9b",
+      "timestamp": "2026-08-24T07:59:04.813Z",
+      "actionType": "USER_CREATED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Sovereign Executive Director",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "USER",
+      "targetId": "usr-systemadmin-4811",
+      "details": {
+        "createdUserId": "usr-systemadmin-4811",
+        "name": "Persistence Test User",
+        "email": "persistence.test@itis365.co.za",
+        "assignedRole": "SYSTEM_ADMIN",
+        "organization": "ITIS National Governance Division",
+        "status": "ACTIVE"
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_679bf566_mt6y32b2"
+    },
+    {
+      "id": "aud-mt6y2fj6-xmudl",
+      "timestamp": "2026-08-24T07:58:35.298Z",
+      "actionType": "PERSON_CREATED",
+      "actorUserId": "usr-systemadmin-5291",
+      "actorName": "Persistence Test User",
+      "actorRole": "SYSTEM_ADMIN",
+      "targetEntity": "PERSON",
+      "targetId": "usr-systemadmin-5291",
+      "details": {
+        "event": "USER_AUTHENTICATED",
+        "role": "SYSTEM_ADMIN",
+        "authScope": {}
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_569f70e3_mt6y2fj6"
+    },
+    {
+      "id": "aud-mt6y2fj6-yaobc",
+      "timestamp": "2026-08-24T07:58:35.298Z",
+      "actionType": "SECURITY_POLICY_MODIFIED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Sovereign Executive Director",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "USER",
+      "targetId": "USR-SUPER-001",
+      "details": {
+        "event": "FOUNDER_PASSWORD_UPDATED",
+        "account": "founder@itis365.co.za",
+        "timestamp": "2026-08-24T07:58:35.298Z"
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_4cb0b45a_mt6y2fj6"
+    },
+    {
+      "id": "aud-mt6y2fj5-0vj78",
+      "timestamp": "2026-08-24T07:58:35.297Z",
+      "actionType": "PERSON_CREATED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Executive Founder / SuperAdmin",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "PERSON",
+      "targetId": "USR-SUPER-001",
+      "details": {
+        "event": "USER_AUTHENTICATED",
+        "role": "FOUNDER_EXECUTIVE",
+        "authScope": {}
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_70c31677_mt6y2fj5"
+    },
+    {
+      "id": "aud-mt6y2fj5-szn5z",
+      "timestamp": "2026-08-24T07:58:35.297Z",
+      "actionType": "SECURITY_POLICY_MODIFIED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Sovereign Executive Director",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "USER",
+      "targetId": "USR-SUPER-001",
+      "details": {
+        "event": "FOUNDER_PASSWORD_UPDATED",
+        "account": "founder@itis365.co.za",
+        "timestamp": "2026-08-24T07:58:35.297Z"
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_75b30f7b_mt6y2fj5"
+    },
+    {
+      "id": "aud-mt6y2fj4-uuw1l",
+      "timestamp": "2026-08-24T07:58:35.296Z",
+      "actionType": "RELATIONSHIP_ESTABLISHED",
+      "actorUserId": "usr-admin-01",
+      "actorName": "M. Ndlovu (Registrar)",
+      "actorRole": "SCHOOL_ADMIN_STAFF",
+      "targetEntity": "RELATIONSHIP",
+      "targetId": "rel-001",
+      "details": {
+        "guardian": "Grace Molefe",
+        "learner": "Thabo Molefe",
+        "rel": "MOTHER",
+        "isPrimary": true
+      },
+      "ipAddress": "196.25.1.10",
+      "checksum": "HEX_5ed58cdd_mt6y2fj4"
+    },
+    {
+      "id": "aud-mt6y2fj4-a5gwm",
+      "timestamp": "2026-08-24T07:58:35.296Z",
+      "actionType": "PERSON_CREATED",
+      "actorUserId": "system-init",
+      "actorName": "System Bootstrapper",
+      "actorRole": "SYSTEM",
+      "targetEntity": "PERSON",
+      "targetId": "per-g-001",
+      "details": {
+        "name": "Grace Molefe",
+        "officialId": "820415*****84"
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_25583684_mt6y2fj4"
+    },
+    {
+      "id": "aud-mt6y2fj3-fsjb0",
+      "timestamp": "2026-08-24T07:58:35.295Z",
+      "actionType": "PERSON_CREATED",
+      "actorUserId": "usr-systemadmin-5291",
+      "actorName": "Persistence Test User",
+      "actorRole": "SYSTEM_ADMIN",
+      "targetEntity": "PERSON",
+      "targetId": "usr-systemadmin-5291",
+      "details": {
+        "event": "USER_AUTHENTICATED",
+        "role": "SYSTEM_ADMIN",
+        "authScope": {}
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_5bacd740_mt6y2fj3"
+    },
+    {
+      "id": "aud-mt6y2fj2-jt9f1",
+      "timestamp": "2026-08-24T07:58:35.294Z",
+      "actionType": "PERSON_CREATED",
+      "actorUserId": "usr-systemadmin-5291",
+      "actorName": "Persistence Test User",
+      "actorRole": "SYSTEM_ADMIN",
+      "targetEntity": "PERSON",
+      "targetId": "usr-systemadmin-5291",
+      "details": {
+        "event": "USER_AUTHENTICATED",
+        "role": "SYSTEM_ADMIN",
+        "authScope": {}
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_6466bdd3_mt6y2fj2"
+    },
+    {
+      "id": "aud-mt6y2fj0-dx0gs",
+      "timestamp": "2026-08-24T07:58:35.292Z",
+      "actionType": "PERSON_CREATED",
+      "actorUserId": "usr-systemadmin-5291",
+      "actorName": "Persistence Test User",
+      "actorRole": "SYSTEM_ADMIN",
+      "targetEntity": "PERSON",
+      "targetId": "usr-systemadmin-5291",
+      "details": {
+        "event": "USER_AUTHENTICATED",
+        "role": "SYSTEM_ADMIN",
+        "authScope": {}
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_0ea33a37_mt6y2fj0"
+    },
+    {
+      "id": "aud-mt6y2fiz-3dke3",
+      "timestamp": "2026-08-24T07:58:35.291Z",
+      "actionType": "USER_CREATED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Sovereign Executive Director",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "USER",
+      "targetId": "usr-systemadmin-5291",
+      "details": {
+        "createdUserId": "usr-systemadmin-5291",
+        "name": "Persistence Test User",
+        "email": "persistence.test@itis365.co.za",
+        "assignedRole": "SYSTEM_ADMIN",
+        "organization": "ITIS National Governance Division",
+        "status": "ACTIVE"
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_135bf501_mt6y2fj0"
+    },
+    {
+      "id": "aud-mt6wpk4y-qsijs",
+      "timestamp": "2026-08-24T07:20:35.122Z",
+      "actionType": "RELATIONSHIP_ESTABLISHED",
+      "actorUserId": "usr-admin-01",
+      "actorName": "M. Ndlovu (Registrar)",
+      "actorRole": "SCHOOL_ADMIN_STAFF",
+      "targetEntity": "RELATIONSHIP",
+      "targetId": "rel-001",
+      "details": {
+        "guardian": "Grace Molefe",
+        "learner": "Thabo Molefe",
+        "rel": "MOTHER",
+        "isPrimary": true
+      },
+      "ipAddress": "196.25.1.10",
+      "checksum": "HEX_051d3ea8_mt6wpk4y"
+    },
+    {
+      "id": "aud-mt6wpk4y-l6xg1",
+      "timestamp": "2026-08-24T07:20:35.122Z",
+      "actionType": "PERSON_CREATED",
+      "actorUserId": "system-init",
+      "actorName": "System Bootstrapper",
+      "actorRole": "SYSTEM",
+      "targetEntity": "PERSON",
+      "targetId": "per-g-001",
+      "details": {
+        "name": "Grace Molefe",
+        "officialId": "820415*****84"
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_5472b672_mt6wpk4y"
+    }
+  ],
+  "incidents": [
+    [
+      "inc-2026-0941",
+      {
+        "id": "inc-2026-0941",
+        "learnerId": "lrn-001",
+        "learnerName": "Thabo Molefe",
+        "learnerGrade": "Grade 10 (10-A)",
+        "schoolId": "sch-001",
+        "schoolName": "Pretoria Boys High School",
+        "guardianName": "Grace Molefe (Mother)",
+        "guardianMobile": "+27 82 123 4567",
+        "timestamp": "2026-08-24T07:57:49.817Z",
+        "severity": "CRITICAL_SOS",
+        "status": "DISPATCHED",
+        "triggerType": "MANUAL_SOS_BEACON",
+        "location": {
+          "lat": -25.7589,
+          "lng": 28.2321,
+          "addressDescription": "Brooklyn Safe Zone - 220m from South Gate",
+          "accuracyMeters": 4.2
+        },
+        "assignedResponder": {
+          "id": "resp-saps-01",
+          "name": "National Police Sunnyside Sector 2 Unit 01",
+          "unitType": "NATIONAL_POLICE",
+          "vehicleId": "POLICE-GP-9912",
+          "etaMinutes": 2,
+          "distanceKm": 0.6
+        },
+        "slaTargetSeconds": 180,
+        "elapsedSeconds": 75,
+        "notes": [
+          "Distress beacon activated on verified Safe Corridor Route 4B",
+          "Identity confirmed against authoritative student directory",
+          "Command Officer authorized National Police Rapid Response dispatch",
+          "Guardian Grace Molefe alerted via instant priority notification"
+        ]
+      }
+    ]
+  ],
+  "users": [
+    [
+      "usr-parent-01",
+      {
+        "id": "usr-parent-01",
+        "email": "grace.molefe@safetynet.co.za",
+        "aliases": [
+          "parent@safetynet.co.za",
+          "parent@itis.safety.za"
+        ],
+        "password": "Password123!",
+        "name": "Grace Molefe",
+        "firstName": "Grace",
+        "surname": "Molefe",
+        "mobileNumber": "+27 82 123 4567",
+        "role": "PARENT_GUARDIAN",
+        "guardianId": "grd-001",
+        "department": "Parent & Legal Guardian Community",
+        "organization": "Pretoria Boys High School Parent Body",
+        "permissions": [
+          "GUARDIAN_CHILDREN_VIEW",
+          "GUARDIAN_LOCATION_VIEW",
+          "GUARDIAN_ALERTS_RECEIVE",
+          "GUARDIAN_PROFILE_UPDATE",
+          "EMERGENCY_INCIDENTS_VIEW_SCOPED"
+        ],
+        "status": "ACTIVE",
+        "isDemoAccount": true,
+        "createdAt": "2026-01-15T08:00:00.000Z"
+      }
+    ],
+    [
+      "usr-principal-01",
+      {
+        "id": "usr-principal-01",
+        "email": "admin@pbhs.co.za",
+        "aliases": [
+          "principal@pbhs.co.za",
+          "principal@itis.safety.za"
+        ],
+        "password": "Password123!",
+        "name": "Dr. Gregory Hassenkamp",
+        "firstName": "Gregory",
+        "surname": "Hassenkamp",
+        "mobileNumber": "+27 12 460 2246",
+        "role": "SCHOOL_PRINCIPAL",
+        "schoolId": "sch-001",
+        "department": "Pretoria Boys High School Administration",
+        "organization": "Pretoria Boys High School",
+        "permissions": [
+          "SCHOOL_RECORDS_MANAGE",
+          "LEARNERS_VIEW_SCOPED",
+          "ATTENDANCE_MANAGE",
+          "EMERGENCY_INCIDENTS_VIEW_SCOPED"
+        ],
+        "status": "ACTIVE",
+        "isDemoAccount": true,
+        "createdAt": "2026-01-10T08:00:00.000Z"
+      }
+    ],
+    [
+      "usr-schooladmin-02",
+      {
+        "id": "usr-schooladmin-02",
+        "email": "safety@sowetohigh.edu.za",
+        "aliases": [
+          "schooladmin@sowetohigh.edu.za",
+          "school@itis.safety.za"
+        ],
+        "password": "Password123!",
+        "name": "Mrs. Nomvula Sithole",
+        "firstName": "Nomvula",
+        "surname": "Sithole",
+        "mobileNumber": "+27 11 938 1122",
+        "role": "SCHOOL_ADMIN_STAFF",
+        "schoolId": "sch-002",
+        "department": "Soweto Community High Registrar",
+        "organization": "Soweto Community High School",
+        "permissions": [
+          "SCHOOL_RECORDS_MANAGE",
+          "LEARNERS_VIEW_SCOPED",
+          "ATTENDANCE_MANAGE",
+          "EMERGENCY_INCIDENTS_VIEW_SCOPED"
+        ],
+        "status": "ACTIVE",
+        "isDemoAccount": true,
+        "createdAt": "2026-01-12T08:00:00.000Z"
+      }
+    ],
+    [
+      "usr-command-01",
+      {
+        "id": "usr-command-01",
+        "email": "command@itis.safety.za",
+        "aliases": [
+          "operator@itis.safety.za",
+          "control@itis.safety.za"
+        ],
+        "password": "Password123!",
+        "name": "Command Officer Sipho Ndlovu",
+        "firstName": "Sipho",
+        "surname": "Ndlovu",
+        "mobileNumber": "+27 12 358 7099",
+        "role": "COMMAND_OPERATOR",
+        "department": "24/7 National Operations Command",
+        "organization": "ITIS National Command Centre",
+        "permissions": [
+          "EMERGENCY_INCIDENTS_VIEW_ALL",
+          "SOS_VERIFY_ASSESS",
+          "RESPONDER_DISPATCH_AUTHORIZE",
+          "RESPONDER_STATUS_UPDATE",
+          "INCIDENT_RESOLVE_CLOSE",
+          "LEARNERS_VIEW_SCOPED",
+          "AUDIT_LOGS_VIEW"
+        ],
+        "status": "ACTIVE",
+        "isDemoAccount": true,
+        "createdAt": "2026-01-01T08:00:00.000Z"
+      }
+    ],
+    [
+      "usr-tech-01",
+      {
+        "id": "usr-tech-01",
+        "email": "thabo.tech@itis.safety.za",
+        "aliases": [
+          "tech@itis.safety.za",
+          "hardware@itis.safety.za"
+        ],
+        "password": "Password123!",
+        "name": "Thabo Sithole (Hardware Lead)",
+        "firstName": "Thabo",
+        "surname": "Sithole",
+        "mobileNumber": "+27 83 991 0022",
+        "role": "TECHNICIAN",
+        "department": "Field Hardware & IoT Telemetry Directorate",
+        "organization": "ITIS Infrastructure Division",
+        "permissions": [
+          "HARDWARE_DEVICES_VIEW",
+          "HARDWARE_DIAGNOSE",
+          "HARDWARE_MAINTENANCE_UPDATE",
+          "FIRMWARE_DEPLOY"
+        ],
+        "status": "ACTIVE",
+        "isDemoAccount": true,
+        "createdAt": "2026-01-05T08:00:00.000Z"
+      }
+    ],
+    [
+      "usr-sysadmin-01",
+      {
+        "id": "usr-sysadmin-01",
+        "email": "sysadmin@itis.safety.za",
+        "aliases": [
+          "admin@itis.safety.za",
+          "system@itis.safety.za"
+        ],
+        "password": "Password123!",
+        "name": "Sovereign Administrator",
+        "firstName": "Sovereign",
+        "surname": "Administrator",
+        "mobileNumber": "+27 12 000 1100",
+        "role": "SYSTEM_ADMIN",
+        "department": "Core Infrastructure Operations",
+        "organization": "ITIS Systems Directorate",
+        "permissions": [
+          "OPERATIONAL_RECORDS_MANAGE",
+          "SCHOOLS_REGISTER",
+          "SCHOOL_RECORDS_MANAGE",
+          "LEARNERS_REGISTER",
+          "LEARNERS_VIEW_ALL",
+          "GUARDIANS_REGISTER",
+          "GUARDIAN_RELATIONSHIPS_MANAGE",
+          "ENROLMENT_MANAGE",
+          "ATTENDANCE_MANAGE",
+          "HARDWARE_DEVICES_VIEW",
+          "HARDWARE_DIAGNOSE",
+          "AUDIT_LOGS_VIEW"
+        ],
+        "status": "ACTIVE",
+        "isDemoAccount": true,
+        "createdAt": "2026-01-01T08:00:00.000Z"
+      }
+    ],
+    [
+      "usr-responder-01",
+      {
+        "id": "usr-responder-01",
+        "email": "responder@itis.safety.za",
+        "aliases": [
+          "responder.sunnyside@police.gov.za",
+          "saps.sunnyside@saps.gov.za",
+          "responder@saps.gov.za",
+          "saps@itis.safety.za",
+          "police@itis.safety.za"
+        ],
+        "password": "Password123!",
+        "name": "National Police Sunnyside Sector 2 Unit 01",
+        "firstName": "W/O Kabelo",
+        "surname": "Khumalo",
+        "mobileNumber": "+27 12 422 3600",
+        "role": "FIELD_RESPONDER",
+        "responderUnit": "POLICE-GP-9912",
+        "department": "National Police Service (Rapid Emergency Response)",
+        "organization": "South African Police Service (SAPS)",
+        "permissions": [
+          "ASSIGNED_INCIDENT_VIEW_MINIMAL",
+          "ASSIGNED_INCIDENT_STATUS_UPDATE",
+          "INCIDENT_REPORT_SUBMIT"
+        ],
+        "status": "ACTIVE",
+        "isDemoAccount": true,
+        "createdAt": "2026-01-08T08:00:00.000Z"
+      }
+    ],
+    [
+      "usr-auditor-01",
+      {
+        "id": "usr-auditor-01",
+        "email": "audit@dbe.gov.za",
+        "aliases": [
+          "inspector@dbe.gov.za",
+          "governance@itis.safety.za"
+        ],
+        "password": "Password123!",
+        "name": "Adv. P. Dlamini",
+        "firstName": "Phindile",
+        "surname": "Dlamini",
+        "mobileNumber": "+27 12 357 3000",
+        "role": "GOVERNMENT_AUDITOR",
+        "department": "Department of Basic Education National Directorate",
+        "organization": "Department of Basic Education (DBE)",
+        "permissions": [
+          "GOVERNMENT_AGGREGATES_VIEW",
+          "COMPLIANCE_REPORTS_VIEW",
+          "EMIS_INTEGRITY_INSPECT",
+          "ENTERPRISE_AUDIT_VIEW",
+          "AUDIT_LOGS_VIEW"
+        ],
+        "status": "ACTIVE",
+        "isDemoAccount": true,
+        "createdAt": "2026-01-03T08:00:00.000Z"
+      }
+    ],
+    [
+      "USR-SUPER-001",
+      {
+        "id": "USR-SUPER-001",
+        "email": "founder@itis365.co.za",
+        "aliases": [
+          "founder@itis365.co.za",
+          "founder@itis.safety.za",
+          "executive@itis.safety.za",
+          "director@itis.safety.za",
+          "usr-founder-01"
+        ],
+        "password": "cad8a08b342ff4691572e570134b4ca69de6038d519bf3754bf41bb7cabaa288",
+        "name": "Executive Founder / SuperAdmin",
+        "firstName": "Executive",
+        "surname": "Founder",
+        "mobileNumber": "+27 12 999 0001",
+        "role": "FOUNDER_EXECUTIVE",
+        "department": "ITIS Sovereign Governance Council",
+        "organization": "ITIS National Safety Initiative",
+        "permissions": [
+          "PLATFORM_GOVERNANCE_MANAGE",
+          "USER_IDENTITIES_MANAGE",
+          "SECURITY_POLICIES_MANAGE",
+          "SYSTEM_CONFIG_MANAGE",
+          "ENTERPRISE_AUDIT_VIEW",
+          "OPERATIONAL_RECORDS_MANAGE",
+          "SCHOOLS_REGISTER",
+          "SCHOOL_RECORDS_MANAGE",
+          "LEARNERS_REGISTER",
+          "LEARNERS_VIEW_ALL",
+          "GUARDIANS_REGISTER",
+          "GUARDIAN_RELATIONSHIPS_MANAGE",
+          "ENROLMENT_MANAGE",
+          "ATTENDANCE_MANAGE",
+          "EMERGENCY_INCIDENTS_VIEW_ALL",
+          "SOS_VERIFY_ASSESS",
+          "RESPONDER_DISPATCH_AUTHORIZE",
+          "RESPONDER_STATUS_UPDATE",
+          "INCIDENT_RESOLVE_CLOSE",
+          "HARDWARE_DEVICES_VIEW",
+          "HARDWARE_DIAGNOSE",
+          "HARDWARE_MAINTENANCE_UPDATE",
+          "FIRMWARE_DEPLOY",
+          "GOVERNMENT_AGGREGATES_VIEW",
+          "COMPLIANCE_REPORTS_VIEW",
+          "EMIS_INTEGRITY_INSPECT",
+          "EXECUTIVE_METRICS_VIEW",
+          "STRATEGIC_DASHBOARD_VIEW",
+          "AUDIT_LOGS_VIEW"
+        ],
+        "status": "ACTIVE",
+        "isDemoAccount": true,
+        "createdAt": "2026-01-01T00:00:00.000Z"
+      }
+    ]
+  ],
+  "responderUnits": [
+    [
+      "resp-saps-01",
+      {
+        "id": "resp-saps-01",
+        "callSign": "POLICE-GP-9912 (Patrol 01)",
+        "name": "National Police Sunnyside Sector 2 Unit 01",
+        "unitType": "NATIONAL_POLICE",
+        "vehicleId": "POLICE-GP-9912",
+        "contactPhone": "+27 12 422 3600",
+        "radioFrequency": "National Emergency Band CH-02",
+        "currentLocation": {
+          "lat": -25.755,
+          "lng": 28.231,
+          "addressDescription": "Roper St Patrol Sector (0.6 km from South Gate)",
+          "isVerified": true
+        },
+        "status": "AVAILABLE",
+        "assignedUserId": "usr-responder-01",
+        "capabilities": [
+          "National Police Tactical Escort",
+          "Child Protection Intercept",
+          "Trauma First Aid Support",
+          "Secure Emergency Radio"
+        ],
+        "ratingScore": 4.98
+      }
+    ],
+    [
+      "resp-metro-02",
+      {
+        "id": "resp-metro-02",
+        "callSign": "METRO-PATROL-04",
+        "name": "Metro Police Emergency Unit 04",
+        "unitType": "METRO_POLICE",
+        "vehicleId": "METRO-0412",
+        "contactPhone": "+27 12 358 7095",
+        "radioFrequency": "National Emergency Band CH-03",
+        "currentLocation": {
+          "lat": -25.764,
+          "lng": 28.242,
+          "addressDescription": "Hatfield Plaza Patrol Sector (1.2 km)",
+          "isVerified": true
+        },
+        "status": "AVAILABLE",
+        "capabilities": [
+          "Perimeter Security & Cordon",
+          "School Traffic Escort",
+          "Rapid Response Intercept"
+        ],
+        "ratingScore": 4.85
+      }
+    ],
+    [
+      "resp-ems-03",
+      {
+        "id": "resp-ems-03",
+        "callSign": "MEDIC-ALPHA-12",
+        "name": "Emergency Medical Services Rapid Paramedic Alpha",
+        "unitType": "PARAMEDIC_EMS",
+        "vehicleId": "AMB-GP-8821",
+        "contactPhone": "+27 82 911 0000",
+        "radioFrequency": "National Emergency Band CH-05",
+        "currentLocation": {
+          "lat": -25.768,
+          "lng": 28.228,
+          "addressDescription": "Groenkloof Emergency Station (1.8 km)",
+          "isVerified": true
+        },
+        "status": "AVAILABLE",
+        "capabilities": [
+          "Advanced Life Support (ALS)",
+          "Pediatric Trauma Care",
+          "Rapid Medical Evacuation"
+        ],
+        "ratingScore": 4.95
+      }
+    ],
+    [
+      "resp-sec-04",
+      {
+        "id": "resp-sec-04",
+        "callSign": "ARMED-SEC-09",
+        "name": "Armed Security Safe Corridor Patrol",
+        "unitType": "PRIVATE_SECURITY",
+        "vehicleId": "SEC-GP-4411",
+        "contactPhone": "+27 11 697 0000",
+        "radioFrequency": "National Emergency Band CH-04",
+        "currentLocation": {
+          "lat": -25.751,
+          "lng": 28.245,
+          "addressDescription": "Brooklyn Mall Corridor (2.1 km)",
+          "isVerified": true
+        },
+        "status": "AVAILABLE",
+        "capabilities": [
+          "Armed Visual Deterrence",
+          "School Corridor Guarding",
+          "Perimeter Interception"
+        ],
+        "ratingScore": 4.78
+      }
+    ],
+    [
+      "resp-cpf-05",
+      {
+        "id": "resp-cpf-05",
+        "callSign": "COMMUNITY-WATCH-02",
+        "name": "Community Safety Watch Patrol 02",
+        "unitType": "COMMUNITY_CPF",
+        "vehicleId": "CPF-TSH-109",
+        "contactPhone": "+27 83 555 1212",
+        "radioFrequency": "National Emergency Band CH-01",
+        "currentLocation": {
+          "lat": -25.772,
+          "lng": 28.219,
+          "addressDescription": "Sunnyside East Patrol (2.8 km)",
+          "isVerified": true
+        },
+        "status": "AVAILABLE",
+        "capabilities": [
+          "Community Foot Patrol",
+          "Witness Identification",
+          "Child Safety Escort"
+        ],
+        "ratingScore": 4.6
+      }
+    ]
+  ]
+}
