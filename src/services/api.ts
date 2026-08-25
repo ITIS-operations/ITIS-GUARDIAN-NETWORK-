@@ -17,6 +17,7 @@ import {
   IncidentOutcomeReport,
   PlatformUserItem,
   CreateUserPayload,
+  RegisterUserPayload,
   AccountStatus,
   PaginatedResponse,
   LearnerQueryOptions,
@@ -115,6 +116,32 @@ export const api = {
       permissions: string[];
       scope: { schoolId?: string; guardianId?: string; responderUnit?: string; department?: string };
     }>(res, 'Authentication failed');
+
+    if (data.token) {
+      this.setToken(data.token);
+    }
+    return data;
+  },
+
+  // Authoritative Self-Registration for Users (Guardians, School Staff, Responders, etc.)
+  async register(payload: RegisterUserPayload): Promise<{
+    user: ActiveUserSession;
+    token: string;
+    permissions: string[];
+    scope: { schoolId?: string; guardianId?: string; responderUnit?: string; department?: string };
+  }> {
+    const res = await fetch(`${API_BASE}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await safeFetchJson<{
+      user: ActiveUserSession;
+      token: string;
+      permissions: string[];
+      scope: { schoolId?: string; guardianId?: string; responderUnit?: string; department?: string };
+    }>(res, 'Registration failed');
 
     if (data.token) {
       this.setToken(data.token);

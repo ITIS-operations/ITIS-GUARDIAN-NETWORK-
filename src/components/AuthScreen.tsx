@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   Lock, 
   ShieldCheck, 
@@ -9,10 +9,17 @@ import {
   CheckCircle2, 
   Eye, 
   EyeOff, 
-  X
+  X,
+  UserPlus,
+  LogIn,
+  User,
+  Phone,
+  Building2,
+  CreditCard,
+  ShieldAlert
 } from 'lucide-react';
 import { api } from '../services/api.js';
-import { ActiveUserSession } from '../types.js';
+import { ActiveUserSession, UserRole, School } from '../types.js';
 
 interface Props {
   onLoginSuccess: (user: ActiveUserSession) => void;
@@ -25,20 +32,50 @@ export const AuthScreen: React.FC<Props> = ({
   onBackToLanding,
   redirectNotice
 }) => {
+  const [mode, setMode] = useState<'LOGIN' | 'REGISTER'>('LOGIN');
+
+  // Sign-in fields
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Registration fields
+  const [regFirstName, setRegFirstName] = useState('');
+  const [regSurname, setRegSurname] = useState('');
+  const [regEmail, setRegEmail] = useState('');
+  const [regMobile, setRegMobile] = useState('');
+  const [regSaId, setRegSaId] = useState('');
+  const [regRole, setRegRole] = useState<UserRole>('PARENT_GUARDIAN');
+  const [regSchoolId, setRegSchoolId] = useState('');
+  const [regOrganization, setRegOrganization] = useState('');
+  const [regPassword, setRegPassword] = useState('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState('');
+  const [showRegPassword, setShowRegPassword] = useState(false);
+
+  // Available Schools for registration linkage
+  const [schools, setSchools] = useState<School[]>([]);
 
   // Optional: Modal for Forgot Password
   const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(false);
   const [forgotEmail, setForgotEmail] = useState('');
   const [forgotSubmitted, setForgotSubmitted] = useState(false);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  useEffect(() => {
+    api.getSchools().then(list => {
+      setSchools(list || []);
+      if (list && list.length > 0 && !regSchoolId) {
+        setRegSchoolId(list[0].id);
+      }
+    }).catch(() => {});
+  }, []);
+
+  const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    setSuccessMessage(null);
 
     if (!email.trim()) {
       setError('Please enter your registered email address.');
@@ -55,6 +92,53 @@ export const AuthScreen: React.FC<Props> = ({
       onLoginSuccess(res.user);
     } catch (err: any) {
       setError(err.message || 'Authentication failed. Please verify your credentials.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    setSuccessMessage(null);
+
+    if (!regFirstName.trim() || !regSurname.trim()) {
+      setError('Please enter both your first name and surname.');
+      return;
+    }
+    if (!regEmail.trim()) {
+      setError('Please enter a valid email address.');
+      return;
+    }
+    if (!regPassword) {
+      setError('Please enter a secure password (minimum 8 characters).');
+      return;
+    }
+    if (regPassword !== regConfirmPassword) {
+      setError('Passwords do not match. Please re-enter your password.');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const res = await api.register({
+        firstName: regFirstName.trim(),
+        surname: regSurname.trim(),
+        email: regEmail.trim(),
+        mobileNumber: regMobile.trim() || undefined,
+        saIdNumber: regSaId.trim() || undefined,
+        role: regRole,
+        schoolId: (regRole === 'SCHOOL_PRINCIPAL' || regRole === 'SCHOOL_ADMIN_STAFF') ? regSchoolId : undefined,
+        organization: regOrganization.trim() || undefined,
+        password: regPassword
+      });
+
+      setSuccessMessage('Account registered and verified! Logging you in...');
+      setTimeout(() => {
+        onLoginSuccess(res.user);
+      }, 700);
+    } catch (err: any) {
+      setError(err.message || 'Registration failed. Please check your information and try again.');
     } finally {
       setLoading(false);
     }
@@ -96,7 +180,7 @@ export const AuthScreen: React.FC<Props> = ({
         </div>
       )}
 
-      {/* Unified Authoritative Sign In Card */}
+      {/* Unified Authoritative Authentication Card */}
       <div className="rounded-3xl bg-[#0a1224] border border-slate-800 p-6 sm:p-10 shadow-2xl space-y-6">
         
         {/* Emblem & Header */}
@@ -114,99 +198,335 @@ export const AuthScreen: React.FC<Props> = ({
           
           <div className="space-y-1">
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              Sign In to ITIS
+              {mode === 'LOGIN' ? 'Sign In to ITIS' : 'Create an Account'}
             </h2>
             <p className="text-xs text-slate-400 max-w-sm mx-auto leading-relaxed">
-              Enter your registered credentials. The server authoritatively verifies your identity, role, and clearance.
+              {mode === 'LOGIN' 
+                ? 'Enter your registered credentials. Your identity, role, and portal access are verified server-side.' 
+                : 'Register as a Parent/Guardian, School Staff, or Emergency Responder. Once registered, access your account from any browser.'}
             </p>
+          </div>
+
+          {/* Mode Switcher Tabs */}
+          <div className="flex items-center justify-center pt-2">
+            <div className="bg-slate-950 p-1 rounded-xl border border-slate-800 flex gap-1">
+              <button
+                type="button"
+                onClick={() => { setMode('LOGIN'); setError(null); setSuccessMessage(null); }}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  mode === 'LOGIN'
+                    ? 'bg-cyan-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                }`}
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Sign In</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setMode('REGISTER'); setError(null); setSuccessMessage(null); }}
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  mode === 'REGISTER'
+                    ? 'bg-cyan-600 text-white shadow-md'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-900'
+                }`}
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>Register Account</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Authentication Form */}
-        <form onSubmit={handleSubmit} className="space-y-4 pt-2">
-          {error && (
-            <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2.5">
-              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
-              <span className="leading-snug">{error}</span>
-            </div>
-          )}
-
-          {/* Email Address */}
-          <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-slate-300">
-              EMAIL ADDRESS
-            </label>
-            <div className="relative">
-              <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@organization.co.za"
-                className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-cyan-500 transition-colors font-mono"
-                autoComplete="email"
-                required
-              />
-            </div>
+        {/* Status Alerts */}
+        {error && (
+          <div className="p-3.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-start gap-2.5">
+            <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+            <span className="leading-snug">{error}</span>
           </div>
+        )}
 
-          {/* Password */}
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
+        {successMessage && (
+          <div className="p-3.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 text-xs flex items-start gap-2.5">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <span className="leading-snug">{successMessage}</span>
+          </div>
+        )}
+
+        {/* -------------------- SIGN IN FORM -------------------- */}
+        {mode === 'LOGIN' ? (
+          <form onSubmit={handleLoginSubmit} className="space-y-4 pt-1">
+            {/* Email Address */}
+            <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-slate-300">
-                PASSWORD
+                EMAIL ADDRESS
               </label>
-              <button
-                type="button"
-                onClick={() => setShowForgotPasswordModal(true)}
-                className="text-[11px] text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
-              >
-                FORGOT PASSWORD?
-              </button>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="name@organization.co.za"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-cyan-500 transition-colors font-mono"
+                  autoComplete="email"
+                  required
+                />
+              </div>
             </div>
-            <div className="relative">
-              <Key className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                type={showPassword ? 'text' : 'password'}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••••••"
-                className="w-full pl-10 pr-11 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-cyan-500 transition-colors font-mono"
-                autoComplete="current-password"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1"
-                aria-label={showPassword ? 'Hide password' : 'Show password'}
-              >
-                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
 
-          {/* SIGN IN SUBMIT BUTTON */}
-          <div className="pt-2">
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 text-white text-sm font-bold shadow-lg shadow-cyan-950/60 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-            >
-              {loading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  <span>Verifying Credentials...</span>
-                </>
-              ) : (
-                <>
-                  <span>SIGN IN</span>
-                  <ArrowRight className="w-4 h-4" />
-                </>
-              )}
-            </button>
-          </div>
-        </form>
+            {/* Password */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-semibold text-slate-300">
+                  PASSWORD
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPasswordModal(true)}
+                  className="text-[11px] text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
+                >
+                  FORGOT PASSWORD?
+                </button>
+              </div>
+              <div className="relative">
+                <Key className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••••••"
+                  className="w-full pl-10 pr-11 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-cyan-500 transition-colors font-mono"
+                  autoComplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors p-1"
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+
+            {/* SIGN IN SUBMIT BUTTON */}
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 text-white text-sm font-bold shadow-lg shadow-cyan-950/60 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+              >
+                {loading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Verifying Credentials...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>SIGN IN</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        ) : (
+          /* -------------------- REGISTRATION FORM -------------------- */
+          <form onSubmit={handleRegisterSubmit} className="space-y-4 pt-1">
+            {/* Account Role Selection */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-300">
+                ACCOUNT ROLE / PURPOSE
+              </label>
+              <select
+                value={regRole}
+                onChange={(e) => setRegRole(e.target.value as UserRole)}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-medium focus:outline-none focus:border-cyan-500"
+              >
+                <option value="PARENT_GUARDIAN">Parent / Legal Guardian (Child Tracking & Safety)</option>
+                <option value="SCHOOL_PRINCIPAL">School Principal (Institutional Governance)</option>
+                <option value="SCHOOL_ADMIN_STAFF">School Administrator / Enrolment Officer</option>
+                <option value="FIELD_RESPONDER">Emergency Field Responder (Rapid Reaction)</option>
+                <option value="HARDWARE_SUPPORT">Hardware / IoT Device Support Specialist</option>
+                <option value="GOVERNMENT_AUDITOR">Government / Provincial Education Auditor</option>
+              </select>
+            </div>
+
+            {/* Name Fields */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-300">
+                  FIRST NAME
+                </label>
+                <div className="relative">
+                  <User className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={regFirstName}
+                    onChange={(e) => setRegFirstName(e.target.value)}
+                    placeholder="e.g. Sipho"
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-300">
+                  SURNAME
+                </label>
+                <input
+                  type="text"
+                  value={regSurname}
+                  onChange={(e) => setRegSurname(e.target.value)}
+                  placeholder="e.g. Dlamini"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-cyan-500"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Email Address */}
+            <div className="space-y-1.5">
+              <label className="block text-xs font-semibold text-slate-300">
+                EMAIL ADDRESS
+              </label>
+              <div className="relative">
+                <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="email"
+                  value={regEmail}
+                  onChange={(e) => setRegEmail(e.target.value)}
+                  placeholder="sipho.dlamini@domain.co.za"
+                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-xs font-mono focus:outline-none focus:border-cyan-500"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Mobile & SA ID Number */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-300">
+                  MOBILE NUMBER
+                </label>
+                <div className="relative">
+                  <Phone className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="tel"
+                    value={regMobile}
+                    onChange={(e) => setRegMobile(e.target.value)}
+                    placeholder="+27 82 123 4567"
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder-slate-500 font-mono focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-300">
+                  SA ID / OFFICIAL ID (OPTIONAL)
+                </label>
+                <div className="relative">
+                  <CreditCard className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={regSaId}
+                    onChange={(e) => setRegSaId(e.target.value)}
+                    placeholder="8501015000080"
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder-slate-500 font-mono focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* School Selection (If School Role) */}
+            {(regRole === 'SCHOOL_PRINCIPAL' || regRole === 'SCHOOL_ADMIN_STAFF') && (
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-300">
+                  ASSIGNED SCHOOL
+                </label>
+                <div className="relative">
+                  <Building2 className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <select
+                    value={regSchoolId}
+                    onChange={(e) => setRegSchoolId(e.target.value)}
+                    className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs font-medium focus:outline-none focus:border-cyan-500"
+                  >
+                    {schools.map(s => (
+                      <option key={s.id} value={s.id}>
+                        {s.name} ({s.emisCode}) — {s.province}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            )}
+
+            {/* Passwords */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-300">
+                  PASSWORD
+                </label>
+                <div className="relative">
+                  <Key className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <input
+                    type={showRegPassword ? 'text' : 'password'}
+                    value={regPassword}
+                    onChange={(e) => setRegPassword(e.target.value)}
+                    placeholder="Min 8 chars, 1 number"
+                    className="w-full pl-10 pr-9 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder-slate-500 font-mono focus:outline-none focus:border-cyan-500"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRegPassword(!showRegPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                  >
+                    {showRegPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-300">
+                  CONFIRM PASSWORD
+                </label>
+                <input
+                  type={showRegPassword ? 'text' : 'password'}
+                  value={regConfirmPassword}
+                  onChange={(e) => setRegConfirmPassword(e.target.value)}
+                  placeholder="Re-enter password"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-white text-xs placeholder-slate-500 font-mono focus:outline-none focus:border-cyan-500"
+                  required
+                />
+              </div>
+            </div>
+
+            {/* REGISTER SUBMIT BUTTON */}
+            <div className="pt-2">
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full py-3.5 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 disabled:opacity-50 text-white text-sm font-bold shadow-lg shadow-emerald-950/60 transition-all flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+              >
+                {loading ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    <span>Registering Account...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>CREATE AUTHORITATIVE ACCOUNT</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
+        )}
 
         {/* Security & Compliance Footnote */}
         <div className="pt-4 border-t border-slate-800/80 space-y-2">

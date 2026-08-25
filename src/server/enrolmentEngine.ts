@@ -2,7 +2,8 @@ import {
   db,
   maskSaId,
   maskPhone,
-  hashPassword
+  hashPassword,
+  generateSalt
 } from './dbStore.js';
 import {
   Person,
@@ -689,29 +690,37 @@ export class EnrolmentEngine {
 
       if (matchedUser) {
         matchedUser.guardianId = finalGuardianId;
+        matchedUser.updatedAt = now;
       } else {
         const newUserId = 'usr-parent-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+        const salt = generateSalt();
+        const hash = hashPassword('Password123!', salt);
         const parentUser = {
           id: newUserId,
           email: cleanEmail,
+          normalizedEmail: cleanEmail,
           name: `${gPerson.firstName} ${gPerson.lastName}`.trim(),
           firstName: gPerson.firstName,
           surname: gPerson.lastName,
           mobileNumber: gPerson.mobileNumber,
           role: 'PARENT_GUARDIAN' as const,
-          password: hashPassword('Password123!'),
+          password: hash,
+          passwordSalt: salt,
+          passwordHash: hash,
           guardianId: finalGuardianId,
           department: 'Parent & Legal Guardian Community',
           organization: 'Parent & Legal Guardian Network',
           permissions: db.getDefaultPermissionsForRole('PARENT_GUARDIAN'),
           status: 'ACTIVE' as const,
           isDemoAccount: false,
-          createdAt: now
+          createdAt: now,
+          updatedAt: now
         };
         db.users.set(parentUser.id, parentUser);
       }
     }
 
+    db.rebuildIndexes();
     db.persistToDisk();
 
     const message = wasExistingGuardian

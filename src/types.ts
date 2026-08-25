@@ -649,6 +649,21 @@ export interface CreateUserPayload {
   permissions?: string[];
 }
 
+export interface RegisterUserPayload {
+  firstName: string;
+  surname: string;
+  email: string;
+  password: string;
+  confirmPassword?: string;
+  role?: UserRole;
+  mobileNumber?: string;
+  saIdNumber?: string;
+  schoolId?: string;
+  organization?: string;
+  responderUnit?: string;
+  department?: string;
+}
+
 export interface ActiveUserSession {
   id: string;
   name: string;

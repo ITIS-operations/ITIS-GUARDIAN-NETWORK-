@@ -165,6 +165,22 @@ app.post('/api/auth/login', (req, res) => {
   }
 });
 
+// Self-registration endpoint for Guardians, School Staff, Responders, etc.
+app.post('/api/auth/register', (req, res) => {
+  try {
+    const result = db.registerPublicUser(req.body);
+    res.status(201).json({
+      success: true,
+      user: result.user,
+      token: result.token,
+      permissions: result.permissions,
+      scope: result.scope
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Registration failed' });
+  }
+});
+
 app.get('/api/auth/session', (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
