@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { db, maskSaId } from './src/server/dbStore.js';
+import { repository, ProductionMigrationEngine } from './src/server/db/index.js';
 import { enrolmentEngine } from './src/server/enrolmentEngine.js';
 import { rbacEngine, AUTHORITATIVE_ROLE_MATRIX, ResourceAccessContext } from './src/server/rbacEngine.js';
 import { rbacTestSuite } from './src/server/rbacTestSuite.js';
@@ -606,26 +607,16 @@ app.post('/api/enrolment/run-validation-suite', (req, res) => {
 });
 
 // ----------------------------------------------------
-// 5. LEARNERS & SCOPED ACCESS (STRICT ABAC GUARDS)
+// 5. LEARNERS & SCOPED ACCESS (HIGH-SCALE PAGINATED & INDEXED)
 // ----------------------------------------------------
 
 app.get('/api/learners', requireAuth, (req, res) => {
   const user = req.user!;
-  const { schoolId, guardianId, search } = req.query;
-  let learners = db.getAllHydratedLearners();
+  const { schoolId, guardianId, search, grade, page, limit, offset, paginated } = req.query;
 
-  // 1. Role-based Scoping
-  if (user.role === 'PARENT_GUARDIAN') {
-    // Guardian can ONLY see their verified linked children
-    if (!user.guardianId) {
-      return res.json([]);
-    }
-    learners = learners.filter(l => l.guardians.some(g => g.guardian.id === user.guardianId));
-  } else if (user.role === 'SCHOOL_PRINCIPAL' || user.role === 'SCHOOL_ADMIN_STAFF') {
-    // School staff restricted to assigned school
-    const effectiveSchoolId = user.schoolId || (schoolId as string);
-    if (user.schoolId && schoolId && schoolId !== user.schoolId) {
-      // Cross school attempt
+  // Institutional boundary check for school staff
+  if ((user.role === 'SCHOOL_PRINCIPAL' || user.role === 'SCHOOL_ADMIN_STAFF') && user.schoolId) {
+    if (schoolId && schoolId !== user.schoolId) {
       db.logAuditEvent({
         actionType: 'UNAUTHORIZED_ACCESS_DENIED',
         actorUserId: user.id,
@@ -639,49 +630,37 @@ app.get('/api/learners', requireAuth, (req, res) => {
         error: `ACCESS DENIED: Institutional boundary violation. You are restricted to school '${user.schoolId}'.`
       });
     }
-    if (effectiveSchoolId) {
-      learners = learners.filter(l => l.currentEnrolment?.schoolId === effectiveSchoolId);
-    }
-  } else if (user.role === 'FIELD_RESPONDER') {
-    // Responder receives only learner involved in assigned active incident
-    const assignedIncident = Array.from(db.incidents.values()).find(
-      i => i.status !== 'RESOLVED' && abacHelpers.isIncidentAssignedToResponder(i.id, user.responderUnit, user.id)
-    );
-    if (assignedIncident) {
-      learners = learners.filter(l => l.learner.id === assignedIncident.learnerId);
-    } else {
-      learners = [];
-    }
-  } else if (user.role === 'TECHNICIAN') {
-    // Technicians cannot browse learner PII
+  }
+
+  // Technicians cannot browse learner PII
+  if (user.role === 'TECHNICIAN') {
     return res.status(403).json({
       error: 'ACCESS DENIED: Hardware technicians lack clearance to browse personal learner safety records.'
     });
-  } else {
-    // Founder, System Admin, Government (Government receives aggregate, handled via view)
-    if (schoolId) {
-      learners = learners.filter(l => l.currentEnrolment?.schoolId === schoolId);
-    }
-    if (guardianId) {
-      learners = learners.filter(l => l.guardians.some(g => g.guardian.id === guardianId));
-    }
   }
 
-  // Search filter
-  if (search && typeof search === 'string') {
-    const q = search.toLowerCase();
-    learners = learners.filter(
-      l =>
-        l.person.firstName.toLowerCase().includes(q) ||
-        l.person.lastName.toLowerCase().includes(q) ||
-        l.learner.emisId.toLowerCase().includes(q) ||
-        l.learner.admissionNumber.toLowerCase().includes(q)
-    );
+  const queryOptions = {
+    schoolId: (schoolId as string) || (user.role.startsWith('SCHOOL_') ? user.schoolId : undefined),
+    guardianId: (guardianId as string) || (user.role === 'PARENT_GUARDIAN' ? user.guardianId : undefined),
+    search: search as string,
+    grade: grade as string,
+    page: page ? Number(page) : undefined,
+    limit: limit ? Number(limit) : undefined,
+    offset: offset ? Number(offset) : undefined
+  };
+
+  const paginatedResult = db.queryPaginatedLearners(queryOptions, user);
+  const sanitizedData = paginatedResult.data.map(l => rbacEngine.sanitizeLearnerRecord(l, user));
+
+  if (paginated === 'true' || page !== undefined || limit !== undefined) {
+    return res.json({
+      data: sanitizedData,
+      pagination: paginatedResult.pagination
+    });
   }
 
-  // Sanitize according to role & need-to-know
-  const sanitized = learners.map(l => rbacEngine.sanitizeLearnerRecord(l, user));
-  res.json(sanitized);
+  // Backward compatibility for standard array requests
+  res.json(sanitizedData);
 });
 
 // Single Learner Inspection (Strict ABAC Check)
@@ -721,10 +700,23 @@ app.get('/api/learners/:id', requireAuth, (req, res) => {
 });
 
 // ----------------------------------------------------
-// 6. SCHOOLS & GUARDIANS REGISTRIES
+// 6. SCHOOLS & GUARDIANS REGISTRIES (INDEXED & PAGINATED)
 // ----------------------------------------------------
 
 app.get('/api/schools', (req, res) => {
+  const { search, province, district, page, limit, paginated } = req.query;
+  
+  if (paginated === 'true' || page !== undefined || limit !== undefined || search !== undefined) {
+    const result = db.queryPaginatedSchools({
+      search: search as string,
+      province: province as string,
+      district: district as string,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined
+    });
+    return res.json(paginated === 'true' || page !== undefined || limit !== undefined ? result : result.data);
+  }
+
   res.json(Array.from(db.schools.values()));
 });
 
@@ -787,34 +779,80 @@ app.get('/api/guardians', requireAuth, (req, res) => {
 });
 
 // ----------------------------------------------------
-// 7. INCIDENTS, SOS & TACTICAL DISPATCH (STRICT HUMAN-IN-THE-LOOP)
+// 7. INCIDENTS, SOS & TACTICAL EVENT-DRIVEN DISPATCH
 // ----------------------------------------------------
+
+interface IncidentDeltaEvent {
+  id: string;
+  type: 'NEW_INCIDENT' | 'STATUS_CHANGE' | 'DISPATCH' | 'RESPONDER_ACCEPTED' | 'RESPONDER_EN_ROUTE' | 'RESPONDER_ARRIVED' | 'RESOLUTION';
+  incidentId: string;
+  timestamp: string;
+  payload: Partial<IncidentAlert>;
+}
+
+const recentIncidentEvents: IncidentDeltaEvent[] = [];
+
+function recordIncidentDeltaEvent(type: IncidentDeltaEvent['type'], incident: IncidentAlert) {
+  const event: IncidentDeltaEvent = {
+    id: 'evt-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
+    type,
+    incidentId: incident.id,
+    timestamp: new Date().toISOString(),
+    payload: {
+      id: incident.id,
+      status: incident.status,
+      severity: incident.severity,
+      operationalState: incident.operationalState,
+      assignedResponder: incident.assignedResponder,
+      notes: incident.notes,
+      timestamp: incident.timestamp
+    }
+  };
+
+  recentIncidentEvents.unshift(event);
+  if (recentIncidentEvents.length > 500) {
+    recentIncidentEvents.pop();
+  }
+}
+
+// Delta events endpoint (Clients receive only what changed without polling the entire incident database)
+app.get('/api/incidents/events', requireAuth, (req, res) => {
+  const { since } = req.query;
+  const sinceMs = since ? new Date(since as string).getTime() : 0;
+  
+  const deltas = recentIncidentEvents.filter(e => new Date(e.timestamp).getTime() > sinceMs);
+  res.json({
+    events: deltas,
+    latestTimestamp: new Date().toISOString()
+  });
+});
 
 app.get('/api/incidents', requireAuth, (req, res) => {
   const user = req.user!;
-  let list = Array.from(db.incidents.values());
+  const { activeOnly, status, severity, schoolId, page, limit, paginated } = req.query;
 
-  if (user.role === 'PARENT_GUARDIAN') {
-    // Guardian can ONLY see incidents involving their verified linked children
-    if (!user.guardianId) return res.json([]);
-    const myChildren = enrolmentEngine.getLinkedChildrenForGuardian(user.guardianId);
-    const childIds = new Set(myChildren.map(c => c.learner.id));
-    list = list.filter(i => childIds.has(i.learnerId));
-  } else if (user.role === 'SCHOOL_PRINCIPAL' || user.role === 'SCHOOL_ADMIN_STAFF') {
-    // School admin sees incidents for their school
-    if (user.schoolId) {
-      list = list.filter(i => i.schoolId === user.schoolId);
-    }
-  } else if (user.role === 'FIELD_RESPONDER') {
-    // Responder sees ONLY assigned incident
-    list = list.filter(i => abacHelpers.isIncidentAssignedToResponder(i.id, user.responderUnit, user.id));
-  } else if (user.role === 'TECHNICIAN') {
+  if (user.role === 'TECHNICIAN') {
     return res.status(403).json({
       error: 'ACCESS DENIED: Technicians lack operational clearance to monitor live tactical emergencies.'
     });
   }
 
-  res.json(list);
+  const queryOptions = {
+    activeOnly: activeOnly === 'true',
+    status: status as string,
+    severity: severity as string,
+    schoolId: schoolId as string,
+    page: page ? Number(page) : undefined,
+    limit: limit ? Number(limit) : undefined
+  };
+
+  const paginatedResult = db.queryPaginatedIncidents(queryOptions, user);
+
+  if (paginated === 'true' || page !== undefined || limit !== undefined) {
+    return res.json(paginatedResult);
+  }
+
+  res.json(paginatedResult.data);
 });
 
 // Manual SOS Panic Trigger
@@ -864,6 +902,7 @@ app.post('/api/incidents/panic-trigger', (req, res) => {
     };
 
     db.incidents.set(id, newIncident);
+    recordIncidentDeltaEvent('NEW_INCIDENT', newIncident);
 
     db.logAuditEvent({
       actionType: 'EMERGENCY_PANIC_TRIGGERED',
@@ -910,6 +949,8 @@ app.post(
 
       if (note) incident.notes.push(note);
       incident.notes.push(`TACTICAL DISPATCH AUTHORIZED by ${req.user!.name} (${req.user!.role}) at ${new Date().toLocaleTimeString()}`);
+
+      recordIncidentDeltaEvent('DISPATCH', incident);
 
       db.logAuditEvent({
         actionType: 'DISPATCH_ACTIVATED',
@@ -1024,6 +1065,10 @@ app.post('/api/responder/accept', requireAuth, (req, res) => {
     }
 
     const updated = db.acceptIncidentAssignment(incidentId, user);
+    const incidentObj = db.incidents.get(incidentId);
+    if (incidentObj) {
+      recordIncidentDeltaEvent('RESPONDER_ACCEPTED', incidentObj);
+    }
     res.json({ success: true, assignment: updated });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -1047,6 +1092,10 @@ app.post('/api/responder/decline', requireAuth, (req, res) => {
     }
 
     const result = db.declineIncidentAssignment(incidentId, user, reason);
+    const incidentObj = db.incidents.get(incidentId);
+    if (incidentObj) {
+      recordIncidentDeltaEvent('STATUS_CHANGE', incidentObj);
+    }
     res.json(result);
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -1070,6 +1119,11 @@ app.post('/api/responder/status', requireAuth, (req, res) => {
     }
 
     const updated = db.updateResponderOperationalStatus(incidentId, user, operationalState, note, telemetry);
+    const incidentObj = db.incidents.get(incidentId);
+    if (incidentObj) {
+      const eventType = operationalState === 'EN_ROUTE' ? 'RESPONDER_EN_ROUTE' : operationalState === 'ARRIVED' ? 'RESPONDER_ARRIVED' : 'STATUS_CHANGE';
+      recordIncidentDeltaEvent(eventType, incidentObj);
+    }
     res.json({ success: true, assignment: updated });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -1092,6 +1146,7 @@ app.post(
       }
 
       const resolvedIncident = db.submitIncidentOutcomeReport(report, user);
+      recordIncidentDeltaEvent('RESOLUTION', resolvedIncident);
       res.json({ success: true, incident: resolvedIncident });
     } catch (err: any) {
       res.status(400).json({ error: err.message });
@@ -1105,7 +1160,69 @@ app.get(
   requireAuth,
   enforcePermission('AUDIT_LOGS_VIEW'),
   (req, res) => {
-    res.json(db.auditLogs);
+    const { actionType, actorUserId, targetEntity, targetId, startDate, endDate, search, page, limit, paginated } = req.query;
+
+    const queryOptions = {
+      actionType: actionType as any,
+      actorUserId: actorUserId as string,
+      targetEntity: targetEntity as any,
+      targetId: targetId as string,
+      startDate: startDate as string,
+      endDate: endDate as string,
+      search: search as string,
+      page: page ? Number(page) : undefined,
+      limit: limit ? Number(limit) : undefined
+    };
+
+    const result = db.queryPaginatedAuditLogs(queryOptions);
+
+    if (paginated === 'true' || page !== undefined || limit !== undefined || actionType || search || startDate) {
+      return res.json(result);
+    }
+
+    res.json(result.data);
+  }
+);
+
+// ----------------------------------------------------
+// PRODUCTION DATABASE READINESS & MIGRATION API
+// ----------------------------------------------------
+app.get(
+  '/api/database/readiness',
+  requireAuth,
+  enforcePermission('ENTERPRISE_AUDIT_VIEW'),
+  async (req, res) => {
+    try {
+      const health = await repository.checkHealth();
+      const validation = ProductionMigrationEngine.validateCurrentStore();
+      res.json({
+        success: true,
+        health,
+        validation,
+        architecture: {
+          targetDatabase: 'PostgreSQL 14+ / Cloud SQL',
+          scaleCapacity: '3,000,000+ Enrolled Learners',
+          captureOnceCompliance: validation.captureOnceAnomalies.length === 0,
+          auditIntegrityCompliant: validation.auditIntegrityPassed
+        }
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+app.get(
+  '/api/database/migration-plan',
+  requireAuth,
+  enforcePermission('SYSTEM_CONFIG_MANAGE'),
+  (req, res) => {
+    try {
+      const plan = ProductionMigrationEngine.generateMigrationPlan();
+      res.json({ success: true, plan });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
   }
 );
 

@@ -198,15 +198,15 @@ export function App() {
     setActiveTab('LANDING_PAGE');
   };
 
-  // Operational Data loader
+  // Operational Data loader (Lightweight & high-scale optimized)
   const loadData = async () => {
     try {
-      const [lData, sData, iData] = await Promise.all([
-        api.getLearners(),
+      const [lRes, sData, iData] = await Promise.all([
+        api.getPaginatedLearners({ limit: 50 }),
         api.getSchools(),
         api.getIncidents()
       ]);
-      setLearners(Array.isArray(lData) ? lData : []);
+      setLearners(Array.isArray(lRes?.data) ? lRes.data : []);
       setSchools(Array.isArray(sData) ? sData : []);
       setIncidents(Array.isArray(iData) ? iData : []);
     } catch (err) {

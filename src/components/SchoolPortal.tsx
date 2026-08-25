@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   School as SchoolIcon, 
   UserPlus, 
@@ -12,6 +12,7 @@ import {
   Calendar,
   Layers,
   ChevronRight,
+  ChevronLeft,
   History,
   Check,
   CheckCircle2,
@@ -26,7 +27,7 @@ import {
   PlusCircle,
   Eye
 } from 'lucide-react';
-import { HydratedLearnerRecord, School, ActiveUserSession } from '../types.js';
+import { HydratedLearnerRecord, School, ActiveUserSession, PaginatedResponse } from '../types.js';
 import { api } from '../services/api.js';
 import { AnnualSafetyUpdateModal } from './AnnualSafetyUpdateModal.js';
 
@@ -40,7 +41,7 @@ export type SchoolSection =
   | 'SUPPORT';
 
 interface Props {
-  learners: HydratedLearnerRecord[];
+  learners?: HydratedLearnerRecord[];
   schools: School[];
   currentUser: ActiveUserSession;
   onOpenEnrolment: () => void;
@@ -54,13 +55,18 @@ export const SchoolPortal: React.FC<Props> = ({
   onOpenEnrolment,
   onRefresh
 }) => {
-  const safeLearners = Array.isArray(learners) ? learners : [];
   const safeSchools = Array.isArray(schools) ? schools : [];
 
   const [selectedSchoolId, setSelectedSchoolId] = useState<string>(currentUser?.schoolId || safeSchools[0]?.id || 'sch-001');
   const [currentTab, setCurrentTab] = useState<SchoolSection>('DASHBOARD');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGradeFilter, setSelectedGradeFilter] = useState('ALL');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [paginatedData, setPaginatedData] = useState<PaginatedResponse<HydratedLearnerRecord>>({
+    data: [],
+    pagination: { total: 0, limit: 16, offset: 0, page: 1, totalPages: 1, hasMore: false }
+  });
+  const [isLoadingLearners, setIsLoadingLearners] = useState(false);
   
   // Grade Progression Modal State
   const [advancingLearner, setAdvancingLearner] = useState<HydratedLearnerRecord | null>(null);
@@ -74,20 +80,51 @@ export const SchoolPortal: React.FC<Props> = ({
 
   const currentSchool = safeSchools.find(s => s.id === selectedSchoolId) || safeSchools[0];
 
-  const schoolLearners = safeLearners.filter(l => {
-    if (!l || !l.person || !l.learner) return false;
-    const matchesSchool = l.currentEnrolment?.schoolId === selectedSchoolId;
-    const matchesSearch = searchQuery
-      ? (l.person.firstName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (l.person.lastName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (l.learner.emisId || '').toLowerCase().includes(searchQuery.toLowerCase())
-      : true;
-    const matchesGrade = selectedGradeFilter === 'ALL'
-      ? true
-      : l.currentAcademicRecord?.grade === selectedGradeFilter;
+  // Abort controller ref for in-flight queries
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-    return matchesSchool && matchesSearch && matchesGrade;
-  });
+  const fetchSchoolLearners = useCallback(async (
+    schoolId: string,
+    search: string,
+    grade: string,
+    page: number
+  ) => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    setIsLoadingLearners(true);
+    try {
+      const res = await api.getPaginatedLearners({
+        schoolId,
+        search: search.trim() || undefined,
+        grade: grade !== 'ALL' ? grade : undefined,
+        page,
+        limit: 16
+      }, controller.signal);
+
+      if (res && res.data) {
+        setPaginatedData(res);
+      }
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        console.warn('School learners fetch warning:', err);
+      }
+    } finally {
+      setIsLoadingLearners(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      fetchSchoolLearners(selectedSchoolId, searchQuery, selectedGradeFilter, currentPage);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [selectedSchoolId, searchQuery, selectedGradeFilter, currentPage, fetchSchoolLearners]);
+
+  const schoolLearners = paginatedData.data;
 
   const handleAdvanceAcademicYear = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -110,6 +147,7 @@ export const SchoolPortal: React.FC<Props> = ({
       });
       setAdvanceMessage(`Successfully advanced ${advancingLearner.person.firstName} to ${newGrade} (${newClassSection}) without duplicating learner record!`);
       onRefresh();
+      fetchSchoolLearners(selectedSchoolId, searchQuery, selectedGradeFilter, currentPage);
       setTimeout(() => {
         setAdvancingLearner(null);
         setAdvanceMessage(null);
@@ -309,10 +347,34 @@ export const SchoolPortal: React.FC<Props> = ({
               </select>
             </div>
 
-            <div className="flex items-center gap-2 justify-between sm:justify-end">
+            <div className="flex items-center gap-3 justify-between sm:justify-end">
               <span className="text-xs text-slate-400 font-mono">
-                {schoolLearners.length} Registered Learners
+                {paginatedData.pagination?.total || 0} Registered Learners
               </span>
+
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage <= 1 || isLoadingLearners}
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-300 transition-colors"
+                  title="Previous Page"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-xs font-mono text-cyan-300 px-1.5">
+                  Page {paginatedData.pagination?.page || 1} / {Math.max(paginatedData.pagination?.totalPages || 1, 1)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage(p => p + 1)}
+                  disabled={!paginatedData.pagination?.hasMore || currentPage >= (paginatedData.pagination?.totalPages || 1) || isLoadingLearners}
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-300 transition-colors"
+                  title="Next Page"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
 

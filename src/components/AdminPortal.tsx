@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Users, 
   School, 
@@ -23,9 +23,11 @@ import {
   AlertTriangle,
   Radio,
   ExternalLink,
-  X
+  X,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
-import { ActiveUserSession, HydratedLearnerRecord, School as SchoolType, UserRole } from '../types.js';
+import { ActiveUserSession, HydratedLearnerRecord, School as SchoolType, UserRole, PaginatedResponse } from '../types.js';
 import { api } from '../services/api.js';
 import { RegisterSchoolModal } from './RegisterSchoolModal.js';
 import { AnnualSafetyUpdateModal } from './AnnualSafetyUpdateModal.js';
@@ -63,6 +65,15 @@ export const AdminPortal: React.FC<Props> = ({
   const [liveUsers, setLiveUsers] = useState<any[]>([]);
   const [isLoadingUsers, setIsLoadingUsers] = useState(false);
 
+  // Paginated Learners State for 3,000,000+ Scale
+  const [learnerSearch, setLearnerSearch] = useState('');
+  const [learnerPage, setLearnerPage] = useState(1);
+  const [paginatedLearners, setPaginatedLearners] = useState<PaginatedResponse<HydratedLearnerRecord>>({
+    data: [],
+    pagination: { total: 0, limit: 15, offset: 0, page: 1, totalPages: 1, hasMore: false }
+  });
+  const [isLoadingLearners, setIsLoadingLearners] = useState(false);
+
   // School Registration & Safety Update Modals
   const [isRegisterSchoolOpen, setIsRegisterSchoolOpen] = useState(false);
   const [selectedLearnerForSafetyUpdate, setSelectedLearnerForSafetyUpdate] = useState<HydratedLearnerRecord | null>(null);
@@ -85,6 +96,33 @@ export const AdminPortal: React.FC<Props> = ({
   useEffect(() => {
     fetchUsers();
   }, []);
+
+  const fetchAdminLearners = useCallback(async (search: string, page: number) => {
+    setIsLoadingLearners(true);
+    try {
+      const res = await api.getPaginatedLearners({
+        search: search.trim() || undefined,
+        page,
+        limit: 15
+      });
+      if (res && res.data) {
+        setPaginatedLearners(res);
+      }
+    } catch (err) {
+      console.warn('Could not fetch paginated learners:', err);
+    } finally {
+      setIsLoadingLearners(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (currentTab === 'LEARNERS') {
+      const timer = setTimeout(() => {
+        fetchAdminLearners(learnerSearch, learnerPage);
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [currentTab, learnerSearch, learnerPage, fetchAdminLearners]);
 
   const fetchUsers = async () => {
     setIsLoadingUsers(true);
@@ -429,7 +467,7 @@ export const AdminPortal: React.FC<Props> = ({
           <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h3 className="text-sm font-bold text-white">Central Learner Master Registry</h3>
-              <p className="text-xs text-slate-400">Total Authoritative Enrolments: {learners.length} • Capture Once Model Active</p>
+              <p className="text-xs text-slate-400">Total Authoritative Enrolments: {paginatedLearners.pagination?.total || learners.length} • Capture Once Model Active</p>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -450,6 +488,52 @@ export const AdminPortal: React.FC<Props> = ({
             </div>
           </div>
 
+          {/* Search & Pagination Bar */}
+          <div className="p-3 sm:p-4 rounded-xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+            <div className="relative flex-1 max-w-md">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={learnerSearch}
+                onChange={e => {
+                  setLearnerSearch(e.target.value);
+                  setLearnerPage(1);
+                }}
+                placeholder="Search by name, EMIS, admission number or SA ID..."
+                className="w-full pl-9 pr-4 py-2 rounded-lg bg-slate-950 border border-slate-700 text-white text-xs outline-none focus:border-cyan-500 font-mono"
+              />
+            </div>
+
+            <div className="flex items-center gap-3 justify-between sm:justify-end">
+              <span className="text-xs text-slate-400 font-mono">
+                {paginatedLearners.pagination?.total || 0} Records Found
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setLearnerPage(p => Math.max(1, p - 1))}
+                  disabled={learnerPage <= 1 || isLoadingLearners}
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-300 transition-colors"
+                  title="Previous Page"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <span className="text-xs font-mono text-cyan-300 px-2">
+                  Page {paginatedLearners.pagination?.page || 1} of {Math.max(paginatedLearners.pagination?.totalPages || 1, 1)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setLearnerPage(p => p + 1)}
+                  disabled={!paginatedLearners.pagination?.hasMore || learnerPage >= (paginatedLearners.pagination?.totalPages || 1) || isLoadingLearners}
+                  className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed text-slate-300 transition-colors"
+                  title="Next Page"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden shadow-lg">
             <div className="overflow-x-auto">
               <table className="w-full text-left text-xs">
@@ -464,7 +548,7 @@ export const AdminPortal: React.FC<Props> = ({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-800 font-mono">
-                  {learners.map(l => (
+                  {(paginatedLearners.data.length > 0 ? paginatedLearners.data : learners).map(l => (
                     <tr key={l.learner.id} className="hover:bg-slate-850/50 transition-colors">
                       <td className="py-3 px-4">
                         <strong className="text-white block font-sans text-sm">{l.person.firstName} {l.person.lastName}</strong>
