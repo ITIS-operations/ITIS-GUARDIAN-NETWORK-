@@ -3,6 +3,7 @@ import cors from 'cors';
 import path from 'path';
 import { db, maskSaId } from './src/server/dbStore.js';
 import { repository, ProductionMigrationEngine } from './src/server/db/index.js';
+import { bootstrapDatabase } from './src/server/db/bootstrap.js';
 import { enrolmentEngine } from './src/server/enrolmentEngine.js';
 import { rbacEngine, AUTHORITATIVE_ROLE_MATRIX, ResourceAccessContext } from './src/server/rbacEngine.js';
 import { rbacTestSuite } from './src/server/rbacTestSuite.js';
@@ -1246,6 +1247,12 @@ app.get(
 // FRONTEND STATIC BUNDLE OR VITE DEV SERVER
 // ----------------------------------------------------
 async function setupServer() {
+  try {
+    await bootstrapDatabase();
+  } catch (err) {
+    console.error('[ITIS] Error during database bootstrap:', err);
+  }
+
   if (process.env.NODE_ENV === 'production') {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));

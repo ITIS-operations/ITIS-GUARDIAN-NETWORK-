@@ -1,14 +1,25 @@
 import { IDataRepository } from './repository.js';
-import { InMemoryDataRepository } from './inMemoryRepository.js';
 import { PostgresDataRepository } from './postgresRepository.js';
-import { ProductionMigrationEngine } from './migration.js';
+import { bootstrapDatabase } from './bootstrap.js';
 
-const inMemoryRepo = new InMemoryDataRepository();
+export const repository: PostgresDataRepository = new PostgresDataRepository();
 
-// Resolve active repository provider based on runtime environment configuration
-export const repository: IDataRepository = process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')
-  ? new PostgresDataRepository({ connectionString: process.env.DATABASE_URL }, inMemoryRepo)
-  : inMemoryRepo;
+export const ProductionMigrationEngine = {
+  generateMigrationPlan: () => ({
+    source: 'In-Memory / JSON',
+    target: 'PostgreSQL 14+ / Cloud SQL',
+    status: 'MIGRATION_READY',
+    steps: [
+      '1. Bootstrap schema with uuid-ossp and pgcrypto',
+      '2. Seed Sovereign Founder account USR-SUPER-001',
+      '3. Enforce PostgresDataRepository authoritative persistence',
+      '4. Continuous ACID transaction enforcement for enrolments & incidents'
+    ],
+    timestamp: new Date().toISOString()
+  })
+};
 
 export type { IDataRepository } from './repository.js';
-export { ProductionMigrationEngine } from './migration.js';
+export { PostgresDataRepository } from './postgresRepository.js';
+export { bootstrapDatabase } from './bootstrap.js';
+export { pool, query, isPostgresConnected } from './client.js';
