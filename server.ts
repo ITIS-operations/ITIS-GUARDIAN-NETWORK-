@@ -4,7 +4,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { repository, ProductionMigrationEngine } from './src/server/db/index.js';
 import { bootstrapDatabase } from './src/server/db/bootstrap.js';
-import { query } from './src/server/db/client.js';
+import { query, isDatabaseConnectionError } from './src/server/db/client.js';
 import { rbacEngine, AUTHORITATIVE_ROLE_MATRIX, ResourceAccessContext } from './src/server/rbacEngine.js';
 import { rbacTestSuite } from './src/server/rbacTestSuite.js';
 import { enrolmentTestSuite } from './src/server/enrolmentTestSuite.js';
@@ -224,6 +224,13 @@ app.post('/api/auth/login', async (req, res) => {
       }
     });
   } catch (err: any) {
+    if (isDatabaseConnectionError(err)) {
+      console.error('[Auth Error] PostgreSQL database service unavailable:', err);
+      return res.status(503).json({
+        error: 'DATABASE_UNAVAILABLE',
+        message: 'Authoritative PostgreSQL database service is unavailable. Please check database connection.'
+      });
+    }
     if (err.message && (err.message.includes('SUSPENDED') || err.message.includes('DISABLED'))) {
       return res.status(403).json({ error: err.message });
     }
@@ -593,6 +600,15 @@ app.post('/api/users/:id/deactivate', requireAuth, async (req, res) => {
 app.get('/api/health', async (req, res) => {
   try {
     const health = await repository.checkHealth();
+    if (health.status !== 'HEALTHY') {
+      return res.status(503).json({
+        status: 'DATABASE_UNAVAILABLE',
+        databaseProvider: 'POSTGRESQL',
+        service: 'ITIS Authoritative Core Engine',
+        error: health.details?.error || 'PostgreSQL database connection degraded or unreachable'
+      });
+    }
+
     const personsRes = await query('SELECT count(*)::int as count FROM persons;');
     const learnersRes = await query('SELECT count(*)::int as count FROM learners;');
     const guardiansRes = await query('SELECT count(*)::int as count FROM guardians;');
@@ -601,7 +617,7 @@ app.get('/api/health', async (req, res) => {
     const auditRes = await query('SELECT count(*)::int as count FROM audit_events;');
 
     res.json({
-      status: health.status,
+      status: 'HEALTHY',
       databaseProvider: 'POSTGRESQL',
       service: 'ITIS Authoritative Core Engine',
       securityEngine: 'Phase RBAC-02 Authoritative Matrix Active',
@@ -616,7 +632,12 @@ app.get('/api/health', async (req, res) => {
       }
     });
   } catch (err: any) {
-    res.status(500).json({ status: 'DEGRADED', error: err.message });
+    res.status(503).json({
+      status: 'DATABASE_UNAVAILABLE',
+      databaseProvider: 'POSTGRESQL',
+      service: 'ITIS Authoritative Core Engine',
+      error: err.message
+    });
   }
 });
 
