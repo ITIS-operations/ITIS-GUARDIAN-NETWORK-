@@ -35,7 +35,8 @@ import {
   SchoolQueryOptions,
   IncidentQueryOptions,
   AuditLogQueryOptions,
-  ActiveUserSession
+  ActiveUserSession,
+  EligibleResponderRanking
 } from '../../types.js';
 
 const SYSTEM_ACTOR: ActiveUserSession = {
@@ -117,6 +118,14 @@ class InMemoryUserRepository implements IUserRepository {
     return this.toPlatformUserItem(u);
   }
 
+  async updatePassword(userId: string, newPasswordPlain: string): Promise<void> {
+    const u = db.users.get(userId);
+    if (u) {
+      u.password = newPasswordPlain;
+      db.persistToDisk();
+    }
+  }
+
   async verifyCredentials(identifier: string, passwordPlain: string): Promise<PlatformUserItem | null> {
     const clean = identifier.trim().toLowerCase();
     for (const u of db.users.values()) {
@@ -127,6 +136,15 @@ class InMemoryUserRepository implements IUserRepository {
       }
     }
     return null;
+  }
+
+  async registerPublicUser(params: RegisterUserPayload): Promise<{
+    user: ActiveUserSession;
+    token: string;
+    permissions: string[];
+    scope: any;
+  }> {
+    return db.registerPublicUser(params);
   }
 }
 
@@ -239,6 +257,14 @@ class InMemoryLearnerRepository implements ILearnerRepository {
     if (!hydrated) throw new Error('Hydration failed after annual safety update');
     return hydrated;
   }
+
+  async searchIdentity(params: any): Promise<any> {
+    return enrolmentEngine.searchIdentity(params);
+  }
+
+  async assignDeviceToLearner(params: any): Promise<any> {
+    return enrolmentEngine.assignDeviceToLearner(params);
+  }
 }
 
 class InMemoryGuardianRepository implements IGuardianRepository {
@@ -270,6 +296,16 @@ class InMemoryGuardianRepository implements IGuardianRepository {
       }
     }
     return list;
+  }
+
+  async findAll(): Promise<Array<{ guardian: Guardian; person: Person | null; linkedChildren: HydratedLearnerRecord[] }>> {
+    const results: Array<{ guardian: Guardian; person: Person | null; linkedChildren: HydratedLearnerRecord[] }> = [];
+    for (const g of db.guardians.values()) {
+      const person = g.personId ? db.persons.get(g.personId) || null : null;
+      const linkedChildren = await this.findLearnersByGuardianId(g.id);
+      results.push({ guardian: g, person, linkedChildren });
+    }
+    return results;
   }
 
   async create(guardian: Guardian): Promise<Guardian> {
@@ -330,6 +366,13 @@ class InMemoryIncidentRepository implements IIncidentRepository {
   async create(alert: IncidentAlert, actorContext: any): Promise<IncidentAlert> {
     db.incidents.set(alert.id, alert);
     return alert;
+  }
+
+  async update(id: string, updates: Partial<IncidentAlert>): Promise<IncidentAlert> {
+    const inc = db.incidents.get(id);
+    if (!inc) throw new Error(`Incident ${id} not found`);
+    Object.assign(inc, updates);
+    return inc;
   }
 
   async updateStatus(incidentId: string, status: string, notes?: string): Promise<IncidentAlert> {
@@ -395,6 +438,10 @@ class InMemoryResponderRepository implements IResponderRepository {
   async submitOutcomeReport(report: IncidentOutcomeReport, user: any): Promise<IncidentAlert> {
     return db.submitIncidentOutcomeReport(report, user);
   }
+
+  async getRankedEligibleResponders(incidentId: string): Promise<EligibleResponderRanking[]> {
+    return db.getRankedEligibleResponders(incidentId);
+  }
 }
 
 class InMemoryAuditRepository implements IAuditRepository {
@@ -413,6 +460,33 @@ class InMemoryAuditRepository implements IAuditRepository {
 
 export class InMemoryDataRepository implements IDataRepository {
   public users = new InMemoryUserRepository();
+  public sessions = {
+    async createSession(token: string, userId: string, sessionData: any, permissions: string[]): Promise<void> {
+      db.sessions.set(token, {
+        token,
+        userId,
+        session: sessionData,
+        permissions,
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 86400000).toISOString()
+      } as any);
+    },
+    async getSession(token: string): Promise<{ token: string; session: any; permissions: string[] } | null> {
+      const s = db.getSession(token);
+      return s ? { token, session: s.session, permissions: s.permissions } : null;
+    },
+    async revokeSession(token: string): Promise<void> {
+      db.revokeSession(token);
+    },
+    async revokeUserSessions(userId: string): Promise<void> {
+      for (const [t, s] of db.sessions.entries()) {
+        if (s.userId === userId) {
+          db.sessions.delete(t);
+        }
+      }
+    },
+    async cleanupExpiredSessions(): Promise<void> {}
+  };
   public schools = new InMemorySchoolRepository();
   public persons = new InMemoryPersonRepository();
   public learners = new InMemoryLearnerRepository();

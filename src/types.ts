@@ -629,6 +629,7 @@ export interface PlatformUserItem {
   permissions: string[];
   status: AccountStatus;
   isDemoAccount?: boolean;
+  mustChangePassword?: boolean;
   createdAt?: string;
 }
 
@@ -675,6 +676,7 @@ export interface ActiveUserSession {
   department?: string;
   organization?: string;
   token: string;
+  mustChangePassword?: boolean;
 }
 
 // Authoritative Permission Matrix Definitions

@@ -10,6 +10,7 @@ import {
   IIncidentRepository,
   IResponderRepository,
   IAuditRepository,
+  ISessionRepository,
   DatabaseTransaction
 } from './repository.js';
 import {
@@ -37,9 +38,14 @@ import {
   IncidentQueryOptions,
   AuditLogQueryOptions,
   ActiveUserSession,
+  RegisterUserPayload,
   AccountStatus,
   UserRole,
-  EligibleResponderRanking
+  EligibleResponderRanking,
+  IdentitySearchResult,
+  ExistingGuardianMatch,
+  ExistingLearnerMatch,
+  LinkedChildSummary
 } from '../../types.js';
 import crypto from 'crypto';
 
@@ -314,6 +320,166 @@ export class PostgresUserRepository implements IUserRepository {
        WHERE id = $3;`,
       [hash, salt, userId]
     );
+  }
+
+  async registerPublicUser(params: RegisterUserPayload): Promise<{
+    user: ActiveUserSession;
+    token: string;
+    permissions: string[];
+    scope: any;
+  }> {
+    const policyResult = validatePasswordPolicy(params.password);
+    if (!policyResult.valid) {
+      throw new Error(policyResult.reason || 'Password does not meet required security complexity standards.');
+    }
+
+    const cleanEmail = normalizeEmail(params.email);
+    const existing = await this.findByEmailOrAlias(cleanEmail);
+    if (existing) {
+      throw new Error('An account with this email address is already registered. Please sign in instead.');
+    }
+
+    const salt = generateSalt();
+    const hashedPassword = hashPassword(params.password, salt);
+    const role: UserRole = params.role || 'PARENT_GUARDIAN';
+    const fullName = `${params.firstName || ''} ${params.surname || ''}`.trim() || 'Registered User';
+
+    let assignedGuardianId: string | undefined = undefined;
+    const assignedSchoolId = params.schoolId;
+    const assignedResponderUnit = params.responderUnit;
+
+    if (role === 'PARENT_GUARDIAN') {
+      const cleanSaId = params.saIdNumber?.trim();
+      let matchedPersonId: string | undefined;
+
+      if (cleanSaId) {
+        const pRes = await query(`SELECT id FROM persons WHERE official_id = $1;`, [cleanSaId]);
+        if (pRes.rows.length > 0) matchedPersonId = pRes.rows[0].id;
+      }
+      if (!matchedPersonId) {
+        const pRes = await query(`SELECT id FROM persons WHERE email = $1;`, [cleanEmail]);
+        if (pRes.rows.length > 0) matchedPersonId = pRes.rows[0].id;
+      }
+
+      if (matchedPersonId) {
+        const gRes = await query(`SELECT id FROM guardians WHERE person_id = $1;`, [matchedPersonId]);
+        if (gRes.rows.length > 0) assignedGuardianId = gRes.rows[0].id;
+      }
+
+      if (!assignedGuardianId) {
+        const personId = matchedPersonId || ('per-g-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6));
+        if (!matchedPersonId) {
+          await query(
+            `INSERT INTO persons (
+              id, official_id, id_type, first_name, last_name, date_of_birth,
+              gender, mobile_number, mobile_verified, email, email_verified,
+              is_verified, verification_source
+            ) VALUES ($1, $2, 'SA_ID', $3, $4, '1985-01-01', 'UNDISCLOSED', $5, TRUE, $6, TRUE, TRUE, 'DHA_NPR_LOOKUP');`,
+            [
+              personId,
+              cleanSaId || ('SA-REG-' + Date.now().toString().slice(-8)),
+              params.firstName?.trim() || fullName.split(' ')[0] || 'Guardian',
+              params.surname?.trim() || fullName.split(' ').slice(1).join(' ') || 'User',
+              params.mobileNumber?.trim() || '+27 82 000 0000',
+              cleanEmail
+            ]
+          );
+        }
+
+        const guardianId = 'grd-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+        await query(
+          `INSERT INTO guardians (
+            id, person_id, sa_id_number, sa_id_masked, id_verified, mobile_number,
+            preferred_language, push_notifications_enabled, id_verification_status
+          ) VALUES ($1, $2, $3, $4, TRUE, $5, 'English', TRUE, 'VERIFIED');`,
+          [
+            guardianId,
+            personId,
+            cleanSaId || ('SA-REG-' + Date.now().toString().slice(-8)),
+            maskSaId(cleanSaId || ('SA-REG-' + Date.now().toString().slice(-8))),
+            params.mobileNumber?.trim() || '+27 82 000 0000'
+          ]
+        );
+        assignedGuardianId = guardianId;
+      }
+    }
+
+    const id = 'usr-' + role.toLowerCase().replace(/_/g, '') + '-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+    const roleDef = AUTHORITATIVE_ROLE_MATRIX[role];
+    const permissions = roleDef ? roleDef.canList : [];
+
+    await query(
+      `INSERT INTO users (
+        id, email, name, first_name, surname, mobile_number, role,
+        password_hash, password_salt, school_id, guardian_id, responder_unit,
+        department, organization, permissions, status, is_demo_account, must_change_password
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'ACTIVE', FALSE, FALSE);`,
+      [
+        id,
+        cleanEmail,
+        fullName,
+        params.firstName?.trim() || null,
+        params.surname?.trim() || null,
+        params.mobileNumber?.trim() || null,
+        role,
+        hashedPassword,
+        salt,
+        assignedSchoolId || null,
+        assignedGuardianId || null,
+        assignedResponderUnit || null,
+        params.department || (role === 'PARENT_GUARDIAN' ? 'Parent & Legal Guardian Community' : 'ITIS Operational Division'),
+        params.organization || (role === 'PARENT_GUARDIAN' ? 'Parent & Legal Guardian Network' : 'ITIS Platform Network'),
+        permissions
+      ]
+    );
+
+    const token = 'tok_itis_' + crypto.randomBytes(16).toString('hex') + '_' + Date.now().toString(36);
+    const sessionUser: ActiveUserSession = {
+      id,
+      name: fullName,
+      email: cleanEmail,
+      role,
+      schoolId: assignedSchoolId,
+      guardianId: assignedGuardianId,
+      responderUnit: assignedResponderUnit,
+      department: params.department || (role === 'PARENT_GUARDIAN' ? 'Parent & Legal Guardian Community' : 'ITIS Operational Division'),
+      organization: params.organization || (role === 'PARENT_GUARDIAN' ? 'Parent & Legal Guardian Network' : 'ITIS Platform Network'),
+      token,
+      mustChangePassword: false
+    };
+
+    const sessionRepo = new PostgresSessionRepository();
+    await sessionRepo.createSession(token, id, sessionUser, permissions);
+
+    const auditRepo = new PostgresAuditRepository();
+    await auditRepo.logEvent({
+      actionType: 'PERSON_CREATED',
+      actorUserId: id,
+      actorName: fullName,
+      actorRole: role,
+      targetEntity: 'USER',
+      targetId: id,
+      details: {
+        registrationMethod: 'PUBLIC_SELF_REGISTRATION',
+        name: fullName,
+        email: cleanEmail,
+        role,
+        guardianId: assignedGuardianId
+      },
+      ipAddress: '127.0.0.1'
+    });
+
+    return {
+      user: sessionUser,
+      token,
+      permissions,
+      scope: {
+        schoolId: assignedSchoolId,
+        guardianId: assignedGuardianId,
+        responderUnit: assignedResponderUnit,
+        department: params.department
+      }
+    };
   }
 
   private mapRowToUserItem(row: any): PlatformUserItem {
@@ -608,6 +774,27 @@ export class PostgresGuardianRepository implements IGuardianRepository {
       if (hydrated) list.push(hydrated);
     }
     return list;
+  }
+
+  async findAll(): Promise<Array<{ guardian: Guardian; person: Person | null; linkedChildren: HydratedLearnerRecord[] }>> {
+    const gRes = await query(`SELECT * FROM guardians ORDER BY created_at ASC;`);
+    const results: Array<{ guardian: Guardian; person: Person | null; linkedChildren: HydratedLearnerRecord[] }> = [];
+    const personRepo = new PostgresPersonRepository();
+
+    for (const gRow of gRes.rows) {
+      const guardian = this.mapRowToGuardian(gRow);
+      let person: Person | null = null;
+      if (guardian.personId) {
+        person = await personRepo.findById(guardian.personId);
+      }
+      const linkedChildren = await this.findLearnersByGuardianId(guardian.id);
+      results.push({
+        guardian,
+        person,
+        linkedChildren
+      });
+    }
+    return results;
   }
 
   async create(guardian: Guardian): Promise<Guardian> {
@@ -1223,6 +1410,303 @@ export class PostgresLearnerRepository implements ILearnerRepository {
     return hydrated!;
   }
 
+  async searchIdentity(params: {
+    saIdNumber?: string;
+    mobileNumber?: string;
+    emisId?: string;
+    firstName?: string;
+    lastName?: string;
+    dateOfBirth?: string;
+  }): Promise<IdentitySearchResult> {
+    const cleanId = params.saIdNumber ? params.saIdNumber.trim().replace(/\s+/g, '') : '';
+    const cleanMobile = params.mobileNumber ? params.mobileNumber.trim().replace(/\s+/g, '') : '';
+    const cleanEmis = params.emisId ? params.emisId.trim().toUpperCase() : '';
+    const fName = params.firstName ? params.firstName.trim().toLowerCase() : '';
+    const lName = params.lastName ? params.lastName.trim().toLowerCase() : '';
+
+    // 1. CHECK LEARNER IDENTITY MATCH (via EMIS / Admission ID)
+    if (cleanEmis) {
+      const emisRes = await query(
+        `SELECT l.id as learner_id, l.emis_id, p.id as person_id, p.first_name, p.last_name, p.date_of_birth,
+                s.name as school_name, se.grade, se.class_section,
+                (SELECT COUNT(*) FROM guardian_learner_relationships WHERE learner_id = l.id) as guardian_count
+         FROM learners l
+         JOIN persons p ON l.person_id = p.id
+         LEFT JOIN school_enrolments se ON se.learner_id = l.id AND se.enrolment_status = 'ACTIVE'
+         LEFT JOIN schools s ON se.school_id = s.id
+         WHERE UPPER(l.emis_id) = UPPER($1) OR UPPER(l.admission_number) = UPPER($1)
+         LIMIT 1;`,
+        [cleanEmis]
+      );
+
+      if (emisRes.rows.length > 0) {
+        const row = emisRes.rows[0];
+        const learnerMatch: ExistingLearnerMatch = {
+          learnerId: row.learner_id,
+          personId: row.person_id,
+          fullName: `${row.first_name} ${row.last_name}`,
+          emisId: row.emis_id,
+          dateOfBirth: row.date_of_birth ? new Date(row.date_of_birth).toISOString().split('T')[0] : '2010-01-01',
+          currentSchoolName: row.school_name || 'Unassigned',
+          currentGrade: row.grade ? `${row.grade} (${row.class_section})` : 'N/A',
+          linkedGuardiansCount: parseInt(row.guardian_count || '0', 10)
+        };
+
+        return {
+          matchType: 'EXACT_ID_MATCH',
+          entityType: 'LEARNER',
+          learnerMatch,
+          confidenceScore: 100,
+          title: 'Authoritative Learner Found',
+          description: `Learner "${row.first_name} ${row.last_name}" is already registered in the National Child Safety Database with EMIS ${row.emis_id}. You may link this learner to your school or advance their grade without duplicating the learner entity.`,
+          requiresStaffReview: false,
+          allowDirectLink: true
+        };
+      }
+    }
+
+    // Helper to get linked children summary for a guardian
+    const getLinkedChildren = async (guardianId: string): Promise<LinkedChildSummary[]> => {
+      const relRes = await query(
+        `SELECT l.id as learner_id, p.id as person_id, p.first_name, p.last_name, l.emis_id,
+                s.name as school_name, se.grade, se.class_section, rel.relationship_type, rel.is_primary_contact, se.enrolment_status
+         FROM guardian_learner_relationships rel
+         JOIN learners l ON rel.learner_id = l.id
+         JOIN persons p ON l.person_id = p.id
+         LEFT JOIN school_enrolments se ON se.learner_id = l.id AND se.enrolment_status = 'ACTIVE'
+         LEFT JOIN schools s ON se.school_id = s.id
+         WHERE rel.guardian_id = $1;`,
+        [guardianId]
+      );
+      return relRes.rows.map(r => ({
+        learnerId: r.learner_id,
+        personId: r.person_id,
+        fullName: `${r.first_name} ${r.last_name}`,
+        emisId: r.emis_id,
+        grade: r.grade || 'N/A',
+        classSection: r.class_section || 'N/A',
+        schoolName: r.school_name || 'Unassigned',
+        relationshipType: r.relationship_type as any || 'PARENT',
+        isPrimary: !!r.is_primary_contact,
+        status: (r.enrolment_status as any) || 'ACTIVE'
+      }));
+    };
+
+    // 2. CHECK GUARDIAN IDENTITY (via SA ID Number)
+    if (cleanId) {
+      const gRes = await query(
+        `SELECT g.id as guardian_id, g.sa_id_number, p.id as person_id, p.first_name, p.last_name, p.date_of_birth, p.email, g.mobile_number
+         FROM guardians g
+         JOIN persons p ON g.person_id = p.id
+         WHERE g.sa_id_number = $1 OR p.official_id = $1
+         LIMIT 1;`,
+        [cleanId]
+      );
+
+      if (gRes.rows.length > 0) {
+        const row = gRes.rows[0];
+        if (lName && row.last_name.toLowerCase() !== lName) {
+          return {
+            matchType: 'CONFLICT_DETECTED',
+            entityType: 'GUARDIAN',
+            confidenceScore: 70,
+            title: 'Identity Verification Required: Mismatched Record',
+            description: `The SA ID ${maskSaId(cleanId)} belongs to verified citizen "${row.first_name} ${row.last_name}", but input specified surname "${params.lastName}". Automatic linking is blocked to protect child safety.`,
+            requiresStaffReview: true,
+            conflictReason: `SA ID registered to "${row.first_name} ${row.last_name}" (DOB: ${row.date_of_birth}), whereas form input specified "${params.firstName || ''} ${params.lastName || ''}".`,
+            allowDirectLink: false
+          };
+        }
+
+        const linkedChildren = await getLinkedChildren(row.guardian_id);
+        const guardianMatch: ExistingGuardianMatch = {
+          guardianId: row.guardian_id,
+          personId: row.person_id,
+          fullName: `${row.first_name} ${row.last_name}`,
+          saIdMasked: maskSaId(row.sa_id_number),
+          mobileNumber: row.mobile_number,
+          mobileVerified: true,
+          email: row.email,
+          linkedChildren
+        };
+
+        return {
+          matchType: 'EXACT_ID_MATCH',
+          entityType: 'GUARDIAN',
+          guardianMatch,
+          confidenceScore: 100,
+          title: 'Existing Guardian Found',
+          description: `Authoritative parent/guardian record found for ${row.first_name} ${row.last_name} (ID: ${maskSaId(row.sa_id_number)}). Existing children are listed below. Click "ADD ANOTHER CHILD" to link without creating a duplicate account.`,
+          requiresStaffReview: false,
+          allowDirectLink: true
+        };
+      }
+    }
+
+    // 3. CHECK GUARDIAN BY VERIFIED MOBILE NUMBER
+    if (cleanMobile) {
+      const normalizedMobile = cleanMobile.replace(/\s+/g, '').replace(/^0/, '+27');
+      const mRes = await query(
+        `SELECT g.id as guardian_id, g.sa_id_number, p.id as person_id, p.first_name, p.last_name, p.email, g.mobile_number
+         FROM guardians g
+         JOIN persons p ON g.person_id = p.id
+         WHERE g.mobile_number = $1 OR g.mobile_number = $2 OR p.mobile_number = $1 OR p.mobile_number = $2
+         LIMIT 1;`,
+        [cleanMobile, normalizedMobile]
+      );
+
+      if (mRes.rows.length > 0) {
+        const row = mRes.rows[0];
+        const linkedChildren = await getLinkedChildren(row.guardian_id);
+        const guardianMatch: ExistingGuardianMatch = {
+          guardianId: row.guardian_id,
+          personId: row.person_id,
+          fullName: `${row.first_name} ${row.last_name}`,
+          saIdMasked: maskSaId(row.sa_id_number),
+          mobileNumber: row.mobile_number,
+          mobileVerified: true,
+          email: row.email,
+          linkedChildren
+        };
+
+        return {
+          matchType: 'VERIFIED_MOBILE_MATCH',
+          entityType: 'GUARDIAN',
+          guardianMatch,
+          confidenceScore: 85,
+          title: 'Possible Existing Guardian Found (Mobile Match)',
+          description: `The mobile number ${cleanMobile} matches verified guardian "${row.first_name} ${row.last_name}". Please review and confirm identity before linking.`,
+          requiresStaffReview: true,
+          allowDirectLink: true
+        };
+      }
+    }
+
+    // 4. CHECK NAME/SURNAME
+    if (fName && lName) {
+      const nRes = await query(
+        `SELECT g.id as guardian_id, g.sa_id_number, p.id as person_id, p.first_name, p.last_name, p.email, g.mobile_number
+         FROM guardians g
+         JOIN persons p ON g.person_id = p.id
+         WHERE LOWER(p.first_name) = LOWER($1) AND LOWER(p.last_name) = LOWER($2)
+         LIMIT 1;`,
+        [fName, lName]
+      );
+
+      if (nRes.rows.length > 0) {
+        const row = nRes.rows[0];
+        const linkedChildren = await getLinkedChildren(row.guardian_id);
+        return {
+          matchType: 'NAME_SURNAME_POSSIBLE',
+          entityType: 'GUARDIAN',
+          guardianMatch: {
+            guardianId: row.guardian_id,
+            personId: row.person_id,
+            fullName: `${row.first_name} ${row.last_name}`,
+            saIdMasked: maskSaId(row.sa_id_number),
+            mobileNumber: row.mobile_number,
+            mobileVerified: true,
+            email: row.email,
+            linkedChildren
+          },
+          confidenceScore: 40,
+          title: 'Possible Name Match (Manual Verification Required)',
+          description: `A person named "${row.first_name} ${row.last_name}" exists. In accordance with ITIS Child Safety Protocol, names and surnames alone CANNOT automatically link records. Please enter an SA ID or verified Mobile Number.`,
+          requiresStaffReview: true,
+          allowDirectLink: false
+        };
+      }
+    }
+
+    return {
+      matchType: 'NO_MATCH',
+      entityType: 'GUARDIAN',
+      confidenceScore: 0,
+      title: 'No Prior Authoritative Record Found',
+      description: 'The provided credentials do not exist in the National Register. A new authoritative Person, Learner, and Guardian record will be created and certified.',
+      requiresStaffReview: false,
+      allowDirectLink: false
+    };
+  }
+
+  async assignDeviceToLearner(params: {
+    learnerId: string;
+    trackingBeaconId: string;
+    schoolId?: string;
+    forceReassign?: boolean;
+    staffContext: any;
+  }): Promise<{ success: boolean; learnerId: string; trackingBeaconId: string; message: string; auditEventId: string }> {
+    const { learnerId, trackingBeaconId, schoolId, forceReassign, staffContext } = params;
+
+    if (staffContext.staffRole !== 'FOUNDER_EXECUTIVE' && staffContext.staffRole !== 'SYSTEM_ADMIN') {
+      throw new Error(`ACCESS DENIED: Role "${staffContext.staffRole}" lacks administrative authority to pair or assign approved safety hardware.`);
+    }
+
+    const cleanBeacon = trackingBeaconId.trim().toUpperCase();
+    if (!cleanBeacon) {
+      throw new Error('Valid Tracking Beacon / Device ID is required.');
+    }
+
+    const learner = await this.findById(learnerId);
+    if (!learner) {
+      throw new Error(`Learner record "${learnerId}" not found in authoritative directory.`);
+    }
+
+    // Check for duplicate device assignment across all learners
+    const dupRes = await query(
+      `SELECT l.id, p.first_name, p.last_name, l.emis_id 
+       FROM learners l 
+       JOIN persons p ON l.person_id = p.id 
+       WHERE l.id != $1 AND UPPER(l.current_device_id) = $2;`,
+      [learnerId, cleanBeacon]
+    );
+
+    if (dupRes.rows.length > 0) {
+      if (!forceReassign) {
+        const dup = dupRes.rows[0];
+        throw new Error(`DUPLICATE HARDWARE DEVICE: Tracking Beacon "${cleanBeacon}" is already assigned to learner "${dup.first_name} ${dup.last_name}" (EMIS: ${dup.emis_id}). Unlinking previous learner is required before reassignment.`);
+      } else {
+        await query(`UPDATE learners SET current_device_id = NULL WHERE UPPER(current_device_id) = $1;`, [cleanBeacon]);
+        await query(`UPDATE devices SET assigned_learner_id = NULL WHERE UPPER(device_id) = $1;`, [cleanBeacon]);
+      }
+    }
+
+    await query(
+      `UPDATE learners SET current_device_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2;`,
+      [cleanBeacon, learnerId]
+    );
+
+    await query(
+      `INSERT INTO devices (id, device_id, device_type, assigned_learner_id, status)
+       VALUES ($1, $2, 'HARDWARE_BEACON', $3, 'ACTIVE')
+       ON CONFLICT (device_id) DO UPDATE SET assigned_learner_id = $3, status = 'ACTIVE';`,
+      ['dev-' + cleanBeacon, cleanBeacon, learnerId]
+    );
+
+    const auditRepo = new PostgresAuditRepository();
+    const audit = await auditRepo.logEvent({
+      actionType: 'DEVICE_PAIRED',
+      actorUserId: staffContext.staffUserId,
+      actorName: staffContext.staffName,
+      actorRole: staffContext.staffRole,
+      targetEntity: 'LEARNER',
+      targetId: learnerId,
+      details: {
+        trackingBeaconId: cleanBeacon,
+        schoolId
+      },
+      ipAddress: staffContext.ipAddress
+    });
+
+    return {
+      success: true,
+      learnerId,
+      trackingBeaconId: cleanBeacon,
+      message: `Tracking beacon "${cleanBeacon}" successfully paired and assigned to learner ${learnerId}.`,
+      auditEventId: audit.id
+    };
+  }
+
   private mapRowToLearner(row: any): Learner {
     return {
       id: row.id,
@@ -1327,6 +1811,9 @@ export class PostgresIncidentRepository implements IIncidentRepository {
       whereClauses.push(`learner_id = $${paramIndex++}`);
       params.push(options.learnerId);
     }
+    if (options?.activeOnly) {
+      whereClauses.push(`status != 'RESOLVED'`);
+    }
     if (options?.status) {
       whereClauses.push(`status = $${paramIndex++}`);
       params.push(options.status);
@@ -1387,6 +1874,40 @@ export class PostgresIncidentRepository implements IIncidentRepository {
         alert.assignedResponder ? JSON.stringify(alert.assignedResponder) : null,
         alert.operationalState || 'AVAILABLE',
         alert.timestamp || now
+      ]
+    );
+    return this.mapRowToIncident(res.rows[0]);
+  }
+
+  async update(id: string, updates: Partial<IncidentAlert>): Promise<IncidentAlert> {
+    const existing = await this.findById(id);
+    if (!existing) throw new Error('Incident not found.');
+
+    const status = updates.status ?? existing.status;
+    const severity = updates.severity ?? existing.severity;
+    const notes = updates.notes ? (Array.isArray(updates.notes) ? updates.notes : [updates.notes]) : existing.notes;
+    const assignedResponder = updates.assignedResponder !== undefined ? updates.assignedResponder : existing.assignedResponder;
+    const operationalState = updates.operationalState ?? existing.operationalState;
+    const resolvedAt = status === 'RESOLVED' ? new Date().toISOString() : null;
+
+    const res = await query(
+      `UPDATE incidents 
+       SET status = $1,
+           severity = $2,
+           notes = $3,
+           assigned_responder = $4,
+           responder_status = $5,
+           resolved_at = COALESCE($6::timestamptz, resolved_at)
+       WHERE id = $7
+       RETURNING *;`,
+      [
+        status,
+        severity,
+        notes,
+        assignedResponder ? JSON.stringify(assignedResponder) : null,
+        operationalState,
+        resolvedAt,
+        id
       ]
     );
     return this.mapRowToIncident(res.rows[0]);
@@ -1591,6 +2112,116 @@ export class PostgresResponderRepository implements IResponderRepository {
       }
     }
     return views;
+  }
+
+  async getRankedEligibleResponders(incidentId: string): Promise<EligibleResponderRanking[]> {
+    const incRes = await query(`SELECT * FROM incidents WHERE id = $1;`, [incidentId]);
+    const incRow = incRes.rows[0];
+    const incLocation = incRow ? {
+      lat: Number(incRow.latitude) || -25.7589,
+      lng: Number(incRow.longitude) || 28.2321,
+      accuracyMeters: Number(incRow.accuracy_meters) || 4.2
+    } : { lat: -25.7589, lng: 28.2321, accuracyMeters: 4.2 };
+
+    const isLearnerLocationValid = 
+      typeof incLocation?.lat === 'number' && 
+      typeof incLocation?.lng === 'number' && 
+      !isNaN(incLocation.lat) && 
+      !isNaN(incLocation.lng) && 
+      incLocation.lat !== 0 && 
+      incLocation.lng !== 0;
+
+    const units = await this.findAll();
+    const rankings: EligibleResponderRanking[] = units.map(unit => {
+      const isResponderLocationValid = 
+        typeof unit.currentLocation?.lat === 'number' && 
+        typeof unit.currentLocation?.lng === 'number' && 
+        !isNaN(unit.currentLocation.lat) && 
+        !isNaN(unit.currentLocation.lng) && 
+        unit.currentLocation.lat !== 0 && 
+        unit.currentLocation.lng !== 0 &&
+        unit.currentLocation.isVerified !== false;
+
+      const locationVerified = isLearnerLocationValid && isResponderLocationValid;
+
+      let distanceKm: number | null = null;
+      let estimatedEtaMinutes: number | null = null;
+
+      if (locationVerified) {
+        distanceKm = calculateDistanceKm(
+          unit.currentLocation.lat,
+          unit.currentLocation.lng,
+          incLocation.lat,
+          incLocation.lng
+        );
+        estimatedEtaMinutes = Math.max(1, Math.round((distanceKm / 35) * 60));
+      }
+
+      const isAvailable = unit.status === 'AVAILABLE';
+
+      let capabilityMatchScore = 70;
+      if (unit.unitType === 'NATIONAL_POLICE' || unit.unitType === 'SAPS') capabilityMatchScore = 98;
+      else if (unit.unitType === 'PARAMEDIC_EMS') capabilityMatchScore = 94;
+      else if (unit.unitType === 'METRO_POLICE') capabilityMatchScore = 88;
+      else if (unit.unitType === 'PRIVATE_SECURITY') capabilityMatchScore = 82;
+      else if (unit.unitType === 'COMMUNITY_CPF') capabilityMatchScore = 75;
+
+      if (distanceKm !== null && distanceKm > 2.5) {
+        capabilityMatchScore -= 10;
+      }
+      if (!isAvailable) {
+        capabilityMatchScore -= 40;
+      }
+
+      let aiRecommendationReason = '';
+      if (!locationVerified) {
+        aiRecommendationReason = `LOCATION VERIFICATION PENDING: Operational unit ready on standby. Live GPS synchronization in progress.`;
+      } else if (isAvailable && distanceKm !== null && distanceKm <= 1.0) {
+        aiRecommendationReason = `PRIMARY AI RECOMMENDATION: ${unit.name} is the closest verified unit (${distanceKm} km, ~${estimatedEtaMinutes} min ETA) with high corridor familiarity.`;
+      } else if (isAvailable && unit.unitType === 'PARAMEDIC_EMS') {
+        aiRecommendationReason = `MEDICAL BACKUP RECOMMENDATION: Specialized ALS paramedic crew within rapid response radius (${distanceKm} km, ~${estimatedEtaMinutes} min ETA).`;
+      } else if (isAvailable && distanceKm !== null) {
+        aiRecommendationReason = `AVAILABLE EMERGENCY UNIT: On active standby (${distanceKm} km, ~${estimatedEtaMinutes} min ETA). High capability score.`;
+      } else {
+        aiRecommendationReason = `ENGAGED: Unit currently in operational status [${unit.status}]. Secondary dispatch queue.`;
+      }
+
+      return {
+        responder: unit,
+        distanceKm,
+        estimatedEtaMinutes,
+        isAvailable,
+        capabilityMatchScore: Math.max(10, capabilityMatchScore),
+        rank: 1,
+        aiRecommendationReason,
+        locationVerified,
+        statusText: unit.status,
+        capabilitiesList: unit.capabilities || []
+      };
+    });
+
+    rankings.sort((a, b) => {
+      if (a.isAvailable !== b.isAvailable) return a.isAvailable ? -1 : 1;
+      if (a.locationVerified && b.locationVerified && a.distanceKm !== null && b.distanceKm !== null) {
+        if (Math.abs(a.distanceKm - b.distanceKm) > 0.1) {
+          return a.distanceKm - b.distanceKm;
+        }
+        if (a.estimatedEtaMinutes !== null && b.estimatedEtaMinutes !== null && a.estimatedEtaMinutes !== b.estimatedEtaMinutes) {
+          return a.estimatedEtaMinutes - b.estimatedEtaMinutes;
+        }
+      } else if (a.locationVerified && !b.locationVerified) {
+        return -1;
+      } else if (!a.locationVerified && b.locationVerified) {
+        return 1;
+      }
+      return b.capabilityMatchScore - a.capabilityMatchScore;
+    });
+
+    rankings.forEach((r, idx) => {
+      r.rank = idx + 1;
+    });
+
+    return rankings;
   }
 
   async acceptAssignment(incidentId: string, user: any): Promise<any> {
@@ -1805,24 +2436,47 @@ export class PostgresAuditRepository implements IAuditRepository {
 // ----------------------------------------------------
 // 10. POSTGRES SESSION REPOSITORY
 // ----------------------------------------------------
-export class PostgresSessionRepository {
+export class PostgresSessionRepository implements ISessionRepository {
   async createSession(
     token: string,
     userId: string,
     sessionUser: ActiveUserSession,
     permissions: string[],
     ttlHours: number = 24
-  ): Promise<ActiveSessionRecord> {
+  ): Promise<any> {
+    const id = 'sess-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
     const createdAt = new Date().toISOString();
     const expiresAt = new Date(Date.now() + ttlHours * 60 * 60 * 1000).toISOString();
 
     await query(
-      `INSERT INTO sessions (token, user_id, session_data, permissions, expires_at, created_at)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       ON CONFLICT (token) DO UPDATE SET
-         session_data = EXCLUDED.session_data,
-         expires_at = EXCLUDED.expires_at;`,
-      [token, userId, JSON.stringify(sessionUser), permissions, expiresAt, createdAt]
+      `INSERT INTO sessions (
+        id, token, user_id, email, name, role, department, organization,
+        school_id, guardian_id, responder_unit, permissions, session_data,
+        expires_at, created_at, last_active_at
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      ON CONFLICT (token) DO UPDATE SET
+        session_data = EXCLUDED.session_data,
+        permissions = EXCLUDED.permissions,
+        expires_at = EXCLUDED.expires_at,
+        last_active_at = EXCLUDED.last_active_at;`,
+      [
+        id,
+        token,
+        userId,
+        sessionUser.email,
+        sessionUser.name || 'User',
+        sessionUser.role,
+        sessionUser.department || null,
+        sessionUser.organization || null,
+        sessionUser.schoolId || null,
+        sessionUser.guardianId || null,
+        sessionUser.responderUnit || null,
+        permissions,
+        JSON.stringify(sessionUser),
+        expiresAt,
+        createdAt,
+        createdAt
+      ]
     );
 
     return {
@@ -1850,6 +2504,19 @@ export class PostgresSessionRepository {
         sessionUser = JSON.parse(sessionUser);
       } catch {}
     }
+    if (!sessionUser) {
+      sessionUser = {
+        id: row.user_id,
+        email: row.email,
+        name: row.name,
+        role: row.role,
+        department: row.department,
+        organization: row.organization,
+        schoolId: row.school_id,
+        guardianId: row.guardian_id,
+        responderUnit: row.responder_unit
+      };
+    }
 
     return {
       token: row.token,
@@ -1861,11 +2528,10 @@ export class PostgresSessionRepository {
     };
   }
 
-  async revokeSession(token: string): Promise<boolean> {
-    if (!token) return false;
+  async revokeSession(token: string): Promise<void> {
+    if (!token) return;
     const clean = token.replace('Bearer ', '').trim();
-    const res = await query(`DELETE FROM sessions WHERE token = $1;`, [clean]);
-    return (res.rowCount || 0) > 0;
+    await query(`DELETE FROM sessions WHERE token = $1;`, [clean]);
   }
 
   async revokeUserSessions(userId: string, exceptToken?: string): Promise<void> {
@@ -1874,6 +2540,10 @@ export class PostgresSessionRepository {
     } else {
       await query(`DELETE FROM sessions WHERE user_id = $1;`, [userId]);
     }
+  }
+
+  async cleanupExpiredSessions(): Promise<void> {
+    await query(`DELETE FROM sessions WHERE expires_at <= CURRENT_TIMESTAMP;`);
   }
 }
 

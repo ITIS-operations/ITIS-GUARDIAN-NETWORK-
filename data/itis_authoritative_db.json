@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "savedAt": "2026-08-24T17:02:08.670Z",
+  "savedAt": "2026-08-28T10:58:36.540Z",
   "persons": [
     [
       "per-g-001",
@@ -97,6 +97,87 @@
         "mobileVerified": false,
         "emailVerified": false
       }
+    ],
+    [
+      "per-g-mtcu93ap-ykm8",
+      {
+        "id": "per-g-mtcu93ap-ykm8",
+        "officialId": "800101500704619",
+        "idType": "SA_ID",
+        "firstName": "ForensicGuardian",
+        "lastName": "Test",
+        "dateOfBirth": "1980-01-01",
+        "gender": "UNDISCLOSED",
+        "mobileNumber": "+27 82 777 704619",
+        "mobileVerified": true,
+        "email": "guardian.704619@test.co.za",
+        "emailVerified": true,
+        "physicalAddress": "123 Forensic Way, Pretoria",
+        "isVerified": true,
+        "verificationSource": "DHA_NPR_LOOKUP",
+        "createdAt": "2026-08-28T10:58:24.625Z",
+        "updatedAt": "2026-08-28T10:58:24.625Z"
+      }
+    ],
+    [
+      "per-g-mtcu96oj-2fer",
+      {
+        "id": "per-g-mtcu96oj-2fer",
+        "officialId": "800101500709007",
+        "idType": "SA_ID",
+        "firstName": "ForensicGuardian",
+        "lastName": "Test",
+        "dateOfBirth": "1980-01-01",
+        "gender": "UNDISCLOSED",
+        "mobileNumber": "+27 82 777 709007",
+        "mobileVerified": true,
+        "email": "guardian.709007@test.co.za",
+        "emailVerified": true,
+        "physicalAddress": "123 Forensic Way, Pretoria",
+        "isVerified": true,
+        "verificationSource": "DHA_NPR_LOOKUP",
+        "createdAt": "2026-08-28T10:58:29.011Z",
+        "updatedAt": "2026-08-28T10:58:29.011Z"
+      }
+    ],
+    [
+      "per-g-mtcu9chn-6fni",
+      {
+        "id": "per-g-mtcu9chn-6fni",
+        "officialId": "800101500716534",
+        "idType": "SA_ID",
+        "firstName": "TestGuardian716534",
+        "lastName": "ForensicAudit",
+        "dateOfBirth": "1980-01-01",
+        "gender": "UNDISCLOSED",
+        "mobileNumber": "+27 82 777 716534",
+        "mobileVerified": true,
+        "email": "guardian.716534@forensic-test.co.za",
+        "emailVerified": true,
+        "physicalAddress": "123 Forensic Street, Pretoria",
+        "isVerified": true,
+        "verificationSource": "DHA_NPR_LOOKUP",
+        "createdAt": "2026-08-28T10:58:36.538Z",
+        "updatedAt": "2026-08-28T10:58:36.538Z"
+      }
+    ],
+    [
+      "per-l-mtcu9chn-qx5b",
+      {
+        "id": "per-l-mtcu9chn-qx5b",
+        "officialId": "150101500716534",
+        "idType": "SA_ID",
+        "firstName": "TestLearner716534",
+        "lastName": "ForensicAudit",
+        "dateOfBirth": "2015-05-15",
+        "gender": "FEMALE",
+        "mobileVerified": false,
+        "emailVerified": false,
+        "isVerified": true,
+        "verificationSource": "EMIS_VERIFIED",
+        "createdAt": "2026-08-28T10:58:36.538Z",
+        "updatedAt": "2026-08-28T10:58:36.538Z"
+      }
     ]
   ],
   "learners": [
@@ -147,6 +228,23 @@
         "createdAt": "2025-02-01T08:00:00.000Z",
         "updatedAt": "2026-01-10T08:00:00.000Z"
       }
+    ],
+    [
+      "lrn-mtcu9chn-8usd",
+      {
+        "id": "lrn-mtcu9chn-8usd",
+        "personId": "per-l-mtcu9chn-qx5b",
+        "emisId": "EMIS-TEST-716534",
+        "admissionNumber": "EMIS-TEST-716534",
+        "bloodType": "O+",
+        "allergies": [
+          "Peanuts"
+        ],
+        "trackingBeaconId": "BCN-ITIS-6099",
+        "photoUrl": "https://images.unsplash.com/photo-1534528741990?w=200&auto=format&fit=crop&q=80",
+        "createdAt": "2026-08-28T10:58:36.538Z",
+        "updatedAt": "2026-08-28T10:58:36.538Z"
+      }
     ]
   ],
   "guardians": [
@@ -183,6 +281,54 @@
         "pushNotificationsEnabled": true,
         "createdAt": "2025-02-01T08:00:00.000Z",
         "updatedAt": "2026-01-10T08:00:00.000Z"
+      }
+    ],
+    [
+      "grd-mtcu93ap-0dra",
+      {
+        "id": "grd-mtcu93ap-0dra",
+        "personId": "per-g-mtcu93ap-ykm8",
+        "saIdNumber": "800101500704619",
+        "saIdMasked": "800****19",
+        "idVerified": true,
+        "mobileNumber": "+27 82 777 704619",
+        "mobileVerified": true,
+        "preferredLanguage": "English",
+        "pushNotificationsEnabled": true,
+        "createdAt": "2026-08-28T10:58:24.625Z",
+        "updatedAt": "2026-08-28T10:58:24.625Z"
+      }
+    ],
+    [
+      "grd-mtcu96oj-qb4z",
+      {
+        "id": "grd-mtcu96oj-qb4z",
+        "personId": "per-g-mtcu96oj-2fer",
+        "saIdNumber": "800101500709007",
+        "saIdMasked": "800****07",
+        "idVerified": true,
+        "mobileNumber": "+27 82 777 709007",
+        "mobileVerified": true,
+        "preferredLanguage": "English",
+        "pushNotificationsEnabled": true,
+        "createdAt": "2026-08-28T10:58:29.011Z",
+        "updatedAt": "2026-08-28T10:58:29.011Z"
+      }
+    ],
+    [
+      "grd-mtcu9chn-01v5",
+      {
+        "id": "grd-mtcu9chn-01v5",
+        "personId": "per-g-mtcu9chn-6fni",
+        "saIdNumber": "800101500716534",
+        "saIdMasked": "800****34",
+        "idVerified": true,
+        "mobileNumber": "+27 82 777 716534",
+        "mobileVerified": true,
+        "preferredLanguage": "English",
+        "pushNotificationsEnabled": true,
+        "createdAt": "2026-08-28T10:58:36.538Z",
+        "updatedAt": "2026-08-28T10:58:36.538Z"
       }
     ]
   ],
@@ -243,6 +389,25 @@
         "establishedBySchoolId": "sch-002",
         "auditTrailId": "aud-seed-003"
       }
+    ],
+    [
+      "rel-mtcu9chn-b8q7",
+      {
+        "id": "rel-mtcu9chn-b8q7",
+        "guardianId": "grd-mtcu9chn-01v5",
+        "learnerId": "lrn-mtcu9chn-8usd",
+        "relationshipType": "MOTHER",
+        "isPrimary": true,
+        "legalCustodyVerified": true,
+        "authorizedForPickup": true,
+        "receiveSosAlerts": true,
+        "verificationStatus": "VERIFIED",
+        "establishedAt": "2026-08-28T10:58:36.538Z",
+        "establishedByStaffUserId": "USR-SUPER-001",
+        "establishedByStaffName": "Executive Founder / SuperAdmin",
+        "establishedBySchoolId": "sch-001",
+        "auditTrailId": "aud-mtcu9chn"
+      }
     ]
   ],
   "schools": [
@@ -258,7 +423,7 @@
         "principalName": "Dr. Gregory Hassenkamp",
         "contactPhone": "+27 12 460 2246",
         "contactEmail": "admin@pbhs.co.za",
-        "activeLearnersCount": 1450,
+        "activeLearnersCount": 3,
         "totalGuardiansLinkedCount": 1390,
         "geofenceCenter": {
           "lat": -25.7601,
@@ -352,6 +517,20 @@
         "createdAt": "2025-02-01T08:00:00.000Z",
         "updatedAt": "2026-01-10T08:00:00.000Z"
       }
+    ],
+    [
+      "enr-mtcu9chn-w0pd",
+      {
+        "id": "enr-mtcu9chn-w0pd",
+        "learnerId": "lrn-mtcu9chn-8usd",
+        "schoolId": "sch-001",
+        "admissionDate": "2026-08-28",
+        "enrolmentStatus": "ACTIVE",
+        "currentAcademicYear": 2026,
+        "enrolledByStaffId": "USR-SUPER-001",
+        "createdAt": "2026-08-28T10:58:36.538Z",
+        "updatedAt": "2026-08-28T10:58:36.538Z"
+      }
     ]
   ],
   "academicRecords": [
@@ -414,9 +593,271 @@
         "status": "CURRENT",
         "updatedAt": "2026-01-10T08:00:00.000Z"
       }
+    ],
+    [
+      "acd-lrn-mtcu9chn-8usd-2026",
+      {
+        "id": "acd-lrn-mtcu9chn-8usd-2026",
+        "learnerId": "lrn-mtcu9chn-8usd",
+        "schoolId": "sch-001",
+        "academicYear": 2026,
+        "grade": "GRADE_4",
+        "classSection": "4B",
+        "homeroomTeacher": "Unassigned",
+        "attendanceRate": 100,
+        "status": "CURRENT",
+        "updatedAt": "2026-08-28T10:58:36.538Z"
+      }
     ]
   ],
+  "devices": [],
   "auditLogs": [
+    {
+      "id": "aud-mtcu9chn-f9i64",
+      "timestamp": "2026-08-28T10:58:36.539Z",
+      "actionType": "ACADEMIC_RECORD_ADVANCED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Executive Founder / SuperAdmin",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "ACADEMIC_RECORD",
+      "targetId": "acd-lrn-mtcu9chn-8usd-2026",
+      "details": {
+        "learnerId": "lrn-mtcu9chn-8usd",
+        "grade": "GRADE_4",
+        "classSection": "4B",
+        "year": 2026
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_2338c0ce_mtcu9chn"
+    },
+    {
+      "id": "aud-mtcu9chn-yugh0",
+      "timestamp": "2026-08-28T10:58:36.539Z",
+      "actionType": "SCHOOL_ENROLLED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Executive Founder / SuperAdmin",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "ENROLMENT",
+      "targetId": "enr-mtcu9chn-w0pd",
+      "details": {
+        "learnerId": "lrn-mtcu9chn-8usd",
+        "schoolId": "sch-001",
+        "academicYear": 2026,
+        "schoolName": "Pretoria Boys High School"
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_189c4f91_mtcu9chn"
+    },
+    {
+      "id": "aud-mtcu9chn-qhvee",
+      "timestamp": "2026-08-28T10:58:36.539Z",
+      "actionType": "RELATIONSHIP_ESTABLISHED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Executive Founder / SuperAdmin",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "RELATIONSHIP",
+      "targetId": "rel-mtcu9chn-b8q7",
+      "details": {
+        "guardianId": "grd-mtcu9chn-01v5",
+        "learnerId": "lrn-mtcu9chn-8usd",
+        "relationshipType": "MOTHER",
+        "isPrimary": true,
+        "schoolId": "sch-001"
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_66f1fc5c_mtcu9chn"
+    },
+    {
+      "id": "aud-mtcu9chn-jn1nt",
+      "timestamp": "2026-08-28T10:58:36.539Z",
+      "actionType": "DEVICE_PAIRED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Executive Founder / SuperAdmin",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "LEARNER",
+      "targetId": "lrn-mtcu9chn-8usd",
+      "details": {
+        "learnerName": "TestLearner716534 ForensicAudit",
+        "trackingBeaconId": "BCN-ITIS-6099",
+        "emisId": "EMIS-TEST-716534",
+        "schoolId": "sch-001"
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_769a342c_mtcu9chn"
+    },
+    {
+      "id": "aud-mtcu9chn-8ayc4",
+      "timestamp": "2026-08-28T10:58:36.539Z",
+      "actionType": "LEARNER_CREATED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Executive Founder / SuperAdmin",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "LEARNER",
+      "targetId": "lrn-mtcu9chn-8usd",
+      "details": {
+        "fullName": "TestLearner716534 ForensicAudit",
+        "emisId": "EMIS-TEST-716534",
+        "schoolId": "sch-001"
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_7d07a84c_mtcu9chn"
+    },
+    {
+      "id": "aud-mtcu9chn-zm8tu",
+      "timestamp": "2026-08-28T10:58:36.539Z",
+      "actionType": "GUARDIAN_CREATED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Executive Founder / SuperAdmin",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "GUARDIAN",
+      "targetId": "grd-mtcu9chn-01v5",
+      "details": {
+        "fullName": "TestGuardian716534 ForensicAudit",
+        "saIdMasked": "800****34",
+        "schoolId": "sch-001"
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_3383ec32_mtcu9chn"
+    },
+    {
+      "id": "aud-mtcu9ch5-lb1io",
+      "timestamp": "2026-08-28T10:58:36.521Z",
+      "actionType": "PERSON_CREATED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Executive Founder / SuperAdmin",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "PERSON",
+      "targetId": "USR-SUPER-001",
+      "details": {
+        "event": "USER_AUTHENTICATED",
+        "role": "FOUNDER_EXECUTIVE",
+        "authScope": {}
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_2dc4e725_mtcu9ch5"
+    },
+    {
+      "id": "aud-mtcu96oj-2txi5",
+      "timestamp": "2026-08-28T10:58:29.011Z",
+      "actionType": "GUARDIAN_CREATED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Executive Founder / SuperAdmin",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "GUARDIAN",
+      "targetId": "grd-mtcu96oj-qb4z",
+      "details": {
+        "fullName": "ForensicGuardian Test",
+        "saIdMasked": "800****07",
+        "schoolId": "sch-001"
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_47f87b4f_mtcu96oj"
+    },
+    {
+      "id": "aud-mtcu96o2-i92uh",
+      "timestamp": "2026-08-28T10:58:28.994Z",
+      "actionType": "PERSON_CREATED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Executive Founder / SuperAdmin",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "PERSON",
+      "targetId": "USR-SUPER-001",
+      "details": {
+        "event": "USER_AUTHENTICATED",
+        "role": "FOUNDER_EXECUTIVE",
+        "authScope": {}
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_2e0abc45_mtcu96o2"
+    },
+    {
+      "id": "aud-mtcu93ap-8z7q0",
+      "timestamp": "2026-08-28T10:58:24.625Z",
+      "actionType": "GUARDIAN_CREATED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Executive Founder / SuperAdmin",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "GUARDIAN",
+      "targetId": "grd-mtcu93ap-0dra",
+      "details": {
+        "fullName": "ForensicGuardian Test",
+        "saIdMasked": "800****19",
+        "schoolId": "sch-001"
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_5d313eb0_mtcu93ap"
+    },
+    {
+      "id": "aud-mtcu93a6-rsn1m",
+      "timestamp": "2026-08-28T10:58:24.606Z",
+      "actionType": "PERSON_CREATED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Executive Founder / SuperAdmin",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "PERSON",
+      "targetId": "USR-SUPER-001",
+      "details": {
+        "event": "USER_AUTHENTICATED",
+        "role": "FOUNDER_EXECUTIVE",
+        "authScope": {}
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_101d51d4_mtcu93a6"
+    },
+    {
+      "id": "aud-mtcu8xbu-4oicg",
+      "timestamp": "2026-08-28T10:58:16.890Z",
+      "actionType": "USER_CREATED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Executive Founder / SuperAdmin",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "USER",
+      "targetId": "usr-commandoperator-6889",
+      "details": {
+        "createdUserId": "usr-commandoperator-6889",
+        "name": "Forensic Audit Test User",
+        "email": "forensic.audit.test.1787914696883@itis-audit.co.za",
+        "assignedRole": "COMMAND_OPERATOR",
+        "organization": "ITIS Platform Network",
+        "status": "ACTIVE"
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_09193674_mtcu8xbu"
+    },
+    {
+      "id": "aud-mtcu8xb8-63f2l",
+      "timestamp": "2026-08-28T10:58:16.868Z",
+      "actionType": "PERSON_CREATED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Executive Founder / SuperAdmin",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "PERSON",
+      "targetId": "USR-SUPER-001",
+      "details": {
+        "event": "USER_AUTHENTICATED",
+        "role": "FOUNDER_EXECUTIVE",
+        "authScope": {}
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_42e8466e_mtcu8xb8"
+    },
+    {
+      "id": "aud-mtcu8uwq-mnazi",
+      "timestamp": "2026-08-28T10:58:13.754Z",
+      "actionType": "PERSON_CREATED",
+      "actorUserId": "USR-SUPER-001",
+      "actorName": "Executive Founder / SuperAdmin",
+      "actorRole": "FOUNDER_EXECUTIVE",
+      "targetEntity": "PERSON",
+      "targetId": "USR-SUPER-001",
+      "details": {
+        "event": "USER_AUTHENTICATED",
+        "role": "FOUNDER_EXECUTIVE",
+        "authScope": {}
+      },
+      "ipAddress": "127.0.0.1",
+      "checksum": "HEX_77143bd4_mtcu8uwq"
+    },
     {
       "id": "aud-mt7hhg65-3iqdr",
       "timestamp": "2026-08-24T17:02:08.669Z",
@@ -1167,6 +1608,67 @@
         "passwordHash": "6787a55cfdc8d038bfd61cd17a980331fd6e79026031b568a2fd11faf6ee1f2e",
         "failedLoginAttempts": 0,
         "updatedAt": "2026-08-24T17:02:08.661Z"
+      }
+    ],
+    [
+      "usr-commandoperator-6889",
+      {
+        "id": "usr-commandoperator-6889",
+        "email": "forensic.audit.test.1787914696883@itis-audit.co.za",
+        "normalizedEmail": "forensic.audit.test.1787914696883@itis-audit.co.za",
+        "name": "Forensic Audit Test User",
+        "firstName": "Forensic",
+        "surname": "Audit",
+        "mobileNumber": "+27 82 555 9999",
+        "role": "COMMAND_OPERATOR",
+        "password": "9da7dd4a8666bf3b5033e5e7efac183ccda21881e7dab6692879259bf44f1479",
+        "passwordSalt": "itis_salt_762ad692835e3583dc1d400f0fb2ab93",
+        "passwordHash": "9da7dd4a8666bf3b5033e5e7efac183ccda21881e7dab6692879259bf44f1479",
+        "department": "ITIS Operational Division",
+        "organization": "ITIS Platform Network",
+        "permissions": [
+          "EMERGENCY_INCIDENTS_VIEW_ALL",
+          "SOS_VERIFY_ASSESS",
+          "RESPONDER_DISPATCH_AUTHORIZE",
+          "RESPONDER_STATUS_UPDATE",
+          "INCIDENT_RESOLVE_CLOSE",
+          "LEARNERS_VIEW_SCOPED",
+          "AUDIT_LOGS_VIEW"
+        ],
+        "status": "ACTIVE",
+        "isDemoAccount": false,
+        "createdAt": "2026-08-28T10:58:16.889Z",
+        "updatedAt": "2026-08-28T10:58:16.889Z"
+      }
+    ],
+    [
+      "usr-parent-mtcu9chn-x51o",
+      {
+        "id": "usr-parent-mtcu9chn-x51o",
+        "email": "guardian.716534@forensic-test.co.za",
+        "normalizedEmail": "guardian.716534@forensic-test.co.za",
+        "name": "TestGuardian716534 ForensicAudit",
+        "firstName": "TestGuardian716534",
+        "surname": "ForensicAudit",
+        "mobileNumber": "+27 82 777 716534",
+        "role": "PARENT_GUARDIAN",
+        "password": "e55d0f7c4fcd662a981b4e29e0a19739548d23b5574e23cb3434ac81501388bc",
+        "passwordSalt": "itis_salt_7723c403c7a58af4a41855903ae88c41",
+        "passwordHash": "e55d0f7c4fcd662a981b4e29e0a19739548d23b5574e23cb3434ac81501388bc",
+        "guardianId": "grd-mtcu9chn-01v5",
+        "department": "Parent & Legal Guardian Community",
+        "organization": "Parent & Legal Guardian Network",
+        "permissions": [
+          "GUARDIAN_CHILDREN_VIEW",
+          "GUARDIAN_LOCATION_VIEW",
+          "GUARDIAN_ALERTS_RECEIVE",
+          "GUARDIAN_PROFILE_UPDATE",
+          "EMERGENCY_INCIDENTS_VIEW_SCOPED"
+        ],
+        "status": "ACTIVE",
+        "isDemoAccount": false,
+        "createdAt": "2026-08-28T10:58:36.538Z",
+        "updatedAt": "2026-08-28T10:58:36.538Z"
       }
     ]
   ],

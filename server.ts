@@ -1,9 +1,11 @@
 import express from 'express';
 import cors from 'cors';
 import path from 'path';
+import crypto from 'crypto';
 import { db, maskSaId } from './src/server/dbStore.js';
 import { repository, ProductionMigrationEngine } from './src/server/db/index.js';
 import { bootstrapDatabase } from './src/server/db/bootstrap.js';
+import { query } from './src/server/db/client.js';
 import { enrolmentEngine } from './src/server/enrolmentEngine.js';
 import { rbacEngine, AUTHORITATIVE_ROLE_MATRIX, ResourceAccessContext } from './src/server/rbacEngine.js';
 import { rbacTestSuite } from './src/server/rbacTestSuite.js';
@@ -30,13 +32,18 @@ declare global {
 }
 
 // Session resolution middleware (Non-blocking: populates req.user if token is present)
-app.use((req, res, next) => {
+app.use(async (req, res, next) => {
   const authHeader = req.headers.authorization;
   if (authHeader) {
-    const sessionRecord = db.getSession(authHeader);
-    if (sessionRecord) {
-      req.user = sessionRecord.session;
-      req.permissions = sessionRecord.permissions;
+    try {
+      const cleanToken = authHeader.replace('Bearer ', '').trim();
+      const sessionRecord = await repository.sessions.getSession(cleanToken);
+      if (sessionRecord) {
+        req.user = sessionRecord.session;
+        req.permissions = sessionRecord.permissions;
+      }
+    } catch (err) {
+      console.error('[SessionMiddleware] Session resolution error:', err);
     }
   }
   next();
@@ -139,24 +146,72 @@ function enforcePermission(
 // server-side by the database without client-side role trust.
 // ----------------------------------------------------
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
       return res.status(400).json({ error: 'Email and password are required' });
     }
 
-    const authResult = db.authenticateUser(email, password);
-    if (!authResult) {
+    const verifiedUser = await repository.users.verifyCredentials(email, password);
+    if (!verifiedUser) {
       return res.status(401).json({ error: 'Invalid registered identity credentials. Access Denied.' });
     }
 
+    if (verifiedUser.status === 'SUSPENDED' || verifiedUser.status === 'DISABLED') {
+      return res.status(403).json({ error: `Account is ${verifiedUser.status}. Contact administrator.` });
+    }
+
+    const token = 'tok_itis_' + crypto.randomBytes(16).toString('hex') + '_' + Date.now().toString(36);
+    const sessionUser: ActiveUserSession = {
+      id: verifiedUser.id,
+      name: verifiedUser.name,
+      email: verifiedUser.email,
+      role: verifiedUser.role,
+      schoolId: verifiedUser.schoolId,
+      guardianId: verifiedUser.guardianId,
+      responderUnit: verifiedUser.responderUnit,
+      department: verifiedUser.department,
+      organization: verifiedUser.organization,
+      token,
+      mustChangePassword: !!verifiedUser.mustChangePassword
+    };
+
+    const roleDef = AUTHORITATIVE_ROLE_MATRIX[verifiedUser.role];
+    const permissions = verifiedUser.permissions && verifiedUser.permissions.length > 0 ? verifiedUser.permissions : (roleDef ? roleDef.canList : []);
+
+    await repository.sessions.createSession(token, verifiedUser.id, sessionUser, permissions);
+
+    await repository.auditLogs.logEvent({
+      actionType: 'PERSON_CREATED',
+      actorUserId: verifiedUser.id,
+      actorName: verifiedUser.name,
+      actorRole: verifiedUser.role,
+      targetEntity: 'USER',
+      targetId: verifiedUser.id,
+      details: {
+        event: 'USER_AUTHENTICATED',
+        role: verifiedUser.role,
+        authScope: {
+          schoolId: verifiedUser.schoolId,
+          guardianId: verifiedUser.guardianId,
+          responderUnit: verifiedUser.responderUnit
+        }
+      },
+      ipAddress: req.ip || '127.0.0.1'
+    });
+
     res.json({
       success: true,
-      user: authResult.user,
-      token: authResult.token,
-      permissions: authResult.permissions,
-      scope: authResult.scope
+      user: sessionUser,
+      token,
+      permissions,
+      scope: {
+        schoolId: verifiedUser.schoolId,
+        guardianId: verifiedUser.guardianId,
+        responderUnit: verifiedUser.responderUnit,
+        department: verifiedUser.department
+      }
     });
   } catch (err: any) {
     if (err.message && (err.message.includes('SUSPENDED') || err.message.includes('DISABLED'))) {
@@ -167,9 +222,10 @@ app.post('/api/auth/login', (req, res) => {
 });
 
 // Self-registration endpoint for Guardians, School Staff, Responders, etc.
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', async (req, res) => {
   try {
-    const result = db.registerPublicUser(req.body);
+    const result = await repository.users.registerPublicUser(req.body);
+    try { db.registerPublicUser(req.body); } catch (_) {}
     res.status(201).json({
       success: true,
       user: result.user,
@@ -182,13 +238,14 @@ app.post('/api/auth/register', (req, res) => {
   }
 });
 
-app.get('/api/auth/session', (req, res) => {
+app.get('/api/auth/session', async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
     return res.status(401).json({ error: 'Missing authorization header' });
   }
 
-  const sessionRecord = db.getSession(authHeader);
+  const cleanToken = authHeader.replace('Bearer ', '').trim();
+  const sessionRecord = await repository.sessions.getSession(cleanToken);
   if (!sessionRecord) {
     return res.status(401).json({ error: 'Invalid or expired server session' });
   }
@@ -200,13 +257,14 @@ app.get('/api/auth/session', (req, res) => {
 });
 
 // Alias endpoint /api/auth/me for standard session introspection
-app.get('/api/auth/me', (req, res) => {
+app.get('/api/auth/me', async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
     return res.status(401).json({ error: 'Missing authorization header' });
   }
 
-  const sessionRecord = db.getSession(authHeader);
+  const cleanToken = authHeader.replace('Bearer ', '').trim();
+  const sessionRecord = await repository.sessions.getSession(cleanToken);
   if (!sessionRecord) {
     return res.status(401).json({ error: 'Invalid or expired server session' });
   }
@@ -217,12 +275,56 @@ app.get('/api/auth/me', (req, res) => {
   });
 });
 
-app.post('/api/auth/logout', (req, res) => {
+app.post('/api/auth/logout', async (req, res) => {
   const authHeader = req.headers.authorization || req.body?.token;
   if (authHeader) {
-    db.revokeSession(authHeader);
+    const cleanToken = authHeader.replace('Bearer ', '').trim();
+    await repository.sessions.revokeSession(cleanToken);
+    try { db.revokeSession(cleanToken); } catch (_) {}
   }
   res.json({ success: true, message: 'Server session revoked successfully' });
+});
+
+// Update password for authenticated user (mandatory first-login change or self-service update)
+app.post('/api/auth/change-password', requireAuth, async (req, res) => {
+  try {
+    const actorUser = req.user!;
+    const { newPassword, confirmPassword } = req.body || {};
+
+    if (!newPassword || typeof newPassword !== 'string') {
+      return res.status(400).json({ error: 'New password is required.' });
+    }
+    if (!confirmPassword || typeof confirmPassword !== 'string') {
+      return res.status(400).json({ error: 'Password confirmation is required.' });
+    }
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ error: 'New password and confirmation password do not match.' });
+    }
+
+    await repository.users.updatePassword(actorUser.id, newPassword);
+    if (actorUser.token) {
+      await repository.sessions.revokeUserSessions(actorUser.id);
+    }
+    try { db.updateUserPassword(actorUser, newPassword); } catch (_) {}
+
+    await repository.auditLogs.logEvent({
+      actionType: 'SECURITY_POLICY_MODIFIED',
+      actorUserId: actorUser.id,
+      actorName: actorUser.name,
+      actorRole: actorUser.role,
+      targetEntity: 'USER',
+      targetId: actorUser.id,
+      details: {
+        event: 'PASSWORD_CHANGED',
+        userId: actorUser.id
+      },
+      ipAddress: req.ip || '127.0.0.1'
+    });
+
+    res.json({ success: true, message: 'Password updated successfully.' });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message || 'Failed to update password.' });
+  }
 });
 
 // ----------------------------------------------------
@@ -262,11 +364,11 @@ app.post('/api/rbac/run-security-suite', (req, res) => {
 // ----------------------------------------------------
 
 // TEMPORARY FOUNDER PASSWORD MANAGEMENT (DEVELOPMENT / TESTING ONLY)
-app.post('/api/founder/update-password', requireAuth, (req, res) => {
+app.post('/api/founder/update-password', requireAuth, async (req, res) => {
   try {
     const actorUser = req.user!;
     if (actorUser.role !== 'FOUNDER_EXECUTIVE') {
-      db.logAuditEvent({
+      await repository.auditLogs.logEvent({
         actionType: 'UNAUTHORIZED_ACCESS_DENIED',
         actorUserId: actorUser.id,
         actorName: actorUser.name,
@@ -296,9 +398,31 @@ app.post('/api/founder/update-password', requireAuth, (req, res) => {
       return res.status(400).json({ error: 'New password and confirmation password do not match.' });
     }
 
-    // Server-side password update & hashing & policy enforcement
-    const result = db.updateFounderPassword(actorUser, newPassword);
-    res.json(result);
+    // Server-side password update & hashing & policy enforcement in PostgreSQL
+    await repository.users.updatePassword('USR-SUPER-001', newPassword);
+    if (actorUser.token) {
+      await repository.sessions.revokeUserSessions('USR-SUPER-001');
+    }
+    try { db.updateFounderPassword(actorUser, newPassword); } catch (_) {}
+
+    await repository.auditLogs.logEvent({
+      actionType: 'SECURITY_POLICY_MODIFIED',
+      actorUserId: actorUser.id,
+      actorName: actorUser.name,
+      actorRole: actorUser.role,
+      targetEntity: 'USER',
+      targetId: 'USR-SUPER-001',
+      details: {
+        event: 'FOUNDER_PASSWORD_UPDATED',
+        account: 'founder@itis365.co.za'
+      },
+      ipAddress: req.ip || '127.0.0.1'
+    });
+
+    res.json({
+      success: true,
+      message: 'Founder sovereign credentials successfully updated in authoritative PostgreSQL database.'
+    });
   } catch (err: any) {
     if (err.message && err.message.includes('ACCESS DENIED')) {
       return res.status(403).json({ error: err.message });
@@ -309,7 +433,7 @@ app.post('/api/founder/update-password', requireAuth, (req, res) => {
 
 // PROTECTED FOUNDER DEVELOPMENT RECOVERY ENDPOINT (DEV/TESTING ONLY)
 // Strictly guarded: only available in non-production environments to recover locked Founder credentials
-app.post('/api/dev/recover-founder', (req, res) => {
+app.post('/api/dev/recover-founder', async (req, res) => {
   if (process.env.NODE_ENV === 'production') {
     return res.status(403).json({
       error: 'FORBIDDEN: Development recovery is strictly disabled in production deployment mode.'
@@ -331,14 +455,17 @@ app.post('/api/dev/recover-founder', (req, res) => {
       return res.status(400).json({ error: 'New password and confirmation password do not match.' });
     }
 
-    const result = db.recoverFounderCredential(newPassword, {
-      devSecret: devSecret ? 'PROVIDED' : 'DEFAULT_DEV',
-      source: `API_DEV_RECOVERY (${req.ip || '127.0.0.1'})`
-    });
+    await repository.users.updatePassword('USR-SUPER-001', newPassword);
+    try {
+      db.recoverFounderCredential(newPassword, {
+        devSecret: devSecret ? 'PROVIDED' : 'DEFAULT_DEV',
+        source: `API_DEV_RECOVERY (${req.ip || '127.0.0.1'})`
+      });
+    } catch (_) {}
 
     res.json({
       success: true,
-      message: result.message,
+      message: 'Founder sovereign credential successfully recovered in authoritative PostgreSQL.',
       account: 'founder@itis365.co.za',
       id: 'USR-SUPER-001',
       role: 'SuperAdmin / Founder'
@@ -348,9 +475,13 @@ app.post('/api/dev/recover-founder', (req, res) => {
   }
 });
 
-app.get('/api/users', requireAuth, (req, res) => {
+app.get('/api/users', requireAuth, async (req, res) => {
   try {
-    const users = db.getUsers(req.user!);
+    const user = req.user!;
+    if (user.role !== 'FOUNDER_EXECUTIVE' && user.role !== 'SYSTEM_ADMIN') {
+      return res.status(403).json({ error: 'ACCESS DENIED: Insufficient clearance to list platform identities.' });
+    }
+    const users = await repository.users.findAll();
     res.json(users);
   } catch (err: any) {
     res.status(403).json({ error: err.message });
@@ -358,7 +489,7 @@ app.get('/api/users', requireAuth, (req, res) => {
 });
 
 // CRITICAL RULE: Only Founder/SuperAdmin may create platform user accounts
-app.post('/api/users', requireAuth, (req, res) => {
+app.post('/api/users', requireAuth, async (req, res) => {
   try {
     const {
       email,
@@ -380,7 +511,7 @@ app.post('/api/users', requireAuth, (req, res) => {
     // Evaluate permission using Authoritative RBAC Engine
     const decision = rbacEngine.evaluateAccess(req.user!, 'USER_IDENTITIES_MANAGE', { targetUserRole: role });
     if (!decision.allowed || req.user!.role !== 'FOUNDER_EXECUTIVE') {
-      db.logAuditEvent({
+      await repository.auditLogs.logEvent({
         actionType: 'UNAUTHORIZED_USER_CREATION_ATTEMPT',
         actorUserId: req.user!.id,
         actorName: req.user!.name,
@@ -400,7 +531,7 @@ app.post('/api/users', requireAuth, (req, res) => {
       });
     }
 
-    const created = db.createUser(req.user!, {
+    const created = await repository.users.create({
       email,
       name,
       firstName,
@@ -415,7 +546,26 @@ app.post('/api/users', requireAuth, (req, res) => {
       organization,
       status,
       permissions
-    });
+    }, req.user!.id);
+
+    try {
+      db.createUser(req.user!, {
+        email,
+        name,
+        firstName,
+        surname,
+        mobileNumber,
+        role,
+        password,
+        schoolId,
+        guardianId,
+        responderUnit,
+        department,
+        organization,
+        status,
+        permissions
+      });
+    } catch (_) {}
 
     res.status(201).json(created);
   } catch (err: any) {
@@ -423,7 +573,7 @@ app.post('/api/users', requireAuth, (req, res) => {
   }
 });
 
-app.patch('/api/users/:id/status', requireAuth, (req, res) => {
+app.patch('/api/users/:id/status', requireAuth, async (req, res) => {
   try {
     if (req.user!.role !== 'FOUNDER_EXECUTIVE') {
       return res.status(403).json({ error: 'ACCESS DENIED: Only Founder/SuperAdmin may modify platform user account status.' });
@@ -432,20 +582,22 @@ app.patch('/api/users/:id/status', requireAuth, (req, res) => {
     if (!status || !['ACTIVE', 'SUSPENDED', 'DISABLED'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status. Allowed: ACTIVE, SUSPENDED, DISABLED.' });
     }
-    const updated = db.updateUserStatus(req.user!, req.params.id, status);
+    const updated = await repository.users.updateStatus(req.params.id, status, req.user!.id);
+    try { db.updateUserStatus(req.user!, req.params.id, status); } catch (_) {}
     res.json({ success: true, user: updated });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
 });
 
-app.post('/api/users/:id/deactivate', requireAuth, (req, res) => {
+app.post('/api/users/:id/deactivate', requireAuth, async (req, res) => {
   try {
     const decision = rbacEngine.evaluateAccess(req.user!, 'USER_IDENTITIES_MANAGE');
     if (!decision.allowed || req.user!.role !== 'FOUNDER_EXECUTIVE') {
       return res.status(403).json({ error: 'ACCESS DENIED: Only Founder/SuperAdmin may deactivate platform users.' });
     }
-    db.deactivateUser(req.user!, req.params.id);
+    await repository.users.updateStatus(req.params.id, 'DISABLED', req.user!.id);
+    try { db.deactivateUser(req.user!, req.params.id); } catch (_) {}
     res.json({ success: true, message: `User ${req.params.id} deactivated successfully.` });
   } catch (err: any) {
     res.status(400).json({ error: err.message });

@@ -149,6 +149,18 @@ export const api = {
     return data;
   },
 
+  async changePassword(payload: { newPassword: string; confirmPassword: string }): Promise<{ success: boolean; message: string }> {
+    const res = await fetch(`${API_BASE}/auth/change-password`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify(payload)
+    });
+    return safeFetchJson<{ success: boolean; message: string }>(res, 'Failed to update password');
+  },
+
   async getSession(): Promise<{ user: ActiveUserSession; permissions: string[] } | null> {
     const token = this.getToken();
     if (!token) return null;

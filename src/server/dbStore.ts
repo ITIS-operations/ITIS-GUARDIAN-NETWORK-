@@ -129,6 +129,7 @@ export interface ServerUserRecord {
   failedLoginAttempts?: number;
   lockedUntil?: string;
   isDemoAccount?: boolean;
+  mustChangePassword?: boolean;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -1685,7 +1686,8 @@ export class AuthoritativeStore {
       responderUnit: matchedUser.responderUnit,
       department: matchedUser.department,
       organization: matchedUser.organization,
-      token
+      token,
+      mustChangePassword: !!matchedUser.mustChangePassword
     };
 
     const sessionRecord: ActiveSessionRecord = {
@@ -2362,6 +2364,62 @@ export class AuthoritativeStore {
       success: true,
       message: 'Founder password updated successfully.'
     };
+  }
+
+  public updateUserPassword(
+    actorUser: ActiveUserSession,
+    newPasswordPlain: string
+  ): { success: boolean; message: string } {
+    if (!actorUser || !actorUser.id) {
+      throw new Error('AUTHENTICATION_REQUIRED: A valid sovereign session token is required.');
+    }
+
+    const policyResult = validatePasswordPolicy(newPasswordPlain);
+    if (!policyResult.valid) {
+      throw new Error(policyResult.reason || 'Password does not meet required security complexity standards.');
+    }
+
+    let userRecord = this.users.get(actorUser.id);
+    if (!userRecord) {
+      for (const u of this.users.values()) {
+        if (u.id === actorUser.id || normalizeEmail(u.email) === normalizeEmail(actorUser.email)) {
+          userRecord = u;
+          break;
+        }
+      }
+    }
+
+    if (!userRecord) {
+      throw new Error('User record not found.');
+    }
+
+    const salt = generateSalt();
+    const hash = hashPassword(newPasswordPlain, salt);
+
+    userRecord.password = hash;
+    userRecord.passwordHash = hash;
+    userRecord.passwordSalt = salt;
+    userRecord.mustChangePassword = false;
+    userRecord.failedLoginAttempts = 0;
+    userRecord.lockedUntil = undefined;
+    userRecord.updatedAt = new Date().toISOString();
+
+    this.persistToDisk();
+
+    this.logAuditEvent({
+      actionType: 'SECURITY_POLICY_MODIFIED',
+      actorUserId: actorUser.id,
+      actorName: actorUser.name,
+      actorRole: actorUser.role,
+      targetEntity: 'USER',
+      targetId: userRecord.id,
+      details: {
+        event: 'PASSWORD_UPDATED_BY_USER',
+        mustChangePasswordCleared: true
+      }
+    });
+
+    return { success: true, message: 'Password updated successfully. Permanent credentials are active.' };
   }
 
   // ----------------------------------------------------

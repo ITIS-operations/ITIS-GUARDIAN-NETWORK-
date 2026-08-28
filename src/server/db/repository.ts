@@ -12,6 +12,8 @@ import {
   ResponderUnit,
   AssignedIncidentView,
   ImmutableAuditEvent,
+  ActiveUserSession,
+  RegisterUserPayload,
   PlatformUserItem,
   CreateUserPayload,
   AuthoritativeOnboardPayload,
@@ -21,12 +23,22 @@ import {
   LearnerQueryOptions,
   SchoolQueryOptions,
   IncidentQueryOptions,
-  AuditLogQueryOptions
+  AuditLogQueryOptions,
+  IdentitySearchResult,
+  EligibleResponderRanking
 } from '../../types.js';
 
 export interface DatabaseTransaction {
   commit(): Promise<void>;
   rollback(): Promise<void>;
+}
+
+export interface ISessionRepository {
+  createSession(token: string, userId: string, sessionData: any, permissions: string[]): Promise<void>;
+  getSession(token: string): Promise<{ token: string; session: any; permissions: string[] } | null>;
+  revokeSession(token: string): Promise<void>;
+  revokeUserSessions(userId: string): Promise<void>;
+  cleanupExpiredSessions(): Promise<void>;
 }
 
 export interface IUserRepository {
@@ -35,7 +47,14 @@ export interface IUserRepository {
   findAll(): Promise<PlatformUserItem[]>;
   create(payload: CreateUserPayload, actorUserId: string): Promise<PlatformUserItem>;
   updateStatus(id: string, status: 'ACTIVE' | 'SUSPENDED' | 'DISABLED', actorUserId: string): Promise<PlatformUserItem>;
+  updatePassword(userId: string, newPasswordPlain: string): Promise<void>;
   verifyCredentials(identifier: string, passwordPlain: string): Promise<PlatformUserItem | null>;
+  registerPublicUser(params: RegisterUserPayload): Promise<{
+    user: ActiveUserSession;
+    token: string;
+    permissions: string[];
+    scope: any;
+  }>;
 }
 
 export interface ISchoolRepository {
@@ -67,6 +86,21 @@ export interface ILearnerRepository {
     homeroomTeacher?: string;
   }, staffContext: any): Promise<HydratedLearnerRecord>;
   submitAnnualSafetyUpdate(payload: AnnualSafetyUpdatePayload): Promise<HydratedLearnerRecord>;
+  searchIdentity(params: {
+    saIdNumber?: string;
+    mobileNumber?: string;
+    emisId?: string;
+    firstName?: string;
+    lastName?: string;
+    dateOfBirth?: string;
+  }): Promise<IdentitySearchResult>;
+  assignDeviceToLearner(params: {
+    learnerId: string;
+    trackingBeaconId: string;
+    schoolId?: string;
+    forceReassign?: boolean;
+    staffContext: any;
+  }): Promise<{ success: boolean; learnerId: string; trackingBeaconId: string; message: string; auditEventId: string }>;
 }
 
 export interface IGuardianRepository {
@@ -74,6 +108,7 @@ export interface IGuardianRepository {
   findBySaId(saId: string): Promise<Guardian | null>;
   findByUserId(userId: string): Promise<Guardian | null>;
   findLearnersByGuardianId(guardianId: string): Promise<HydratedLearnerRecord[]>;
+  findAll(): Promise<Array<{ guardian: Guardian; person: Person | null; linkedChildren: HydratedLearnerRecord[] }>>;
   create(guardian: Guardian): Promise<Guardian>;
   linkLearner(relationship: GuardianLearnerRelationship): Promise<GuardianLearnerRelationship>;
 }
@@ -90,6 +125,7 @@ export interface IIncidentRepository {
   findById(id: string): Promise<IncidentAlert | null>;
   query(options?: IncidentQueryOptions): Promise<PaginatedResponse<IncidentAlert>>;
   create(alert: IncidentAlert, actorContext: any): Promise<IncidentAlert>;
+  update(id: string, updates: Partial<IncidentAlert>): Promise<IncidentAlert>;
   updateStatus(incidentId: string, status: string, notes?: string): Promise<IncidentAlert>;
   getTimelineEvents(incidentId: string): Promise<any[]>;
   addEvent(incidentId: string, event: {
@@ -110,6 +146,7 @@ export interface IResponderRepository {
   findAll(): Promise<ResponderUnit[]>;
   findAvailable(district?: string): Promise<ResponderUnit[]>;
   getAssignedIncidentsForUser(user: any): Promise<AssignedIncidentView[]>;
+  getRankedEligibleResponders(incidentId: string): Promise<EligibleResponderRanking[]>;
   acceptAssignment(incidentId: string, user: any): Promise<any>;
   declineAssignment(incidentId: string, user: any, reason: string): Promise<any>;
   updateOperationalStatus(incidentId: string, user: any, status: string, note?: string, telemetry?: any): Promise<any>;
@@ -124,6 +161,7 @@ export interface IAuditRepository {
 
 export interface IDataRepository {
   users: IUserRepository;
+  sessions: ISessionRepository;
   schools: ISchoolRepository;
   persons: IPersonRepository;
   learners: ILearnerRepository;
