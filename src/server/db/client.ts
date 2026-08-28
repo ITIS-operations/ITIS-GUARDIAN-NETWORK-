@@ -29,47 +29,121 @@ export function resolveCloudSqlSocket(): string | null {
 }
 
 function getPoolConfig(): pg.PoolConfig {
-  if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
-    return {
-      connectionString: process.env.DATABASE_URL,
-      max: 20,
-      idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 5000,
+  const isVercel = Boolean(process.env.VERCEL || process.env.VERCEL_ENV || process.env.NOW_REGION);
+  const connString = (
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.POSTGRES_URL_NON_POOLING ||
+    process.env.POSTGRESQL_URL ||
+    process.env.DATABASE_PRIVATE_URL ||
+    ''
+  ).trim();
+
+  // If a standard connection string is provided (e.g. from Vercel Postgres, Neon, Cloud SQL public IP/proxy, Supabase)
+  if (connString && (connString.startsWith('postgres://') || connString.startsWith('postgresql://'))) {
+    const isLocalhost = connString.includes('localhost') || connString.includes('127.0.0.1');
+    const disableSsl = process.env.PGSSLMODE === 'disable' || process.env.DISABLE_SSL === 'true';
+    const requireSsl = !isLocalhost && !disableSsl;
+
+    const config: pg.PoolConfig = {
+      connectionString: connString,
+      max: isVercel ? 5 : 20,
+      idleTimeoutMillis: isVercel ? 10000 : 30000,
+      connectionTimeoutMillis: 15000,
     };
+
+    if (requireSsl) {
+      config.ssl = { rejectUnauthorized: false };
+    }
+
+    return config;
   }
 
   const socketPath = resolveCloudSqlSocket();
-  const host = socketPath || process.env.SQL_HOST || process.env.PGHOST;
-  const database = process.env.SQL_DB_NAME || process.env.PGDATABASE || 'cloud_sql_development_database';
-  const user = process.env.SQL_USER || process.env.SQL_ADMIN_USER || process.env.PGUSER || 'ai_studio_app_user';
-  const password = process.env.SQL_PASSWORD || process.env.SQL_ADMIN_PASSWORD || process.env.PGPASSWORD || '';
-  const port = process.env.SQL_PORT
-    ? parseInt(process.env.SQL_PORT, 10)
-    : process.env.PGPORT
-    ? parseInt(process.env.PGPORT, 10)
-    : undefined;
+  const host = (
+    socketPath ||
+    process.env.SQL_HOST ||
+    process.env.PGHOST ||
+    process.env.POSTGRES_HOST ||
+    process.env.DB_HOST ||
+    ''
+  ).trim();
+
+  const database = (
+    process.env.SQL_DB_NAME ||
+    process.env.PGDATABASE ||
+    process.env.POSTGRES_DATABASE ||
+    process.env.DB_NAME ||
+    'cloud_sql_development_database'
+  ).trim();
+
+  const user = (
+    process.env.SQL_USER ||
+    process.env.SQL_ADMIN_USER ||
+    process.env.PGUSER ||
+    process.env.POSTGRES_USER ||
+    process.env.DB_USER ||
+    'ai_studio_app_user'
+  ).trim();
+
+  const password = (
+    process.env.SQL_PASSWORD ||
+    process.env.SQL_ADMIN_PASSWORD ||
+    process.env.PGPASSWORD ||
+    process.env.POSTGRES_PASSWORD ||
+    process.env.DB_PASSWORD ||
+    ''
+  );
+
+  const rawPort =
+    process.env.SQL_PORT ||
+    process.env.PGPORT ||
+    process.env.POSTGRES_PORT ||
+    process.env.DB_PORT;
+
+  const port = rawPort ? parseInt(rawPort, 10) : undefined;
+
+  const isSocket = host.startsWith('/');
+  const isLocal = host === '127.0.0.1' || host.toLowerCase() === 'localhost';
+  const disableSsl = process.env.PGSSLMODE === 'disable' || process.env.DISABLE_SSL === 'true';
+  const requireSsl = !isSocket && !isLocal && !disableSsl;
 
   const config: pg.PoolConfig = {
-    host,
+    host: host || (isSocket ? undefined : '127.0.0.1'),
     database,
     user,
     password,
-    max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000,
+    max: isVercel ? 5 : 20,
+    idleTimeoutMillis: isVercel ? 10000 : 30000,
+    connectionTimeoutMillis: 15000,
   };
 
-  if (port !== undefined) {
+  if (port !== undefined && !isNaN(port)) {
     config.port = port;
+  }
+
+  if (requireSsl) {
+    config.ssl = { rejectUnauthorized: false };
   }
 
   return config;
 }
 
-export const pool = new Pool(getPoolConfig());
+// Global caching for serverless environments (e.g. Vercel)
+declare global {
+  // eslint-disable-next-line no-var
+  var __itisPgPool: pg.Pool | undefined;
+}
+
+export const pool: pg.Pool = globalThis.__itisPgPool || new Pool(getPoolConfig());
+
+if (process.env.NODE_ENV === 'production' || process.env.VERCEL) {
+  globalThis.__itisPgPool = pool;
+}
 
 pool.on('error', (err) => {
-  console.error('[PostgreSQL Pool Error]', err);
+  console.error('[PostgreSQL Pool Error]', err.message);
 });
 
 export async function query<T extends pg.QueryResultRow = any>(text: string, params?: any[]): Promise<pg.QueryResult<T>> {
