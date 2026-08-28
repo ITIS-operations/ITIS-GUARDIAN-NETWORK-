@@ -48,6 +48,7 @@ import {
   LinkedChildSummary
 } from '../../types.js';
 import crypto from 'crypto';
+import { AUTHORITATIVE_ROLE_MATRIX } from '../rbacEngine.js';
 
 export interface ActiveSessionRecord {
   token: string;
@@ -59,6 +60,13 @@ export interface ActiveSessionRecord {
 }
 
 // --- Cryptographic & Utility Helpers ---
+
+function validatePasswordPolicy(password?: string): { valid: boolean; reason?: string } {
+  if (!password || password.length < 6) {
+    return { valid: false, reason: 'Password must be at least 6 characters long.' };
+  }
+  return { valid: true };
+}
 
 function hashPassword(plainText: string, salt: string = 'itis_salt_sha256_sec_2026'): string {
   return crypto.createHash('sha256').update(plainText + ':' + salt).digest('hex');
@@ -1110,27 +1118,66 @@ export class PostgresLearnerRepository implements ILearnerRepository {
       await client.query('BEGIN');
       const now = new Date().toISOString();
 
-      // 1. Learner Person
-      let learnerPersonId = 'per-l-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+      // 0. Device Uniqueness Conflict Prevention
+      if (payload.learner.trackingBeaconId) {
+        const beacon = payload.learner.trackingBeaconId.trim();
+        const dCheck = await client.query(
+          `SELECT l.id, p.first_name, p.last_name FROM learners l
+           JOIN persons p ON l.person_id = p.id
+           WHERE (l.current_device_id = $1) AND ($2::text IS NULL OR l.id != $2) LIMIT 1;`,
+          [beacon, payload.learner.existingLearnerId || null]
+        );
+        if (dCheck.rows.length > 0) {
+          throw new Error(`DUPLICATE HARDWARE DEVICE CONFLICT: Tracking beacon '${beacon}' is already actively assigned to learner ${dCheck.rows[0].first_name} ${dCheck.rows[0].last_name} (${dCheck.rows[0].id}).`);
+        }
 
-      await client.query(
-        `INSERT INTO persons (
-          id, official_id, official_id_type, first_name, last_name, date_of_birth,
-          gender, mobile_number, email, residential_address, is_verified, verification_source
-        ) VALUES ($1, $2, 'SA_ID', $3, $4, $5, $6, NULL, NULL, NULL, TRUE, 'EMIS_VERIFIED')
-        ON CONFLICT (id) DO UPDATE SET
-          first_name = EXCLUDED.first_name,
-          last_name = EXCLUDED.last_name,
-          updated_at = CURRENT_TIMESTAMP;`,
-        [
-          learnerPersonId,
-          payload.learner.officialId || payload.learner.emisId,
-          payload.learner.firstName,
-          payload.learner.lastName,
-          payload.learner.dateOfBirth,
-          payload.learner.gender
-        ]
-      );
+        const devCheck = await client.query(
+          `SELECT id, assigned_learner_id, serial_number FROM devices 
+           WHERE (id = $1 OR serial_number = $1) AND assigned_learner_id IS NOT NULL AND ($2::text IS NULL OR assigned_learner_id != $2) LIMIT 1;`,
+          [beacon, payload.learner.existingLearnerId || null]
+        );
+        if (devCheck.rows.length > 0) {
+          throw new Error(`DUPLICATE HARDWARE DEVICE CONFLICT: Device '${beacon}' is already assigned to another learner.`);
+        }
+      }
+
+      // 1. Learner Person
+      let learnerPersonId = (payload.learner as any).existingPersonId;
+      const learnerOfficialId = payload.learner.officialId || payload.learner.emisId;
+
+      if (!learnerPersonId && learnerOfficialId) {
+        const pCheck = await client.query('SELECT id FROM persons WHERE official_id = $1 LIMIT 1;', [learnerOfficialId]);
+        if (pCheck.rows.length > 0) {
+          learnerPersonId = pCheck.rows[0].id;
+        }
+      }
+
+      if (!learnerPersonId) {
+        learnerPersonId = 'per-l-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+        await client.query(
+          `INSERT INTO persons (
+            id, official_id, official_id_type, first_name, last_name, date_of_birth,
+            gender, mobile_number, email, residential_address, is_verified, verification_source
+          ) VALUES ($1, $2, 'SA_ID', $3, $4, $5, $6, NULL, NULL, NULL, TRUE, 'EMIS_VERIFIED')
+          ON CONFLICT (official_id) DO UPDATE SET
+            first_name = EXCLUDED.first_name,
+            last_name = EXCLUDED.last_name,
+            updated_at = CURRENT_TIMESTAMP;`,
+          [
+            learnerPersonId,
+            learnerOfficialId,
+            payload.learner.firstName,
+            payload.learner.lastName,
+            payload.learner.dateOfBirth,
+            payload.learner.gender
+          ]
+        );
+      } else {
+        await client.query(
+          `UPDATE persons SET first_name = $1, last_name = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3;`,
+          [payload.learner.firstName, payload.learner.lastName, learnerPersonId]
+        );
+      }
 
       // 2. Learner Record
       const learnerId = payload.learner.existingLearnerId || ('lrn-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6));
@@ -1143,6 +1190,7 @@ export class PostgresLearnerRepository implements ILearnerRepository {
           emis_id = EXCLUDED.emis_id,
           admission_number = EXCLUDED.admission_number,
           blood_group = EXCLUDED.blood_group,
+          current_device_id = EXCLUDED.current_device_id,
           updated_at = CURRENT_TIMESTAMP;`,
         [
           learnerId,
@@ -1196,48 +1244,78 @@ export class PostgresLearnerRepository implements ILearnerRepository {
       );
 
       // 5. Guardian Person & Guardian
-      let guardianPersonId = 'per-g-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+      let guardianId = payload.guardian.existingGuardianId;
+      let guardianPersonId: string | undefined;
 
-      await client.query(
-        `INSERT INTO persons (
-          id, official_id, official_id_type, first_name, last_name, date_of_birth,
-          gender, mobile_number, email, residential_address, is_verified, verification_source
-        ) VALUES ($1, $2, 'SA_ID', $3, $4, '1985-01-01', 'UNDISCLOSED', $5, $6, $7, TRUE, 'DHA_NPR_LOOKUP')
-        ON CONFLICT (id) DO UPDATE SET
-          first_name = EXCLUDED.first_name,
-          last_name = EXCLUDED.last_name,
-          mobile_number = EXCLUDED.mobile_number,
-          email = EXCLUDED.email,
-          updated_at = CURRENT_TIMESTAMP;`,
-        [
-          guardianPersonId,
-          payload.guardian.saIdNumber,
-          payload.guardian.firstName,
-          payload.guardian.lastName,
-          payload.guardian.mobileNumber,
-          payload.guardian.email ? normalizeEmail(payload.guardian.email) : null,
-          payload.guardian.physicalAddress || null
-        ]
-      );
+      if (guardianId) {
+        const gCheck = await client.query('SELECT person_id FROM guardians WHERE id = $1 LIMIT 1;', [guardianId]);
+        if (gCheck.rows.length > 0) {
+          guardianPersonId = gCheck.rows[0].person_id;
+        }
+      }
 
-      const guardianId = payload.guardian.existingGuardianId || ('grd-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6));
-      await client.query(
-        `INSERT INTO guardians (
-          id, person_id, sa_id_number, sa_id_masked, id_verified, mobile_number,
-          preferred_language, push_notifications_enabled, id_verification_status
-        ) VALUES ($1, $2, $3, $4, TRUE, $5, $6, TRUE, 'VERIFIED')
-        ON CONFLICT (id) DO UPDATE SET
-          mobile_number = EXCLUDED.mobile_number,
-          updated_at = CURRENT_TIMESTAMP;`,
-        [
-          guardianId,
-          guardianPersonId,
-          payload.guardian.saIdNumber,
-          maskSaId(payload.guardian.saIdNumber),
-          payload.guardian.mobileNumber,
-          payload.guardian.preferredLanguage || 'English'
-        ]
-      );
+      if (!guardianPersonId && payload.guardian.saIdNumber) {
+        const pCheck = await client.query('SELECT id FROM persons WHERE official_id = $1 LIMIT 1;', [payload.guardian.saIdNumber]);
+        if (pCheck.rows.length > 0) {
+          guardianPersonId = pCheck.rows[0].id;
+        }
+      }
+
+      if (!guardianPersonId) {
+        guardianPersonId = 'per-g-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+        await client.query(
+          `INSERT INTO persons (
+            id, official_id, official_id_type, first_name, last_name, date_of_birth,
+            gender, mobile_number, email, residential_address, is_verified, verification_source
+          ) VALUES ($1, $2, 'SA_ID', $3, $4, '1985-01-01', 'UNDISCLOSED', $5, $6, $7, TRUE, 'DHA_NPR_LOOKUP')
+          ON CONFLICT (official_id) DO UPDATE SET
+            first_name = EXCLUDED.first_name,
+            last_name = EXCLUDED.last_name,
+            mobile_number = EXCLUDED.mobile_number,
+            email = EXCLUDED.email,
+            updated_at = CURRENT_TIMESTAMP;`,
+          [
+            guardianPersonId,
+            payload.guardian.saIdNumber,
+            payload.guardian.firstName,
+            payload.guardian.lastName,
+            payload.guardian.mobileNumber,
+            payload.guardian.email ? normalizeEmail(payload.guardian.email) : null,
+            payload.guardian.physicalAddress || null
+          ]
+        );
+      } else {
+        await client.query(
+          `UPDATE persons SET first_name = $1, last_name = $2, mobile_number = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4;`,
+          [payload.guardian.firstName, payload.guardian.lastName, payload.guardian.mobileNumber, guardianPersonId]
+        );
+      }
+
+      if (!guardianId) {
+        const gCheck2 = await client.query('SELECT id FROM guardians WHERE person_id = $1 LIMIT 1;', [guardianPersonId]);
+        if (gCheck2.rows.length > 0) {
+          guardianId = gCheck2.rows[0].id;
+        } else {
+          guardianId = 'grd-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+          await client.query(
+            `INSERT INTO guardians (
+              id, person_id, sa_id_number, sa_id_masked, id_verified, mobile_number,
+              preferred_language, push_notifications_enabled, id_verification_status
+            ) VALUES ($1, $2, $3, $4, TRUE, $5, $6, TRUE, 'VERIFIED')
+            ON CONFLICT (id) DO UPDATE SET
+              mobile_number = EXCLUDED.mobile_number,
+              updated_at = CURRENT_TIMESTAMP;`,
+            [
+              guardianId,
+              guardianPersonId,
+              payload.guardian.saIdNumber,
+              maskSaId(payload.guardian.saIdNumber),
+              payload.guardian.mobileNumber,
+              payload.guardian.preferredLanguage || 'English'
+            ]
+          );
+        }
+      }
 
       // 6. Relationship
       const relationshipId = 'rel-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
@@ -1667,7 +1745,7 @@ export class PostgresLearnerRepository implements ILearnerRepository {
         throw new Error(`DUPLICATE HARDWARE DEVICE: Tracking Beacon "${cleanBeacon}" is already assigned to learner "${dup.first_name} ${dup.last_name}" (EMIS: ${dup.emis_id}). Unlinking previous learner is required before reassignment.`);
       } else {
         await query(`UPDATE learners SET current_device_id = NULL WHERE UPPER(current_device_id) = $1;`, [cleanBeacon]);
-        await query(`UPDATE devices SET assigned_learner_id = NULL WHERE UPPER(device_id) = $1;`, [cleanBeacon]);
+        await query(`UPDATE devices SET assigned_learner_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE UPPER(serial_number) = $1;`, [cleanBeacon]);
       }
     }
 
@@ -1677,10 +1755,10 @@ export class PostgresLearnerRepository implements ILearnerRepository {
     );
 
     await query(
-      `INSERT INTO devices (id, device_id, device_type, assigned_learner_id, status)
-       VALUES ($1, $2, 'HARDWARE_BEACON', $3, 'ACTIVE')
-       ON CONFLICT (device_id) DO UPDATE SET assigned_learner_id = $3, status = 'ACTIVE';`,
-      ['dev-' + cleanBeacon, cleanBeacon, learnerId]
+      `INSERT INTO devices (id, serial_number, device_model, hardware_revision, firmware_version, device_status, battery_level, assigned_learner_id)
+       VALUES ($1, $2, 'ITIS-Beacon-Pro', 'REV-2.1', 'v2.4.1-rc3', 'ACTIVE', 100, $3)
+       ON CONFLICT (serial_number) DO UPDATE SET assigned_learner_id = $3, device_status = 'ACTIVE', updated_at = CURRENT_TIMESTAMP;`,
+      ['dev-' + cleanBeacon.toLowerCase().replace(/[^a-z0-9]/g, '-'), cleanBeacon, learnerId]
     );
 
     const auditRepo = new PostgresAuditRepository();

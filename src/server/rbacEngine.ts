@@ -402,16 +402,16 @@ export class AuthoritativeRbacEngine {
    * 5. Object relationship (Guardian -> Child, Responder -> Assigned incident)
    * 6. Data classification & Need-to-know
    */
-  public evaluateAccess(
+  public async evaluateAccess(
     user: ActiveUserSession | null,
     requiredPermission: PermissionKey,
     context?: ResourceAccessContext,
     helpers?: {
-      isGuardianLinkedToLearner?: (guardianId: string, learnerId: string) => boolean;
-      isLearnerEnrolledInSchool?: (learnerId: string, schoolId: string) => boolean;
-      isIncidentAssignedToResponder?: (incidentId: string, responderUnit?: string, responderId?: string) => boolean;
+      isGuardianLinkedToLearner?: (guardianId: string, learnerId: string) => boolean | Promise<boolean>;
+      isLearnerEnrolledInSchool?: (learnerId: string, schoolId: string) => boolean | Promise<boolean>;
+      isIncidentAssignedToResponder?: (incidentId: string, responderUnit?: string, responderId?: string) => boolean | Promise<boolean>;
     }
-  ): AuthorizationDecision {
+  ): Promise<AuthorizationDecision> {
     // 1. Authenticated Identity Check
     if (!user) {
       return {
@@ -500,7 +500,7 @@ export class AuthoritativeRbacEngine {
       }
 
       if (helpers?.isGuardianLinkedToLearner) {
-        const isLinked = helpers.isGuardianLinkedToLearner(user.guardianId, context.learnerId);
+        const isLinked = await helpers.isGuardianLinkedToLearner(user.guardianId, context.learnerId);
         if (!isLinked) {
           return {
             allowed: false,
@@ -521,7 +521,7 @@ export class AuthoritativeRbacEngine {
     // 7. ABAC: Responder -> Assigned Incident Enforcement
     if (user.role === 'FIELD_RESPONDER') {
       if (context?.incidentId && helpers?.isIncidentAssignedToResponder) {
-        const isAssigned = helpers.isIncidentAssignedToResponder(context.incidentId, user.responderUnit, user.id);
+        const isAssigned = await helpers.isIncidentAssignedToResponder(context.incidentId, user.responderUnit, user.id);
         if (!isAssigned) {
           return {
             allowed: false,

@@ -1,4 +1,3 @@
-import { db } from './dbStore.js';
 import { rbacEngine, AUTHORITATIVE_ROLE_MATRIX } from './rbacEngine.js';
 import { UserRole, ActiveUserSession } from '../types.js';
 
@@ -29,7 +28,7 @@ export interface SecurityTestReport {
 }
 
 export class RbacSecurityTestSuite {
-  public runAllSecurityTests(): SecurityTestReport {
+  public async runAllSecurityTests(): Promise<SecurityTestReport> {
     const results: SecurityTestCaseResult[] = [];
 
     // Setup dummy sessions for testing
@@ -102,20 +101,15 @@ export class RbacSecurityTestSuite {
 
     // Helper functions for relationship / scope evaluation
     const isGuardianLinked = (gId: string, lId: string) => {
-      for (const rel of db.relationships.values()) {
-        if (rel.guardianId === gId && rel.learnerId === lId) return true;
-      }
-      return false;
+      return gId === 'grd-001' && lId === 'lrn-001';
     };
 
     const isIncidentAssigned = (incId: string, unit?: string) => {
-      const inc = db.incidents.get(incId);
-      if (!inc || !inc.assignedResponder) return false;
-      return inc.assignedResponder.vehicleId === unit || inc.assignedResponder.id === unit;
+      return incId === 'inc-001' && (unit === 'SAPS-GP-9912' || unit === 'resp-saps-01');
     };
 
     // TEST 1: Admin attempts to create a platform User Account (Violation: Only Founder may create users)
-    const t1Decision = rbacEngine.evaluateAccess(
+    const t1Decision = await rbacEngine.evaluateAccess(
       adminUser,
       'USER_IDENTITIES_MANAGE',
       { targetUserRole: 'SYSTEM_ADMIN' }
@@ -136,7 +130,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 2: Admin attempts to modify System Security Policies (Founder only)
-    const t2Decision = rbacEngine.evaluateAccess(
+    const t2Decision = await rbacEngine.evaluateAccess(
       adminUser,
       'SECURITY_POLICIES_MANAGE'
     );
@@ -156,7 +150,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 3: School Principal of School 1 attempts to access School 2 records
-    const t3Decision = rbacEngine.evaluateAccess(
+    const t3Decision = await rbacEngine.evaluateAccess(
       principalSchool1,
       'SCHOOL_RECORDS_MANAGE',
       { schoolId: 'sch-002' }
@@ -177,7 +171,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 4: School Principal attempts to dispatch Armed Tactical Responders
-    const t4Decision = rbacEngine.evaluateAccess(
+    const t4Decision = await rbacEngine.evaluateAccess(
       principalSchool1,
       'RESPONDER_DISPATCH_AUTHORIZE'
     );
@@ -197,7 +191,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 5: Guardian attempts to query unlinked child dossier (POPIA / Child Care Act violation)
-    const t5Decision = rbacEngine.evaluateAccess(
+    const t5Decision = await rbacEngine.evaluateAccess(
       guardianUser1,
       'GUARDIAN_CHILDREN_VIEW',
       { learnerId: 'lrn-003' }, // Zola Dlamini (Not Grace Molefe's child)
@@ -219,7 +213,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 6: Guardian attempts to access Command Centre incident feed
-    const t6Decision = rbacEngine.evaluateAccess(
+    const t6Decision = await rbacEngine.evaluateAccess(
       guardianUser1,
       'EMERGENCY_INCIDENTS_VIEW_ALL'
     );
@@ -239,7 +233,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 7: Responder attempts to browse unassigned emergencies
-    const t7Decision = rbacEngine.evaluateAccess(
+    const t7Decision = await rbacEngine.evaluateAccess(
       responderUser,
       'ASSIGNED_INCIDENT_VIEW_MINIMAL',
       { incidentId: 'inc-unassigned-9999' },
@@ -261,7 +255,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 8: Responder attempts to change platform RBAC or self-dispatch
-    const t8Decision = rbacEngine.evaluateAccess(
+    const t8Decision = await rbacEngine.evaluateAccess(
       responderUser,
       'RESPONDER_DISPATCH_AUTHORIZE'
     );
@@ -281,7 +275,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 9: Command Operator attempts Autonomous/AI Dispatch (Prohibited by Directive)
-    const t9Decision = rbacEngine.evaluateAccess(
+    const t9Decision = await rbacEngine.evaluateAccess(
       commandUser,
       'RESPONDER_DISPATCH_AUTHORIZE',
       { isHumanDispatch: false }
@@ -302,7 +296,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 10: Technician attempts to access confidential child personal safety dossiers
-    const t10Decision = rbacEngine.evaluateAccess(
+    const t10Decision = await rbacEngine.evaluateAccess(
       techUser,
       'LEARNERS_VIEW_ALL'
     );
@@ -322,7 +316,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 11: Government Auditor attempts to execute operational emergency dispatch
-    const t11Decision = rbacEngine.evaluateAccess(
+    const t11Decision = await rbacEngine.evaluateAccess(
       govUser,
       'RESPONDER_DISPATCH_AUTHORIZE'
     );
@@ -342,7 +336,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 12: Founder Authorized Sovereign Operations (Full Governance Allowed)
-    const t12Decision = rbacEngine.evaluateAccess(
+    const t12Decision = await rbacEngine.evaluateAccess(
       founderUser,
       'USER_IDENTITIES_MANAGE',
       { targetUserRole: 'SYSTEM_ADMIN' }
@@ -362,7 +356,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 13: School Principal attempts to create platform user accounts
-    const t13Decision = rbacEngine.evaluateAccess(
+    const t13Decision = await rbacEngine.evaluateAccess(
       principalSchool1,
       'USER_IDENTITIES_MANAGE',
       { targetUserRole: 'SCHOOL_ADMIN_STAFF' }
@@ -383,7 +377,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 14: System Admin attempts to alter platform user account status
-    const t14Decision = rbacEngine.evaluateAccess(
+    const t14Decision = await rbacEngine.evaluateAccess(
       adminUser,
       'USER_IDENTITIES_MANAGE'
     );
@@ -403,7 +397,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 15: Non-Founder role attempts to access Founder Password Management endpoint
-    const t15Decision = rbacEngine.evaluateAccess(
+    const t15Decision = await rbacEngine.evaluateAccess(
       adminUser,
       'USER_IDENTITIES_MANAGE',
       { targetUserRole: 'FOUNDER_EXECUTIVE' }
@@ -428,7 +422,7 @@ export class RbacSecurityTestSuite {
     // ----------------------------------------------------
 
     // TEST 16: Founder executes Enrolment Administration (Authorized)
-    const t16Decision = rbacEngine.evaluateAccess(
+    const t16Decision = await rbacEngine.evaluateAccess(
       founderUser,
       'ENROLMENT_MANAGE'
     );
@@ -447,7 +441,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 17: System Admin executes Enrolment Administration (Authorized)
-    const t17Decision = rbacEngine.evaluateAccess(
+    const t17Decision = await rbacEngine.evaluateAccess(
       adminUser,
       'ENROLMENT_MANAGE'
     );
@@ -466,7 +460,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 18: School Principal attempts Enrolment Administration (Blocked by Lock)
-    const t18Decision = rbacEngine.evaluateAccess(
+    const t18Decision = await rbacEngine.evaluateAccess(
       principalSchool1,
       'ENROLMENT_MANAGE'
     );
@@ -486,7 +480,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 19: Parent/Guardian attempts Enrolment Administration (Blocked)
-    const t19Decision = rbacEngine.evaluateAccess(
+    const t19Decision = await rbacEngine.evaluateAccess(
       guardianUser1,
       'ENROLMENT_MANAGE'
     );
@@ -506,7 +500,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 20: Command Operator attempts Enrolment Administration (Blocked)
-    const t20Decision = rbacEngine.evaluateAccess(
+    const t20Decision = await rbacEngine.evaluateAccess(
       commandUser,
       'ENROLMENT_MANAGE'
     );
@@ -526,7 +520,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 21: Field Responder attempts Enrolment Administration (Blocked)
-    const t21Decision = rbacEngine.evaluateAccess(
+    const t21Decision = await rbacEngine.evaluateAccess(
       responderUser,
       'ENROLMENT_MANAGE'
     );
@@ -546,7 +540,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 22: Technician attempts Enrolment Administration (Blocked)
-    const t22Decision = rbacEngine.evaluateAccess(
+    const t22Decision = await rbacEngine.evaluateAccess(
       techUser,
       'ENROLMENT_MANAGE'
     );
@@ -566,7 +560,7 @@ export class RbacSecurityTestSuite {
     });
 
     // TEST 23: Government Auditor attempts Enrolment Administration (Blocked)
-    const t23Decision = rbacEngine.evaluateAccess(
+    const t23Decision = await rbacEngine.evaluateAccess(
       govUser,
       'ENROLMENT_MANAGE'
     );

@@ -36,6 +36,7 @@ import {
   IncidentQueryOptions,
   AuditLogQueryOptions,
   ActiveUserSession,
+  RegisterUserPayload,
   EligibleResponderRanking
 } from '../../types.js';
 
