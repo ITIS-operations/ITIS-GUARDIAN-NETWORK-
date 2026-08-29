@@ -161,6 +161,50 @@ export async function query<T extends pg.QueryResultRow = any>(text: string, par
   }
 }
 
+export type DatabaseErrorCategory =
+  | 'DATABASE_URL_MISSING'
+  | 'DATABASE_CONNECTION_REFUSED'
+  | 'DATABASE_AUTH_FAILED'
+  | 'DATABASE_SSL_ERROR'
+  | 'DATABASE_TIMEOUT'
+  | 'DATABASE_PERMISSION_DENIED'
+  | 'DATABASE_QUERY_FAILED';
+
+export function classifyDatabaseError(error: any): { category: DatabaseErrorCategory; message: string } {
+  if (!error) {
+    return { category: 'DATABASE_QUERY_FAILED', message: 'Unknown database error' };
+  }
+
+  const code = error.code || '';
+  const msg = (error.message || '').toLowerCase();
+
+  if (msg.includes('database_url') || msg.includes('missing database') || msg.includes('database_url is not configured')) {
+    return { category: 'DATABASE_URL_MISSING', message: 'DATABASE_URL is not configured in environment variables' };
+  }
+
+  if (code === 'ECONNREFUSED' || msg.includes('econnrefused') || msg.includes('connection refused')) {
+    return { category: 'DATABASE_CONNECTION_REFUSED', message: 'Connection refused by database host or port' };
+  }
+
+  if (code === '28P01' || code === '28000' || msg.includes('password authentication failed') || msg.includes('auth failed')) {
+    return { category: 'DATABASE_AUTH_FAILED', message: 'Authentication failed for specified database credentials' };
+  }
+
+  if (msg.includes('ssl') || msg.includes('tlsv1') || msg.includes('certificate') || msg.includes('handshake')) {
+    return { category: 'DATABASE_SSL_ERROR', message: 'SSL/TLS negotiation or certificate handshake error' };
+  }
+
+  if (code === 'ETIMEDOUT' || msg.includes('timeout') || msg.includes('timed out')) {
+    return { category: 'DATABASE_TIMEOUT', message: 'Connection timed out while reaching database host' };
+  }
+
+  if (code === '42501' || msg.includes('permission denied') || msg.includes('must be owner')) {
+    return { category: 'DATABASE_PERMISSION_DENIED', message: 'Permission denied for requested database object or schema' };
+  }
+
+  return { category: 'DATABASE_QUERY_FAILED', message: error.message || 'Database query execution failed' };
+}
+
 export function isDatabaseConnectionError(error: any): boolean {
   if (!error) return false;
   const code = error.code;
@@ -183,7 +227,8 @@ export function isDatabaseConnectionError(error: any): boolean {
     msg.includes('database unavailable') ||
     msg.includes('failed to connect') ||
     msg.includes('socket not found') ||
-    msg.includes('timeout')
+    msg.includes('timeout') ||
+    msg.includes('database_url is not configured')
   );
 }
 

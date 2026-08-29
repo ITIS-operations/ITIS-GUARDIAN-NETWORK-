@@ -4,7 +4,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { repository, ProductionMigrationEngine } from './src/server/db/index.js';
 import { bootstrapDatabase } from './src/server/db/bootstrap.js';
-import { query, isDatabaseConnectionError } from './src/server/db/client.js';
+import { query, isDatabaseConnectionError, classifyDatabaseError } from './src/server/db/client.js';
 import { rbacEngine, AUTHORITATIVE_ROLE_MATRIX, ResourceAccessContext } from './src/server/rbacEngine.js';
 import { rbacTestSuite } from './src/server/rbacTestSuite.js';
 import { enrolmentTestSuite } from './src/server/enrolmentTestSuite.js';
@@ -46,6 +46,26 @@ app.use(async (req, res, next) => {
   }
   next();
 });
+
+// Extract real client IP address for immutable audit logging
+function getClientIp(req: express.Request): string {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string') {
+    return forwarded.split(',')[0].trim();
+  }
+  if (Array.isArray(forwarded) && forwarded.length > 0) {
+    return forwarded[0].trim();
+  }
+  return req.ip || req.socket?.remoteAddress || '127.0.0.1';
+}
+
+// Safely normalize Express path parameters
+function normalizeParam(param: string | string[] | undefined): string {
+  if (Array.isArray(param)) {
+    return param[0] || '';
+  }
+  return param || '';
+}
 
 // Enforce authenticated session
 function requireAuth(req: express.Request, res: express.Response, next: express.NextFunction) {
@@ -225,10 +245,12 @@ app.post('/api/auth/login', async (req, res) => {
     });
   } catch (err: any) {
     if (isDatabaseConnectionError(err)) {
-      console.error('[Auth Error] PostgreSQL database service unavailable:', err);
+      const classified = classifyDatabaseError(err);
+      console.error(`[Auth Error] PostgreSQL database connection failure [${classified.category}]:`, classified.message);
       return res.status(503).json({
         error: 'DATABASE_UNAVAILABLE',
-        message: 'Authoritative PostgreSQL database service is unavailable. Please check database connection.'
+        message: 'Authoritative PostgreSQL database service is unavailable. Please check database connection.',
+        category: process.env.NODE_ENV !== 'production' ? classified.category : undefined
       });
     }
     if (err.message && (err.message.includes('SUSPENDED') || err.message.includes('DISABLED'))) {
@@ -541,11 +563,13 @@ app.post('/api/users', requireAuth, async (req, res) => {
       });
     }
 
+    const userFirstName = firstName || (name ? name.split(' ')[0] : '') || 'User';
+    const userSurname = surname || (name ? name.split(' ').slice(1).join(' ') : '') || '';
+
     const created = await repository.users.create({
       email,
-      name,
-      firstName,
-      surname,
+      firstName: userFirstName,
+      surname: userSurname,
       mobileNumber,
       role,
       password,
@@ -573,7 +597,8 @@ app.patch('/api/users/:id/status', requireAuth, async (req, res) => {
     if (!status || !['ACTIVE', 'SUSPENDED', 'DISABLED'].includes(status)) {
       return res.status(400).json({ error: 'Invalid status. Allowed: ACTIVE, SUSPENDED, DISABLED.' });
     }
-    const updated = await repository.users.updateStatus(req.params.id, status, req.user!.id);
+    const userId = normalizeParam(req.params.id);
+    const updated = await repository.users.updateStatus(userId, status, req.user!.id);
     res.json({ success: true, user: updated });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
@@ -586,8 +611,9 @@ app.post('/api/users/:id/deactivate', requireAuth, async (req, res) => {
     if (!decision.allowed || req.user!.role !== 'FOUNDER_EXECUTIVE') {
       return res.status(403).json({ error: 'ACCESS DENIED: Only Founder/SuperAdmin may deactivate platform users.' });
     }
-    await repository.users.updateStatus(req.params.id, 'DISABLED', req.user!.id);
-    res.json({ success: true, message: `User ${req.params.id} deactivated successfully.` });
+    const userId = normalizeParam(req.params.id);
+    await repository.users.updateStatus(userId, 'DISABLED', req.user!.id);
+    res.json({ success: true, message: `User ${userId} deactivated successfully.` });
   } catch (err: any) {
     res.status(400).json({ error: err.message });
   }
@@ -814,7 +840,8 @@ app.get('/api/learners', requireAuth, async (req, res) => {
         actorRole: user.role,
         targetEntity: 'LEARNER',
         targetId: 'CROSS_SCHOOL_QUERY',
-        details: { attemptedSchoolId: schoolId, allowedSchoolId: user.schoolId }
+        details: { attemptedSchoolId: schoolId, allowedSchoolId: user.schoolId },
+        ipAddress: getClientIp(req)
       });
       return res.status(403).json({
         error: `ACCESS DENIED: Institutional boundary violation. You are restricted to school '${user.schoolId}'.`
@@ -856,7 +883,7 @@ app.get('/api/learners', requireAuth, async (req, res) => {
 // Single Learner Inspection (Strict ABAC Check)
 app.get('/api/learners/:id', requireAuth, async (req, res) => {
   const user = req.user!;
-  const learnerId = req.params.id;
+  const learnerId = normalizeParam(req.params.id);
 
   const decision = await rbacEngine.evaluateAccess(
     user,
@@ -874,7 +901,8 @@ app.get('/api/learners/:id', requireAuth, async (req, res) => {
         actorRole: user.role,
         targetEntity: 'LEARNER',
         targetId: learnerId,
-        details: { reason: decision.reason, ...decision.auditDetails }
+        details: { reason: decision.reason, ...decision.auditDetails },
+        ipAddress: getClientIp(req)
       });
     }
     return res.status(decision.statusCode).json({ error: decision.reason });
@@ -1100,7 +1128,8 @@ app.post('/api/incidents/panic-trigger', async (req, res) => {
         learnerName: created.learnerName,
         triggerType: created.triggerType,
         location: created.location
-      }
+      },
+      ipAddress: getClientIp(req)
     });
 
     res.json(created);
@@ -1162,7 +1191,8 @@ app.post(
           assignedUnit: updatedResponder.name,
           vehicleId: updatedResponder.vehicleId,
           operatorVerification: 'HUMAN_VERIFIED'
-        }
+        },
+        ipAddress: getClientIp(req)
       });
 
       res.json(updated);
@@ -1176,7 +1206,7 @@ app.post(
 app.post('/api/incidents/:id/status', requireAuth, async (req, res) => {
   const user = req.user!;
   const { status, note } = req.body;
-  const incidentId = req.params.id;
+  const incidentId = normalizeParam(req.params.id);
   const incident = await repository.incidents.findById(incidentId);
   
   if (!incident) return res.status(404).json({ error: 'Incident not found' });
@@ -1203,7 +1233,8 @@ app.post('/api/incidents/:id/status', requireAuth, async (req, res) => {
     actorRole: user.role,
     targetEntity: 'INCIDENT',
     targetId: updated.id,
-    details: { newStatus: status, note, role: user.role }
+    details: { newStatus: status, note, role: user.role },
+    ipAddress: getClientIp(req)
   });
 
   res.json(updated);
@@ -1233,7 +1264,8 @@ app.get(
   enforcePermission('RESPONDER_DISPATCH_AUTHORIZE'),
   async (req, res) => {
     try {
-      const rankings = await repository.responders.getRankedEligibleResponders(req.params.incidentId);
+      const incidentId = normalizeParam(req.params.incidentId);
+      const rankings = await repository.responders.getRankedEligibleResponders(incidentId);
       res.json(rankings);
     } catch (err: any) {
       res.status(400).json({ error: err.message });
