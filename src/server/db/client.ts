@@ -43,7 +43,10 @@ function getPoolConfig(): pg.PoolConfig {
   // If a standard connection string is provided (e.g. from Vercel Postgres, Neon, Cloud SQL public IP/proxy, Supabase)
   if (connString && (connString.startsWith('postgres://') || connString.startsWith('postgresql://'))) {
     const isLocalhost = connString.includes('localhost') || connString.includes('127.0.0.1');
-    const disableSsl = process.env.PGSSLMODE === 'disable' || process.env.DISABLE_SSL === 'true';
+    const disableSsl =
+      process.env.PGSSLMODE === 'disable' ||
+      process.env.PGSSL_MODE === 'disable' ||
+      process.env.DISABLE_SSL === 'true';
     const requireSsl = !isLocalhost && !disableSsl;
 
     const config: pg.PoolConfig = {
@@ -106,7 +109,10 @@ function getPoolConfig(): pg.PoolConfig {
 
   const isSocket = host.startsWith('/');
   const isLocal = host === '127.0.0.1' || host.toLowerCase() === 'localhost';
-  const disableSsl = process.env.PGSSLMODE === 'disable' || process.env.DISABLE_SSL === 'true';
+  const disableSsl =
+    process.env.PGSSLMODE === 'disable' ||
+    process.env.PGSSL_MODE === 'disable' ||
+    process.env.DISABLE_SSL === 'true';
   const requireSsl = !isSocket && !isLocal && !disableSsl;
 
   const config: pg.PoolConfig = {
@@ -241,4 +247,96 @@ export async function isPostgresConnected(): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Executes a callback within a managed PostgreSQL transaction with automatic BEGIN, COMMIT, and ROLLBACK.
+ */
+export async function withTransaction<T>(callback: (client: pg.PoolClient) => Promise<T>): Promise<T> {
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const result = await callback(client);
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK');
+    } catch (rbError) {
+      console.error('[PostgreSQL Transaction Rollback Failed]', rbError);
+    }
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export type ConnectionMode =
+  | 'UNIX_SOCKET_CLOUDSQL'
+  | 'REMOTE_TCP_URI'
+  | 'REMOTE_TCP_DISCRETE'
+  | 'LOCAL_TCP';
+
+export function determineConnectionMode(): {
+  mode: ConnectionMode;
+  hostType: 'UNIX_SOCKET' | 'REMOTE_TCP' | 'LOCAL';
+  sslRequired: boolean;
+  databaseConfigured: boolean;
+} {
+  const connString = (
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.POSTGRESQL_URL ||
+    ''
+  ).trim();
+
+  if (connString) {
+    const isLocalhost = connString.includes('localhost') || connString.includes('127.0.0.1');
+    const disableSsl =
+      process.env.PGSSLMODE === 'disable' ||
+      process.env.PGSSL_MODE === 'disable' ||
+      process.env.DISABLE_SSL === 'true';
+    return {
+      mode: isLocalhost ? 'LOCAL_TCP' : 'REMOTE_TCP_URI',
+      hostType: isLocalhost ? 'LOCAL' : 'REMOTE_TCP',
+      sslRequired: !isLocalhost && !disableSsl,
+      databaseConfigured: true
+    };
+  }
+
+  const socketPath = resolveCloudSqlSocket();
+  const host = (
+    socketPath ||
+    process.env.SQL_HOST ||
+    process.env.PGHOST ||
+    process.env.POSTGRES_HOST ||
+    ''
+  ).trim();
+
+  const isSocket = host.startsWith('/');
+  const isLocal = host === '127.0.0.1' || host.toLowerCase() === 'localhost';
+  const disableSsl =
+    process.env.PGSSLMODE === 'disable' ||
+    process.env.PGSSL_MODE === 'disable' ||
+    process.env.DISABLE_SSL === 'true';
+
+  let mode: ConnectionMode = 'LOCAL_TCP';
+  let hostType: 'UNIX_SOCKET' | 'REMOTE_TCP' | 'LOCAL' = 'LOCAL';
+
+  if (isSocket) {
+    mode = 'UNIX_SOCKET_CLOUDSQL';
+    hostType = 'UNIX_SOCKET';
+  } else if (!isLocal && host) {
+    mode = 'REMOTE_TCP_DISCRETE';
+    hostType = 'REMOTE_TCP';
+  }
+
+  return {
+    mode,
+    hostType,
+    sslRequired: !isSocket && !isLocal && !disableSsl,
+    databaseConfigured: Boolean(connString || host || socketPath)
+  };
+}
+
 

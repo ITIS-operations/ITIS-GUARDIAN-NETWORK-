@@ -310,6 +310,8 @@ export class EnrolmentEngine {
     relationshipId: string;
     enrolmentId: string;
     academicRecordId: string;
+    guardianUserStatus?: 'CREATED' | 'LINKED' | 'CONFLICT' | 'SKIPPED';
+    guardianUserMessage?: string;
     message: string;
     auditEventId: string;
   } {
@@ -682,6 +684,9 @@ export class EnrolmentEngine {
     const gPerson = db.persons.get(guardianPersonId)!;
 
     // Automatic Parent/Guardian user account provisioning / linking if email is present
+    let guardianUserStatus: 'CREATED' | 'LINKED' | 'CONFLICT' | 'SKIPPED' = 'SKIPPED';
+    let guardianUserMessage = 'No guardian email provided';
+
     if (gPerson && gPerson.email) {
       const cleanEmail = gPerson.email.trim().toLowerCase();
       let matchedUser = Array.from(db.users.values()).find(
@@ -689,17 +694,70 @@ export class EnrolmentEngine {
       );
 
       if (matchedUser) {
-        matchedUser.guardianId = finalGuardianId;
-        matchedUser.updatedAt = now;
+        if (matchedUser.role === 'PARENT_GUARDIAN') {
+          // Re-use existing Guardian account without duplication
+          matchedUser.guardianId = finalGuardianId;
+          matchedUser.updatedAt = now;
+
+          const gEntity = db.guardians.get(finalGuardianId);
+          if (gEntity) {
+            gEntity.userId = matchedUser.id;
+            gEntity.updatedAt = now;
+          }
+
+          guardianUserStatus = 'LINKED';
+          guardianUserMessage = 'Existing Guardian account linked successfully';
+
+          db.logAuditEvent({
+            actionType: 'EXISTING_GUARDIAN_LINKED_TO_LEARNER' as any,
+            actorUserId: staffContext.staffUserId,
+            actorName: staffContext.staffName,
+            actorRole: staffContext.staffRole,
+            targetEntity: 'USER',
+            targetId: matchedUser.id,
+            details: {
+              userId: matchedUser.id,
+              guardianId: finalGuardianId,
+              learnerId: finalLearnerId,
+              email: cleanEmail,
+              action: 'REUSED_EXISTING_GUARDIAN_ACCOUNT'
+            },
+            ipAddress: staffContext.ipAddress
+          });
+        } else {
+          // Non-Guardian role conflict: do NOT overwrite account
+          guardianUserStatus = 'CONFLICT';
+          guardianUserMessage = `Notice: Email '${cleanEmail}' belongs to role '${matchedUser.role}'. Account was preserved without overwrite; flagged for admin review.`;
+
+          db.logAuditEvent({
+            actionType: 'GUARDIAN_USER_ROLE_CONFLICT_FLAGGED' as any,
+            actorUserId: staffContext.staffUserId,
+            actorName: staffContext.staffName,
+            actorRole: staffContext.staffRole,
+            targetEntity: 'USER',
+            targetId: matchedUser.id,
+            details: {
+              existingUserId: matchedUser.id,
+              existingRole: matchedUser.role,
+              guardianId: finalGuardianId,
+              learnerId: finalLearnerId,
+              email: cleanEmail,
+              conflict: 'ROLE_OVERWRITE_PREVENTED'
+            },
+            ipAddress: staffContext.ipAddress
+          });
+        }
       } else {
+        // Create new Guardian User
         const newUserId = 'usr-parent-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
         const salt = generateSalt();
-        const hash = hashPassword('Password123!', salt);
+        const tempPassword = 'PendingActivation_' + Math.random().toString(36).slice(2, 10) + '!';
+        const hash = hashPassword(tempPassword, salt);
         const parentUser = {
           id: newUserId,
           email: cleanEmail,
           normalizedEmail: cleanEmail,
-          name: `${gPerson.firstName} ${gPerson.lastName}`.trim(),
+          name: `${gPerson.firstName} ${gPerson.lastName}`.trim() || 'Guardian User',
           firstName: gPerson.firstName,
           surname: gPerson.lastName,
           mobileNumber: gPerson.mobileNumber,
@@ -712,11 +770,40 @@ export class EnrolmentEngine {
           organization: 'Parent & Legal Guardian Network',
           permissions: db.getDefaultPermissionsForRole('PARENT_GUARDIAN'),
           status: 'ACTIVE' as const,
+          mustChangePassword: true,
           isDemoAccount: false,
           createdAt: now,
           updatedAt: now
         };
         db.users.set(parentUser.id, parentUser);
+
+        const gEntity = db.guardians.get(finalGuardianId);
+        if (gEntity) {
+          gEntity.userId = newUserId;
+          gEntity.updatedAt = now;
+        }
+
+        guardianUserStatus = 'CREATED';
+        guardianUserMessage = 'Guardian account created — activation pending';
+
+        db.logAuditEvent({
+          actionType: 'GUARDIAN_AUTO_CREATED_FROM_LEARNER_REGISTRATION' as any,
+          actorUserId: staffContext.staffUserId,
+          actorName: staffContext.staffName,
+          actorRole: staffContext.staffRole,
+          targetEntity: 'USER',
+          targetId: newUserId,
+          details: {
+            userId: newUserId,
+            guardianId: finalGuardianId,
+            learnerId: finalLearnerId,
+            email: cleanEmail,
+            role: 'PARENT_GUARDIAN',
+            activationStatus: 'PENDING_ACTIVATION',
+            mustChangePassword: true
+          },
+          ipAddress: staffContext.ipAddress
+        });
       }
     }
 
@@ -734,6 +821,8 @@ export class EnrolmentEngine {
       relationshipId: finalRelId,
       enrolmentId: finalEnrolId,
       academicRecordId,
+      guardianUserStatus,
+      guardianUserMessage,
       message,
       auditEventId: auditEvent.id
     };

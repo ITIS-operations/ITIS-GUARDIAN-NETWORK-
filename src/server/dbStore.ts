@@ -1,3 +1,11 @@
+/**
+ * ============================================================================
+ * [DEVELOPMENT & SEED UTILITY ONLY]
+ * dbStore.ts provides historical JSON-based fixture datasets and schema seed data.
+ * It is NOT the runtime authoritative database.
+ * Authoritative production database operations route through PostgresDataRepository.
+ * ============================================================================
+ */
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';

@@ -1,3 +1,11 @@
+/**
+ * ============================================================================
+ * [DEVELOPMENT ONLY / HISTORICAL SEED ADAPTER]
+ * InMemoryDataRepository is a non-authoritative development shim.
+ * Production and authoritative runtime persistence is handled exclusively by
+ * PostgresDataRepository backed by PostgreSQL.
+ * ============================================================================
+ */
 import {
   IDataRepository,
   IUserRepository,

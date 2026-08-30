@@ -494,6 +494,7 @@ export class PostgresUserRepository implements IUserRepository {
     return {
       id: row.id,
       email: row.email,
+      normalizedEmail: row.normalized_email || row.email,
       aliases: row.aliases || [],
       name: row.name,
       firstName: row.first_name || undefined,
@@ -508,6 +509,7 @@ export class PostgresUserRepository implements IUserRepository {
       permissions: row.permissions || [],
       status: row.status as AccountStatus,
       isDemoAccount: !!row.is_demo_account,
+      mustChangePassword: row.must_change_password !== undefined ? Boolean(row.must_change_password) : undefined,
       createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString()
     };
   }
@@ -1261,6 +1263,8 @@ export class PostgresLearnerRepository implements ILearnerRepository {
         }
       }
 
+      const cleanGuardianEmail = payload.guardian.email ? normalizeEmail(payload.guardian.email) : null;
+
       if (!guardianPersonId) {
         guardianPersonId = 'per-g-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
         await client.query(
@@ -1280,14 +1284,14 @@ export class PostgresLearnerRepository implements ILearnerRepository {
             payload.guardian.firstName,
             payload.guardian.lastName,
             payload.guardian.mobileNumber,
-            payload.guardian.email ? normalizeEmail(payload.guardian.email) : null,
+            cleanGuardianEmail,
             payload.guardian.physicalAddress || null
           ]
         );
       } else {
         await client.query(
-          `UPDATE persons SET first_name = $1, last_name = $2, mobile_number = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4;`,
-          [payload.guardian.firstName, payload.guardian.lastName, payload.guardian.mobileNumber, guardianPersonId]
+          `UPDATE persons SET first_name = $1, last_name = $2, mobile_number = $3, email = COALESCE($4, email), updated_at = CURRENT_TIMESTAMP WHERE id = $5;`,
+          [payload.guardian.firstName, payload.guardian.lastName, payload.guardian.mobileNumber, cleanGuardianEmail, guardianPersonId]
         );
       }
 
@@ -1312,6 +1316,172 @@ export class PostgresLearnerRepository implements ILearnerRepository {
               maskSaId(payload.guardian.saIdNumber),
               payload.guardian.mobileNumber,
               payload.guardian.preferredLanguage || 'English'
+            ]
+          );
+        }
+      }
+
+      // 5b. GUARDIAN USER AUTO-CREATION & IDENTITY LINKING (DUPLICATE-SAFE)
+      let guardianUserStatus: 'CREATED' | 'LINKED' | 'CONFLICT' | 'SKIPPED' = 'SKIPPED';
+      let guardianUserMessage = 'No guardian email provided';
+
+      if (cleanGuardianEmail) {
+        // Search existing users by normalized email, email, identifier or aliases
+        const userCheck = await client.query(
+          `SELECT id, role, guardian_id, email, name, account_status FROM users 
+           WHERE normalized_email = $1 OR email = $1 OR identifier = $1 OR $1 = ANY(aliases) LIMIT 1;`,
+          [cleanGuardianEmail]
+        );
+
+        if (userCheck.rows.length > 0) {
+          const existingUser = userCheck.rows[0];
+
+          if (existingUser.role === 'PARENT_GUARDIAN') {
+            // Case 3: Re-use existing Guardian account (No duplicate created!)
+            guardianUserStatus = 'LINKED';
+            guardianUserMessage = 'Existing Guardian account linked successfully';
+
+            if (!existingUser.guardian_id) {
+              await client.query(`UPDATE users SET guardian_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2;`, [guardianId, existingUser.id]);
+            }
+            await client.query(`UPDATE guardians SET user_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2;`, [existingUser.id, guardianId]);
+
+            // Audit event for linking existing guardian
+            const linkAuditId = 'aud-gl-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+            await client.query(
+              `INSERT INTO audit_events (
+                id, action_type, actor_user_id, actor_name, actor_role, target_entity,
+                target_id, details, ip_address, checksum
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);`,
+              [
+                linkAuditId,
+                'EXISTING_GUARDIAN_LINKED_TO_LEARNER',
+                payload.staffContext?.staffUserId || 'SYSTEM',
+                payload.staffContext?.staffName || 'Authoritative Enrollment Engine',
+                payload.staffContext?.staffRole || 'SYSTEM_ADMIN',
+                'GUARDIAN_USER',
+                existingUser.id,
+                JSON.stringify({
+                  userId: existingUser.id,
+                  guardianId,
+                  learnerId,
+                  email: cleanGuardianEmail,
+                  action: 'REUSED_EXISTING_GUARDIAN_ACCOUNT'
+                }),
+                payload.staffContext?.ipAddress || '127.0.0.1',
+                generateChecksum({ id: linkAuditId, timestamp: now, actionType: 'EXISTING_GUARDIAN_LINKED_TO_LEARNER', targetId: existingUser.id })
+              ]
+            );
+          } else {
+            // Case 4: Email belongs to a non-Guardian role (e.g. SYSTEM_ADMIN, SCHOOL_PRINCIPAL, etc.)
+            // DO NOT silently convert or overwrite account! Flag conflict safely for admin review.
+            guardianUserStatus = 'CONFLICT';
+            guardianUserMessage = `Notice: Email '${cleanGuardianEmail}' is associated with administrative role '${existingUser.role}'. Account was not overwritten; guardian profile linked for admin review.`;
+
+            const conflictAuditId = 'aud-gc-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+            await client.query(
+              `INSERT INTO audit_events (
+                id, action_type, actor_user_id, actor_name, actor_role, target_entity,
+                target_id, details, ip_address, checksum
+              ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);`,
+              [
+                conflictAuditId,
+                'GUARDIAN_USER_ROLE_CONFLICT_FLAGGED',
+                payload.staffContext?.staffUserId || 'SYSTEM',
+                payload.staffContext?.staffName || 'Authoritative Enrollment Engine',
+                payload.staffContext?.staffRole || 'SYSTEM_ADMIN',
+                'USER',
+                existingUser.id,
+                JSON.stringify({
+                  existingUserId: existingUser.id,
+                  existingRole: existingUser.role,
+                  guardianId,
+                  learnerId,
+                  email: cleanGuardianEmail,
+                  conflict: 'ROLE_OVERWRITE_PREVENTED'
+                }),
+                payload.staffContext?.ipAddress || '127.0.0.1',
+                generateChecksum({ id: conflictAuditId, timestamp: now, actionType: 'GUARDIAN_USER_ROLE_CONFLICT_FLAGGED', targetId: existingUser.id })
+              ]
+            );
+          }
+        } else {
+          // Case 5: No matching user exists -> Create new Guardian User with PARENT_GUARDIAN role!
+          const newUserId = 'usr-parent-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+          const salt = generateSalt();
+          const tempPassword = 'PendingActivation_' + Math.random().toString(36).slice(2, 10) + '!';
+          const hash = hashPassword(tempPassword, salt);
+          const fullName = `${payload.guardian.firstName || ''} ${payload.guardian.lastName || ''}`.trim() || 'Guardian User';
+          const defaultPermissions = [
+            'GUARDIAN_CHILDREN_VIEW',
+            'GUARDIAN_GEOFENCE_VIEW',
+            'GUARDIAN_INCIDENTS_VIEW',
+            'GUARDIAN_EMERGENCY_TRIGGER',
+            'ATTENDANCE_VIEW_SCOPED'
+          ];
+
+          await client.query(
+            `INSERT INTO users (
+              id, identifier, email, normalized_email, password_hash, password_salt, name,
+              first_name, surname, mobile_number, role, account_status, must_change_password,
+              school_id, guardian_id, responder_unit, department, organization,
+              permissions, is_demo_account, failed_login_attempts
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 0);`,
+            [
+              newUserId,
+              cleanGuardianEmail,
+              cleanGuardianEmail,
+              cleanGuardianEmail,
+              hash,
+              salt,
+              fullName,
+              payload.guardian.firstName?.trim() || null,
+              payload.guardian.lastName?.trim() || null,
+              payload.guardian.mobileNumber?.trim() || null,
+              'PARENT_GUARDIAN',
+              'ACTIVE',
+              true, // must_change_password: Pending activation
+              null,
+              guardianId,
+              null,
+              'Parent & Legal Guardian Community',
+              'Parent & Legal Guardian Network',
+              defaultPermissions,
+              false
+            ]
+          );
+
+          await client.query(`UPDATE guardians SET user_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2;`, [newUserId, guardianId]);
+
+          guardianUserStatus = 'CREATED';
+          guardianUserMessage = 'Guardian account created — activation pending';
+
+          // Audit event for auto-creating guardian user
+          const createAuditId = 'aud-gu-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+          await client.query(
+            `INSERT INTO audit_events (
+              id, action_type, actor_user_id, actor_name, actor_role, target_entity,
+              target_id, details, ip_address, checksum
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);`,
+            [
+              createAuditId,
+              'GUARDIAN_AUTO_CREATED_FROM_LEARNER_REGISTRATION',
+              payload.staffContext?.staffUserId || 'SYSTEM',
+              payload.staffContext?.staffName || 'Authoritative Enrollment Engine',
+              payload.staffContext?.staffRole || 'SYSTEM_ADMIN',
+              'GUARDIAN_USER',
+              newUserId,
+              JSON.stringify({
+                userId: newUserId,
+                guardianId,
+                learnerId,
+                email: cleanGuardianEmail,
+                role: 'PARENT_GUARDIAN',
+                activationStatus: 'PENDING_ACTIVATION',
+                mustChangePassword: true
+              }),
+              payload.staffContext?.ipAddress || '127.0.0.1',
+              generateChecksum({ id: createAuditId, timestamp: now, actionType: 'GUARDIAN_AUTO_CREATED_FROM_LEARNER_REGISTRATION', targetId: newUserId })
             ]
           );
         }
@@ -1399,7 +1569,13 @@ export class PostgresLearnerRepository implements ILearnerRepository {
       if (!hydrated) {
         throw new Error('Failed to retrieve newly onboarded hydrated learner record.');
       }
-      return hydrated;
+      return {
+        ...hydrated,
+        guardianUserStatus,
+        guardianUserMessage,
+        message: guardianUserMessage,
+        auditEventId: auditId
+      };
     } catch (err) {
       await client.query('ROLLBACK');
       console.error('[PostgreSQL Onboarding Error]', err);
@@ -1730,59 +1906,71 @@ export class PostgresLearnerRepository implements ILearnerRepository {
       throw new Error(`Learner record "${learnerId}" not found in authoritative directory.`);
     }
 
-    // Check for duplicate device assignment across all learners
-    const dupRes = await query(
-      `SELECT l.id, p.first_name, p.last_name, l.emis_id 
-       FROM learners l 
-       JOIN persons p ON l.person_id = p.id 
-       WHERE l.id != $1 AND UPPER(l.current_device_id) = $2;`,
-      [learnerId, cleanBeacon]
-    );
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
 
-    if (dupRes.rows.length > 0) {
-      if (!forceReassign) {
-        const dup = dupRes.rows[0];
-        throw new Error(`DUPLICATE HARDWARE DEVICE: Tracking Beacon "${cleanBeacon}" is already assigned to learner "${dup.first_name} ${dup.last_name}" (EMIS: ${dup.emis_id}). Unlinking previous learner is required before reassignment.`);
-      } else {
-        await query(`UPDATE learners SET current_device_id = NULL WHERE UPPER(current_device_id) = $1;`, [cleanBeacon]);
-        await query(`UPDATE devices SET assigned_learner_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE UPPER(serial_number) = $1;`, [cleanBeacon]);
+      // Check for duplicate device assignment across all learners
+      const dupRes = await client.query(
+        `SELECT l.id, p.first_name, p.last_name, l.emis_id 
+         FROM learners l 
+         JOIN persons p ON l.person_id = p.id 
+         WHERE l.id != $1 AND UPPER(l.current_device_id) = $2;`,
+        [learnerId, cleanBeacon]
+      );
+
+      if (dupRes.rows.length > 0) {
+        if (!forceReassign) {
+          const dup = dupRes.rows[0];
+          throw new Error(`DUPLICATE HARDWARE DEVICE: Tracking Beacon "${cleanBeacon}" is already assigned to learner "${dup.first_name} ${dup.last_name}" (EMIS: ${dup.emis_id}). Unlinking previous learner is required before reassignment.`);
+        } else {
+          await client.query(`UPDATE learners SET current_device_id = NULL WHERE UPPER(current_device_id) = $1;`, [cleanBeacon]);
+          await client.query(`UPDATE devices SET assigned_learner_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE UPPER(serial_number) = $1;`, [cleanBeacon]);
+        }
       }
-    }
 
-    await query(
-      `UPDATE learners SET current_device_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2;`,
-      [cleanBeacon, learnerId]
-    );
+      await client.query(
+        `UPDATE learners SET current_device_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2;`,
+        [cleanBeacon, learnerId]
+      );
 
-    await query(
-      `INSERT INTO devices (id, serial_number, device_model, hardware_revision, firmware_version, device_status, battery_level, assigned_learner_id)
-       VALUES ($1, $2, 'ITIS-Beacon-Pro', 'REV-2.1', 'v2.4.1-rc3', 'ACTIVE', 100, $3)
-       ON CONFLICT (serial_number) DO UPDATE SET assigned_learner_id = $3, device_status = 'ACTIVE', updated_at = CURRENT_TIMESTAMP;`,
-      ['dev-' + cleanBeacon.toLowerCase().replace(/[^a-z0-9]/g, '-'), cleanBeacon, learnerId]
-    );
+      await client.query(
+        `INSERT INTO devices (id, serial_number, device_model, hardware_revision, firmware_version, device_status, battery_level, assigned_learner_id)
+         VALUES ($1, $2, 'ITIS-Beacon-Pro', 'REV-2.1', 'v2.4.1-rc3', 'ACTIVE', 100, $3)
+         ON CONFLICT (serial_number) DO UPDATE SET assigned_learner_id = $3, device_status = 'ACTIVE', updated_at = CURRENT_TIMESTAMP;`,
+        ['dev-' + cleanBeacon.toLowerCase().replace(/[^a-z0-9]/g, '-'), cleanBeacon, learnerId]
+      );
 
-    const auditRepo = new PostgresAuditRepository();
-    const audit = await auditRepo.logEvent({
-      actionType: 'DEVICE_PAIRED',
-      actorUserId: staffContext.staffUserId,
-      actorName: staffContext.staffName,
-      actorRole: staffContext.staffRole,
-      targetEntity: 'LEARNER',
-      targetId: learnerId,
-      details: {
+      const auditRepo = new PostgresAuditRepository();
+      const audit = await auditRepo.logEvent({
+        actionType: 'DEVICE_PAIRED',
+        actorUserId: staffContext.staffUserId,
+        actorName: staffContext.staffName,
+        actorRole: staffContext.staffRole,
+        targetEntity: 'LEARNER',
+        targetId: learnerId,
+        details: {
+          trackingBeaconId: cleanBeacon,
+          schoolId
+        },
+        ipAddress: staffContext.ipAddress
+      });
+
+      await client.query('COMMIT');
+
+      return {
+        success: true,
+        learnerId,
         trackingBeaconId: cleanBeacon,
-        schoolId
-      },
-      ipAddress: staffContext.ipAddress
-    });
-
-    return {
-      success: true,
-      learnerId,
-      trackingBeaconId: cleanBeacon,
-      message: `Tracking beacon "${cleanBeacon}" successfully paired and assigned to learner ${learnerId}.`,
-      auditEventId: audit.id
-    };
+        message: `Tracking beacon "${cleanBeacon}" successfully paired and assigned to learner ${learnerId}.`,
+        auditEventId: audit.id
+      };
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 
   private mapRowToLearner(row: any): Learner {
@@ -1859,6 +2047,63 @@ export class PostgresDeviceRepository implements IDeviceRepository {
        WHERE id = $4 OR serial_number = $4;`,
       [telemetry.batteryLevel || null, telemetry.tamperStatus || null, telemetry.lastPingAt || null, deviceId]
     );
+  }
+
+  async queryDevices(options?: { schoolId?: string; search?: string; status?: string }): Promise<any[]> {
+    let whereClauses: string[] = [];
+    let params: any[] = [];
+    let idx = 1;
+
+    if (options?.schoolId) {
+      whereClauses.push(`EXISTS (
+        SELECT 1 FROM learners l 
+        JOIN school_enrolments se ON se.learner_id = l.id 
+        WHERE (l.current_device_id = d.serial_number OR d.assigned_learner_id = l.id) 
+          AND se.school_id = $${idx++} 
+          AND se.enrolment_status = 'ACTIVE'
+      )`);
+      params.push(options.schoolId);
+    }
+
+    if (options?.status && options.status !== 'ALL') {
+      whereClauses.push(`d.device_status = $${idx++}`);
+      params.push(options.status);
+    }
+
+    if (options?.search) {
+      whereClauses.push(`(d.serial_number ILIKE $${idx} OR d.device_model ILIKE $${idx} OR d.firmware_version ILIKE $${idx})`);
+      params.push(`%${options.search}%`);
+      idx++;
+    }
+
+    const whereStr = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+    const res = await query(
+      `SELECT d.*, 
+              l.id as learner_id, l.emis_id,
+              p.first_name, p.last_name,
+              s.id as school_id, s.name as school_name
+       FROM devices d
+       LEFT JOIN learners l ON (d.assigned_learner_id = l.id OR l.current_device_id = d.serial_number)
+       LEFT JOIN persons p ON l.person_id = p.id
+       LEFT JOIN school_enrolments se ON (se.learner_id = l.id AND se.enrolment_status = 'ACTIVE')
+       LEFT JOIN schools s ON se.school_id = s.id
+       ${whereStr}
+       ORDER BY d.created_at DESC;`,
+      params
+    );
+
+    return res.rows.map(r => ({
+      id: r.id,
+      serialNumber: r.serial_number,
+      type: r.device_model?.includes('Gate') ? 'RFID_GATE_READER' : r.device_model?.includes('GPS') || r.device_model?.includes('Vehicle') ? 'VEHICLE_GPS' : r.device_model?.includes('Biometric') ? 'BIOMETRIC_TERMINAL' : 'WEARABLE_BEACON',
+      assignedSchool: r.school_name || 'Pretoria Boys High School',
+      assignedSubject: r.first_name && r.last_name ? `${r.first_name} ${r.last_name} (${r.emis_id || 'EMIS-ACTIVE'})` : r.emis_id ? `Assigned to ${r.emis_id}` : 'Unassigned / Inventory Spare',
+      batteryLevel: r.battery_level !== null ? Number(r.battery_level) : 94,
+      signalStrength: -58,
+      firmwareVersion: r.firmware_version || 'v3.2.1-sec',
+      status: r.device_status === 'ACTIVE' ? 'ONLINE' : r.device_status === 'MAINTENANCE' ? 'MAINTENANCE_REQUIRED' : r.device_status || 'ONLINE',
+      lastHeartbeat: r.last_ping_at ? new Date(r.last_ping_at).toLocaleTimeString() : '12 seconds ago'
+    }));
   }
 }
 

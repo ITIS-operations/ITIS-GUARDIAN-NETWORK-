@@ -88,6 +88,7 @@ export interface Learner {
 export interface Guardian {
   id: string;
   personId: string;
+  userId?: string;
   saIdNumber: string; // e.g. 8503125192084
   saIdMasked: string; // e.g. 850312*****84
   idVerified: boolean;
@@ -182,6 +183,10 @@ export interface HydratedLearnerRecord {
     relationship: GuardianLearnerRelationship;
   }>;
   recentIncident?: IncidentAlert;
+  guardianUserStatus?: 'CREATED' | 'LINKED' | 'CONFLICT' | 'SKIPPED';
+  guardianUserMessage?: string;
+  message?: string;
+  auditEventId?: string;
 }
 
 // Identity Search Match Result
@@ -615,6 +620,7 @@ export type AccountStatus = 'ACTIVE' | 'SUSPENDED' | 'DISABLED';
 export interface PlatformUserItem {
   id: string;
   email: string;
+  normalizedEmail?: string;
   aliases?: string[];
   name: string;
   firstName?: string;

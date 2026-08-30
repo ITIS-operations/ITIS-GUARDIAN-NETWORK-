@@ -486,6 +486,37 @@ export class AuthoritativeRbacEngine {
       }
     }
 
+    // 5b. ABAC: School Staff -> Learner Institutional Enrollment Enforcement
+    if (context?.learnerId && (user.role === 'SCHOOL_PRINCIPAL' || user.role === 'SCHOOL_ADMIN_STAFF')) {
+      if (!user.schoolId) {
+        return {
+          allowed: false,
+          statusCode: 403,
+          reason: 'ACCESS DENIED: User has School Staff role but lacks assigned institutional schoolId.',
+          auditActionRequired: true,
+          auditAction: 'UNAUTHORIZED_ACCESS_DENIED',
+          auditDetails: { userId: user.id, role: user.role, violation: 'UNASSIGNED_SCHOOL_STAFF_SESSION' }
+        };
+      }
+      if (helpers?.isLearnerEnrolledInSchool) {
+        const isEnrolled = await helpers.isLearnerEnrolledInSchool(context.learnerId, user.schoolId);
+        if (!isEnrolled) {
+          return {
+            allowed: false,
+            statusCode: 403,
+            reason: `ACCESS DENIED: Institutional boundary violation. Learner '${context.learnerId}' is not enrolled in your institution '${user.schoolId}'.`,
+            auditActionRequired: true,
+            auditAction: 'UNAUTHORIZED_ACCESS_DENIED',
+            auditDetails: {
+              schoolId: user.schoolId,
+              unlinkedLearnerId: context.learnerId,
+              violation: 'CROSS_SCHOOL_LEARNER_ACCESS_BLOCKED'
+            }
+          };
+        }
+      }
+    }
+
     // 6. ABAC: Guardian -> Child Legal Relationship Enforcement
     if (user.role === 'PARENT_GUARDIAN' && context?.learnerId) {
       if (!user.guardianId) {

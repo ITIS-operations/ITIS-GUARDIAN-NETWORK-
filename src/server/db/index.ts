@@ -9,4 +9,5 @@ export { ProductionMigrationEngine };
 export type { IDataRepository } from './repository.js';
 export { PostgresDataRepository } from './postgresRepository.js';
 export { bootstrapDatabase } from './bootstrap.js';
-export { pool, query, isPostgresConnected } from './client.js';
+export { pool, query, isPostgresConnected, withTransaction, determineConnectionMode } from './client.js';
+

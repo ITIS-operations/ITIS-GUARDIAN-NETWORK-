@@ -117,6 +117,7 @@ export interface IDeviceRepository {
   findById(id: string): Promise<any | null>;
   findBySerialNumber(serialNumber: string): Promise<any | null>;
   findAssignedToLearner(learnerId: string): Promise<any | null>;
+  queryDevices?(options?: { schoolId?: string; search?: string; status?: string }): Promise<any[]>;
   assignToLearner(deviceId: string, learnerId: string, assignedByUserId: string): Promise<void>;
   updateDiagnostic(deviceId: string, telemetry: { batteryLevel?: number; tamperStatus?: string; lastPingAt?: string }): Promise<void>;
 }

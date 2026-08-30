@@ -1549,6 +1549,30 @@ export const AuthoritativeEnrolmentModal: React.FC<Props> = ({
                   </p>
                 </div>
 
+                {/* Guardian Account Provisioning / Linking Status Banner */}
+                {submissionSuccess.guardianUserMessage && (
+                  <div className={`p-3 rounded-xl border max-w-xl mx-auto text-left text-xs flex items-start gap-2.5 ${
+                    submissionSuccess.guardianUserStatus === 'CREATED'
+                      ? 'bg-cyan-950/60 border-cyan-700/80 text-cyan-200'
+                      : submissionSuccess.guardianUserStatus === 'LINKED'
+                      ? 'bg-emerald-950/60 border-emerald-700/80 text-emerald-200'
+                      : submissionSuccess.guardianUserStatus === 'CONFLICT'
+                      ? 'bg-amber-950/60 border-amber-700/80 text-amber-200'
+                      : 'bg-slate-900 border-slate-800 text-slate-300'
+                  }`}>
+                    <ShieldCheck className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <div className="font-bold text-[11px] uppercase tracking-wider font-mono">
+                        {submissionSuccess.guardianUserStatus === 'CREATED' && 'Guardian User Account Auto-Created'}
+                        {submissionSuccess.guardianUserStatus === 'LINKED' && 'Existing Guardian Account Linked'}
+                        {submissionSuccess.guardianUserStatus === 'CONFLICT' && 'Account Notice / Administrative Role Match'}
+                        {(!submissionSuccess.guardianUserStatus || submissionSuccess.guardianUserStatus === 'SKIPPED') && 'Identity Registry Status'}
+                      </div>
+                      <p className="mt-0.5 text-xs opacity-90">{submissionSuccess.guardianUserMessage}</p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Audit and Certificate Reference */}
                 <div className="p-3.5 rounded-xl bg-slate-950/80 border border-emerald-900/60 max-w-xl mx-auto text-left font-mono text-xs space-y-1.5">
                   <div className="flex justify-between">
