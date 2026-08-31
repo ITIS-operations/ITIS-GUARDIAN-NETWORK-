@@ -379,7 +379,7 @@ export class PostgresUserRepository implements IUserRepository {
         if (!matchedPersonId) {
           await query(
             `INSERT INTO persons (
-              id, official_id, id_type, first_name, last_name, date_of_birth,
+              id, official_id, official_id_type, first_name, last_name, date_of_birth,
               gender, mobile_number, mobile_verified, email, email_verified,
               is_verified, verification_source
             ) VALUES ($1, $2, 'SA_ID', $3, $4, '1985-01-01', 'UNDISCLOSED', $5, TRUE, $6, TRUE, TRUE, 'DHA_NPR_LOOKUP');`,
@@ -418,12 +418,14 @@ export class PostgresUserRepository implements IUserRepository {
 
     await query(
       `INSERT INTO users (
-        id, email, name, first_name, surname, mobile_number, role,
+        id, email, normalized_email, identifier, name, first_name, surname, mobile_number, role,
         password_hash, password_salt, school_id, guardian_id, responder_unit,
-        department, organization, permissions, status, is_demo_account, must_change_password
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, 'ACTIVE', FALSE, FALSE);`,
+        department, organization, permissions, account_status, is_demo_account, must_change_password
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, 'ACTIVE', FALSE, FALSE);`,
       [
         id,
+        cleanEmail,
+        cleanEmail,
         cleanEmail,
         fullName,
         params.firstName?.trim() || null,
@@ -1071,6 +1073,10 @@ export class PostgresLearnerRepository implements ILearnerRepository {
       whereClauses.push(`EXISTS (SELECT 1 FROM guardian_learner_relationships glr WHERE glr.learner_id = l.id AND glr.guardian_id = $${paramIndex++} AND glr.access_status = 'ACTIVE')`);
       params.push(options.guardianId);
     }
+    if (options?.learnerIds && options.learnerIds.length > 0) {
+      whereClauses.push(`l.id = ANY($${paramIndex++}::varchar[])`);
+      params.push(options.learnerIds);
+    }
     if (options?.search) {
       whereClauses.push(`(p.first_name ILIKE $${paramIndex} OR p.last_name ILIKE $${paramIndex} OR l.emis_id ILIKE $${paramIndex} OR l.admission_number ILIKE $${paramIndex})`);
       params.push(`%${options.search}%`);
@@ -1143,9 +1149,30 @@ export class PostgresLearnerRepository implements ILearnerRepository {
         }
       }
 
-      // 1. Learner Person
+      // 1. Learner Person & Duplicate Learner Prevention
       let learnerPersonId = (payload.learner as any).existingPersonId;
-      const learnerOfficialId = payload.learner.officialId || payload.learner.emisId;
+      const learnerOfficialId = payload.learner.officialId || (payload.learner as any).saIdNumber;
+
+      if (!payload.learner.existingLearnerId) {
+        if (learnerOfficialId) {
+          const pCheck = await client.query(
+            `SELECT p.id as person_id, l.id as learner_id, p.first_name, p.last_name 
+             FROM persons p 
+             JOIN learners l ON l.person_id = p.id 
+             WHERE p.official_id = $1 LIMIT 1;`,
+            [learnerOfficialId]
+          );
+          if (pCheck.rows.length > 0) {
+            throw new Error(`DUPLICATE LEARNER IDENTITY: A learner with Official ID '${learnerOfficialId}' is already registered (${pCheck.rows[0].first_name} ${pCheck.rows[0].last_name}, ID: ${pCheck.rows[0].learner_id}).`);
+          }
+        }
+        if (payload.learner.emisId) {
+          const eCheck = await client.query('SELECT id, emis_id FROM learners WHERE emis_id = $1 LIMIT 1;', [payload.learner.emisId]);
+          if (eCheck.rows.length > 0) {
+            throw new Error(`DUPLICATE LEARNER IDENTITY: A learner with EMIS ID '${payload.learner.emisId}' is already registered (${eCheck.rows[0].id}).`);
+          }
+        }
+      }
 
       if (!learnerPersonId && learnerOfficialId) {
         const pCheck = await client.query('SELECT id FROM persons WHERE official_id = $1 LIMIT 1;', [learnerOfficialId]);
@@ -1182,23 +1209,39 @@ export class PostgresLearnerRepository implements ILearnerRepository {
       }
 
       // 2. Learner Record
-      const learnerId = payload.learner.existingLearnerId || ('lrn-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6));
+      let learnerId = payload.learner.existingLearnerId;
+      if (!learnerId && learnerPersonId) {
+        const lCheck = await client.query('SELECT id FROM learners WHERE person_id = $1 LIMIT 1;', [learnerPersonId]);
+        if (lCheck.rows.length > 0) {
+          learnerId = lCheck.rows[0].id;
+        }
+      }
+      if (!learnerId && payload.learner.emisId) {
+        const lEmisCheck = await client.query('SELECT id FROM learners WHERE emis_id = $1 LIMIT 1;', [payload.learner.emisId]);
+        if (lEmisCheck.rows.length > 0) {
+          learnerId = lEmisCheck.rows[0].id;
+        }
+      }
+      if (!learnerId) {
+        learnerId = 'lrn-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+      }
+      const effectiveEmisId = payload.learner.emisId || ('EMIS-L-' + Math.floor(1000000 + Math.random() * 9000000));
       await client.query(
         `INSERT INTO learners (
           id, person_id, emis_id, admission_number, blood_group, medical_allergies,
           chronic_conditions, emergency_notes, tracking_consent_status, current_device_id
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'CONSENTED', $9)
         ON CONFLICT (id) DO UPDATE SET
-          emis_id = EXCLUDED.emis_id,
-          admission_number = EXCLUDED.admission_number,
+          emis_id = COALESCE(EXCLUDED.emis_id, learners.emis_id),
+          admission_number = COALESCE(EXCLUDED.admission_number, learners.admission_number),
           blood_group = EXCLUDED.blood_group,
           current_device_id = EXCLUDED.current_device_id,
           updated_at = CURRENT_TIMESTAMP;`,
         [
           learnerId,
           learnerPersonId,
-          payload.learner.emisId,
-          payload.learner.emisId,
+          effectiveEmisId,
+          effectiveEmisId,
           payload.learner.bloodType || null,
           payload.learner.allergies || [],
           [],
@@ -1249,6 +1292,19 @@ export class PostgresLearnerRepository implements ILearnerRepository {
       let guardianId = payload.guardian.existingGuardianId;
       let guardianPersonId: string | undefined;
 
+      const cleanGuardianEmail = payload.guardian.email ? normalizeEmail(payload.guardian.email) : null;
+
+      // 5a. Try resolving guardian from existing user by normalized email
+      if (!guardianId && cleanGuardianEmail) {
+        const uGCheck = await client.query(
+          `SELECT guardian_id FROM users WHERE (normalized_email = $1 OR LOWER(TRIM(email)) = $1 OR identifier = $1) AND guardian_id IS NOT NULL LIMIT 1;`,
+          [cleanGuardianEmail]
+        );
+        if (uGCheck.rows.length > 0 && uGCheck.rows[0].guardian_id) {
+          guardianId = uGCheck.rows[0].guardian_id;
+        }
+      }
+
       if (guardianId) {
         const gCheck = await client.query('SELECT person_id FROM guardians WHERE id = $1 LIMIT 1;', [guardianId]);
         if (gCheck.rows.length > 0) {
@@ -1263,7 +1319,12 @@ export class PostgresLearnerRepository implements ILearnerRepository {
         }
       }
 
-      const cleanGuardianEmail = payload.guardian.email ? normalizeEmail(payload.guardian.email) : null;
+      if (!guardianPersonId && cleanGuardianEmail) {
+        const pEmailCheck = await client.query('SELECT id FROM persons WHERE LOWER(TRIM(email)) = $1 LIMIT 1;', [cleanGuardianEmail]);
+        if (pEmailCheck.rows.length > 0) {
+          guardianPersonId = pEmailCheck.rows[0].id;
+        }
+      }
 
       if (!guardianPersonId) {
         guardianPersonId = 'per-g-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
@@ -1280,7 +1341,7 @@ export class PostgresLearnerRepository implements ILearnerRepository {
             updated_at = CURRENT_TIMESTAMP;`,
           [
             guardianPersonId,
-            payload.guardian.saIdNumber,
+            payload.guardian.saIdNumber || null,
             payload.guardian.firstName,
             payload.guardian.lastName,
             payload.guardian.mobileNumber,
@@ -1321,7 +1382,7 @@ export class PostgresLearnerRepository implements ILearnerRepository {
         }
       }
 
-      // 5b. GUARDIAN USER AUTO-CREATION & IDENTITY LINKING (DUPLICATE-SAFE)
+      // 5b. GUARDIAN USER AUTO-CREATION & IDENTITY LINKING (DUPLICATE-SAFE & IDEMPOTENT)
       let guardianUserStatus: 'CREATED' | 'LINKED' | 'CONFLICT' | 'SKIPPED' = 'SKIPPED';
       let guardianUserMessage = 'No guardian email provided';
 
@@ -1329,7 +1390,7 @@ export class PostgresLearnerRepository implements ILearnerRepository {
         // Search existing users by normalized email, email, identifier or aliases
         const userCheck = await client.query(
           `SELECT id, role, guardian_id, email, name, account_status FROM users 
-           WHERE normalized_email = $1 OR email = $1 OR identifier = $1 OR $1 = ANY(aliases) LIMIT 1;`,
+           WHERE normalized_email = $1 OR LOWER(TRIM(email)) = $1 OR identifier = $1 OR $1 = ANY(aliases) LIMIT 1;`,
           [cleanGuardianEmail]
         );
 
@@ -1420,13 +1481,17 @@ export class PostgresLearnerRepository implements ILearnerRepository {
             'ATTENDANCE_VIEW_SCOPED'
           ];
 
-          await client.query(
+          const userInsertRes = await client.query(
             `INSERT INTO users (
               id, identifier, email, normalized_email, password_hash, password_salt, name,
               first_name, surname, mobile_number, role, account_status, must_change_password,
               school_id, guardian_id, responder_unit, department, organization,
               permissions, is_demo_account, failed_login_attempts
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 0);`,
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, 0)
+            ON CONFLICT (email) DO UPDATE SET
+              guardian_id = COALESCE(users.guardian_id, EXCLUDED.guardian_id),
+              updated_at = CURRENT_TIMESTAMP
+            RETURNING id;`,
             [
               newUserId,
               cleanGuardianEmail,
@@ -1451,7 +1516,8 @@ export class PostgresLearnerRepository implements ILearnerRepository {
             ]
           );
 
-          await client.query(`UPDATE guardians SET user_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2;`, [newUserId, guardianId]);
+          const finalUserId = userInsertRes.rows[0]?.id || newUserId;
+          await client.query(`UPDATE guardians SET user_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2;`, [finalUserId, guardianId]);
 
           guardianUserStatus = 'CREATED';
           guardianUserMessage = 'Guardian account created — activation pending';
@@ -1470,9 +1536,9 @@ export class PostgresLearnerRepository implements ILearnerRepository {
               payload.staffContext?.staffName || 'Authoritative Enrollment Engine',
               payload.staffContext?.staffRole || 'SYSTEM_ADMIN',
               'GUARDIAN_USER',
-              newUserId,
+              finalUserId,
               JSON.stringify({
-                userId: newUserId,
+                userId: finalUserId,
                 guardianId,
                 learnerId,
                 email: cleanGuardianEmail,
@@ -1481,7 +1547,7 @@ export class PostgresLearnerRepository implements ILearnerRepository {
                 mustChangePassword: true
               }),
               payload.staffContext?.ipAddress || '127.0.0.1',
-              generateChecksum({ id: createAuditId, timestamp: now, actionType: 'GUARDIAN_AUTO_CREATED_FROM_LEARNER_REGISTRATION', targetId: newUserId })
+              generateChecksum({ id: createAuditId, timestamp: now, actionType: 'GUARDIAN_AUTO_CREATED_FROM_LEARNER_REGISTRATION', targetId: finalUserId })
             ]
           );
         }
@@ -1502,10 +1568,10 @@ export class PostgresLearnerRepository implements ILearnerRepository {
           relationshipId,
           guardianId,
           learnerId,
-          payload.relationship.relationshipType || 'LEGAL_GUARDIAN',
-          payload.relationship.isPrimary ?? true,
-          payload.relationship.legalCustodyVerified ?? true,
-          payload.relationship.authorizedForPickup ?? true
+          payload.relationship?.relationshipType || (payload.guardian as any)?.relationshipType || 'LEGAL_GUARDIAN',
+          payload.relationship?.isPrimary ?? (payload.guardian as any)?.isPrimary ?? true,
+          payload.relationship?.legalCustodyVerified ?? true,
+          payload.relationship?.authorizedForPickup ?? true
         ]
       );
 
@@ -2112,7 +2178,31 @@ export class PostgresDeviceRepository implements IDeviceRepository {
 // ----------------------------------------------------
 export class PostgresIncidentRepository implements IIncidentRepository {
   async findById(id: string): Promise<IncidentAlert | null> {
-    const res = await query(`SELECT * FROM incidents WHERE id = $1;`, [id]);
+    const res = await query(
+      `SELECT 
+        inc.*,
+        p.first_name || ' ' || p.last_name as learner_name,
+        COALESCE(se.grade, 'Grade 10') as learner_grade,
+        s.name as school_name,
+        gp.first_name || ' ' || gp.last_name as guardian_name,
+        gp.mobile_number as guardian_mobile
+      FROM incidents inc
+      LEFT JOIN learners l ON inc.learner_id = l.id
+      LEFT JOIN persons p ON l.person_id = p.id
+      LEFT JOIN school_enrolments se ON (se.learner_id = l.id AND se.enrolment_status = 'ACTIVE')
+      LEFT JOIN schools s ON inc.school_id = s.id
+      LEFT JOIN LATERAL (
+        SELECT gp_sub.first_name, gp_sub.last_name, COALESCE(g.mobile_number, gp_sub.mobile_number, gp_sub.primary_contact) as mobile_number
+        FROM guardian_learner_relationships glr
+        JOIN guardians g ON glr.guardian_id = g.id
+        JOIN persons gp_sub ON g.person_id = gp_sub.id
+        WHERE glr.learner_id = inc.learner_id AND glr.access_status = 'ACTIVE'
+        ORDER BY glr.created_at ASC
+        LIMIT 1
+      ) gp ON true
+      WHERE inc.id = $1;`,
+      [id]
+    );
     if (res.rows.length === 0) return null;
     return this.mapRowToIncident(res.rows[0]);
   }
@@ -2127,32 +2217,55 @@ export class PostgresIncidentRepository implements IIncidentRepository {
     let paramIndex = 1;
 
     if (options?.schoolId) {
-      whereClauses.push(`school_id = $${paramIndex++}`);
+      whereClauses.push(`inc.school_id = $${paramIndex++}`);
       params.push(options.schoolId);
     }
     if (options?.learnerId) {
-      whereClauses.push(`learner_id = $${paramIndex++}`);
+      whereClauses.push(`inc.learner_id = $${paramIndex++}`);
       params.push(options.learnerId);
     }
     if (options?.activeOnly) {
-      whereClauses.push(`status != 'RESOLVED'`);
+      whereClauses.push(`inc.status != 'RESOLVED'`);
     }
     if (options?.status) {
-      whereClauses.push(`status = $${paramIndex++}`);
+      whereClauses.push(`inc.status = $${paramIndex++}`);
       params.push(options.status);
     }
     if (options?.severity) {
-      whereClauses.push(`severity = $${paramIndex++}`);
+      whereClauses.push(`inc.severity = $${paramIndex++}`);
       params.push(options.severity);
     }
 
     const whereStr = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
-    const countRes = await query(`SELECT COUNT(*) as total FROM incidents ${whereStr};`, params);
+    const countRes = await query(`SELECT COUNT(*) as total FROM incidents inc ${whereStr};`, params);
     const total = parseInt(countRes.rows[0].total, 10);
 
     const dataRes = await query(
-      `SELECT * FROM incidents ${whereStr} ORDER BY triggered_at DESC LIMIT $${paramIndex++} OFFSET $${paramIndex++};`,
+      `SELECT 
+        inc.*,
+        p.first_name || ' ' || p.last_name as learner_name,
+        COALESCE(se.grade, 'Grade 10') as learner_grade,
+        s.name as school_name,
+        gp.first_name || ' ' || gp.last_name as guardian_name,
+        gp.mobile_number as guardian_mobile
+      FROM incidents inc
+      LEFT JOIN learners l ON inc.learner_id = l.id
+      LEFT JOIN persons p ON l.person_id = p.id
+      LEFT JOIN school_enrolments se ON (se.learner_id = l.id AND se.enrolment_status = 'ACTIVE')
+      LEFT JOIN schools s ON inc.school_id = s.id
+      LEFT JOIN LATERAL (
+        SELECT gp_sub.first_name, gp_sub.last_name, COALESCE(g.mobile_number, gp_sub.mobile_number, gp_sub.primary_contact) as mobile_number
+        FROM guardian_learner_relationships glr
+        JOIN guardians g ON glr.guardian_id = g.id
+        JOIN persons gp_sub ON g.person_id = gp_sub.id
+        WHERE glr.learner_id = inc.learner_id AND glr.access_status = 'ACTIVE'
+        ORDER BY glr.created_at ASC
+        LIMIT 1
+      ) gp ON true
+      ${whereStr} 
+      ORDER BY inc.triggered_at DESC 
+      LIMIT $${paramIndex++} OFFSET $${paramIndex++};`,
       [...params, limit, offset]
     );
 
@@ -2199,7 +2312,7 @@ export class PostgresIncidentRepository implements IIncidentRepository {
         alert.timestamp || now
       ]
     );
-    return this.mapRowToIncident(res.rows[0]);
+    return (await this.findById(id)) || this.mapRowToIncident(res.rows[0]);
   }
 
   async update(id: string, updates: Partial<IncidentAlert>): Promise<IncidentAlert> {
@@ -2233,7 +2346,7 @@ export class PostgresIncidentRepository implements IIncidentRepository {
         id
       ]
     );
-    return this.mapRowToIncident(res.rows[0]);
+    return (await this.findById(id)) || this.mapRowToIncident(res.rows[0]);
   }
 
   async updateStatus(incidentId: string, status: string, notes?: string): Promise<IncidentAlert> {
@@ -2250,7 +2363,7 @@ export class PostgresIncidentRepository implements IIncidentRepository {
        RETURNING *;`,
       [status, newNotes, resolvedAt, incidentId]
     );
-    return this.mapRowToIncident(res.rows[0]);
+    return (await this.findById(incidentId)) || this.mapRowToIncident(res.rows[0]);
   }
 
   async getTimelineEvents(incidentId: string): Promise<any[]> {

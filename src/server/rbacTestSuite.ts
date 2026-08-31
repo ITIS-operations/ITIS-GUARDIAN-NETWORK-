@@ -579,6 +579,117 @@ export class RbacSecurityTestSuite {
       evidence: t23Decision.reason || 'Blocked'
     });
 
+    // TEST 24: Command Operator attempts to inspect unrelated learner dossier (Blocked)
+    const t24Decision = await rbacEngine.evaluateAccess(
+      commandUser,
+      'LEARNERS_VIEW_SCOPED',
+      { learnerId: 'lrn-unrelated-999' },
+      {
+        isGuardianLinkedToLearner: isGuardianLinked,
+        isIncidentAssignedToResponder: isIncidentAssigned,
+        isLearnerInvolvedInIncident: (learnerId: string) => learnerId === 'lrn-001'
+      }
+    );
+    results.push({
+      id: 'SEC-TEST-24',
+      role: 'COMMAND_OPERATOR',
+      scenario: 'Command Operator attempts to view dossier of learner not tied to any emergency incident (Forbidden)',
+      targetEndpoint: 'GET /api/learners/lrn-unrelated-999',
+      attemptedOperation: 'LEARNERS_VIEW_SCOPED',
+      expectedStatus: 403,
+      actualStatus: t24Decision.statusCode,
+      passed: t24Decision.statusCode === 403,
+      blockedBy: 'Command Centre Operational Need-To-Know Scoping (Incident Bound)',
+      auditEventGenerated: t24Decision.auditActionRequired === true,
+      auditAction: t24Decision.auditAction,
+      evidence: t24Decision.reason || 'Blocked'
+    });
+
+    // TEST 25: Command Operator attempts administrative school registry modification (Blocked)
+    const t25Decision = await rbacEngine.evaluateAccess(
+      commandUser,
+      'SCHOOL_RECORDS_MANAGE'
+    );
+    results.push({
+      id: 'SEC-TEST-25',
+      role: 'COMMAND_OPERATOR',
+      scenario: 'Command Operator attempts administrative school registry modification (Forbidden)',
+      targetEndpoint: 'POST /api/schools',
+      attemptedOperation: 'SCHOOL_RECORDS_MANAGE',
+      expectedStatus: 403,
+      actualStatus: t25Decision.statusCode,
+      passed: t25Decision.statusCode === 403,
+      blockedBy: 'Institutional Administration Separation of Duties',
+      auditEventGenerated: t25Decision.auditActionRequired === true,
+      auditAction: t25Decision.auditAction,
+      evidence: t25Decision.reason || 'Blocked'
+    });
+
+    // TEST 26: Command Operator attempts hardware fleet telemetry maintenance (Blocked)
+    const t26Decision = await rbacEngine.evaluateAccess(
+      commandUser,
+      'HARDWARE_MAINTENANCE_UPDATE'
+    );
+    results.push({
+      id: 'SEC-TEST-26',
+      role: 'COMMAND_OPERATOR',
+      scenario: 'Command Operator attempts hardware fleet telemetry maintenance or device re-provisioning (Forbidden)',
+      targetEndpoint: 'POST /api/devices',
+      attemptedOperation: 'HARDWARE_MAINTENANCE_UPDATE',
+      expectedStatus: 403,
+      actualStatus: t26Decision.statusCode,
+      passed: t26Decision.statusCode === 403,
+      blockedBy: 'Hardware Fleet Engineering Boundary',
+      auditEventGenerated: t26Decision.auditActionRequired === true,
+      auditAction: t26Decision.auditAction,
+      evidence: t26Decision.reason || 'Blocked'
+    });
+
+    // TEST 27: Command Operator attempts platform user administration and role management (Blocked)
+    const t27Decision = await rbacEngine.evaluateAccess(
+      commandUser,
+      'USER_IDENTITIES_MANAGE'
+    );
+    results.push({
+      id: 'SEC-TEST-27',
+      role: 'COMMAND_OPERATOR',
+      scenario: 'Command Operator attempts platform user administration and role management (Forbidden)',
+      targetEndpoint: 'POST /api/users',
+      attemptedOperation: 'USER_IDENTITIES_MANAGE',
+      expectedStatus: 403,
+      actualStatus: t27Decision.statusCode,
+      passed: t27Decision.statusCode === 403,
+      blockedBy: 'System Identity Governance Lock (Founder/System Admin Only)',
+      auditEventGenerated: t27Decision.auditActionRequired === true,
+      auditAction: t27Decision.auditAction,
+      evidence: t27Decision.reason || 'Blocked'
+    });
+
+    // TEST 28: Command Operator accesses learner dossier tied to active emergency incident (Allowed)
+    const t28Decision = await rbacEngine.evaluateAccess(
+      commandUser,
+      'LEARNERS_VIEW_SCOPED',
+      { learnerId: 'lrn-001' },
+      {
+        isGuardianLinkedToLearner: isGuardianLinked,
+        isIncidentAssignedToResponder: isIncidentAssigned,
+        isLearnerInvolvedInIncident: (learnerId: string) => learnerId === 'lrn-001'
+      }
+    );
+    results.push({
+      id: 'SEC-TEST-28',
+      role: 'COMMAND_OPERATOR',
+      scenario: 'Command Operator inspects dossier for learner with active emergency incident (Allowed)',
+      targetEndpoint: 'GET /api/learners/lrn-001',
+      attemptedOperation: 'LEARNERS_VIEW_SCOPED',
+      expectedStatus: 200,
+      actualStatus: t28Decision.statusCode,
+      passed: t28Decision.statusCode === 200 && t28Decision.allowed === true,
+      blockedBy: 'None (Authorized Incident Need-To-Know)',
+      auditEventGenerated: false,
+      evidence: 'Access granted under operational emergency handling clearance'
+    });
+
     const passedCount = results.filter(r => r.passed).length;
     const failedCount = results.length - passedCount;
 

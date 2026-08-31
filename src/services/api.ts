@@ -38,33 +38,31 @@ async function safeFetchJson<T>(res: Response, fallbackError: string): Promise<T
   const contentType = res.headers.get('content-type') || '';
   const isJson = contentType.toLowerCase().includes('application/json');
 
-  if (!res.ok) {
-    if (isJson) {
-      try {
-        const errorData = await res.json();
-        throw new Error(errorData.error || errorData.message || fallbackError);
-      } catch (err: any) {
-        if (err.message && err.message !== fallbackError && !err.message.includes('JSON')) {
-          throw err;
-        }
-      }
-    }
-
+  if (!isJson) {
     if (res.status === 404) {
-      throw new Error('Authentication service endpoint not found (HTTP 404). Please verify backend server routing.');
+      throw new Error('API service endpoint not found (HTTP 404). Please verify server routing.');
     } else if (res.status === 401) {
-      throw new Error('Invalid registered credentials. Access Denied.');
+      throw new Error('Invalid credentials or session expired. Access Denied (HTTP 401).');
     } else if (res.status === 403) {
-      throw new Error('Access Denied. Insufficient clearance or permission.');
+      throw new Error('Access Denied. Insufficient clearance or permission (HTTP 403).');
+    } else if (res.status === 409) {
+      throw new Error('Identity or resource conflict (HTTP 409).');
     } else if (res.status >= 500) {
       throw new Error(`Server error encountered (HTTP ${res.status}). Please try again shortly.`);
-    } else {
-      throw new Error(`${fallbackError} (HTTP ${res.status})`);
     }
+    throw new Error('Server returned an unexpected response. Please check the API route.');
   }
 
-  if (!isJson) {
-    throw new Error(`Invalid server response format (expected application/json, received ${contentType || 'non-JSON'}).`);
+  if (!res.ok) {
+    try {
+      const errorData = await res.json();
+      throw new Error(errorData.error || errorData.message || `${fallbackError} (HTTP ${res.status})`);
+    } catch (err: any) {
+      if (err.message && !err.message.includes('JSON')) {
+        throw err;
+      }
+      throw new Error(`${fallbackError} (HTTP ${res.status})`);
+    }
   }
 
   return res.json();

@@ -758,6 +758,7 @@ export interface PaginatedResponse<T> {
 export interface LearnerQueryOptions {
   schoolId?: string;
   guardianId?: string;
+  learnerIds?: string[];
   grade?: string;
   search?: string;
   limit?: number;

@@ -40,6 +40,25 @@ app.use(async (req, res, next) => {
       if (sessionRecord) {
         req.user = sessionRecord.session;
         req.permissions = sessionRecord.permissions;
+
+        // Ensure PARENT_GUARDIAN session has accurate guardianId resolved from PostgreSQL
+        if (req.user && req.user.role === 'PARENT_GUARDIAN' && !req.user.guardianId) {
+          try {
+            const gRes = await query(
+              `SELECT g.id FROM guardians g 
+               LEFT JOIN persons p ON g.person_id = p.id 
+               WHERE g.user_id = $1 
+                  OR (p.email IS NOT NULL AND LOWER(TRIM(p.email)) = LOWER(TRIM($2)))
+               ORDER BY g.created_at ASC LIMIT 1;`,
+              [req.user.id, req.user.email]
+            );
+            if (gRes.rows.length > 0) {
+              req.user.guardianId = gRes.rows[0].id;
+            }
+          } catch (gErr) {
+            console.error('[SessionMiddleware] Guardian ID resolution error:', gErr);
+          }
+        }
       }
     } catch (err) {
       console.error('[SessionMiddleware] Session resolution error:', err);
@@ -119,6 +138,18 @@ const abacHelpers = {
       console.error('[ABAC] isIncidentAssignedToResponder query error:', err);
       return false;
     }
+  },
+  isLearnerInvolvedInIncident: async (learnerId: string): Promise<boolean> => {
+    try {
+      const res = await query(
+        `SELECT 1 FROM incidents WHERE learner_id = $1 LIMIT 1;`,
+        [learnerId]
+      );
+      return res.rows.length > 0;
+    } catch (err) {
+      console.error('[ABAC] isLearnerInvolvedInIncident query error:', err);
+      return false;
+    }
   }
 };
 
@@ -194,13 +225,32 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const token = 'tok_itis_' + crypto.randomBytes(16).toString('hex') + '_' + Date.now().toString(36);
+    let resolvedGuardianId = verifiedUser.guardianId;
+    if (verifiedUser.role === 'PARENT_GUARDIAN' && !resolvedGuardianId) {
+      try {
+        const gRes = await query(
+          `SELECT g.id FROM guardians g 
+           LEFT JOIN persons p ON g.person_id = p.id 
+           WHERE g.user_id = $1 
+              OR (p.email IS NOT NULL AND LOWER(TRIM(p.email)) = LOWER(TRIM($2)))
+           ORDER BY g.created_at ASC LIMIT 1;`,
+          [verifiedUser.id, verifiedUser.email]
+        );
+        if (gRes.rows.length > 0) {
+          resolvedGuardianId = gRes.rows[0].id;
+        }
+      } catch (gErr) {
+        console.error('[Login] Guardian ID resolution error:', gErr);
+      }
+    }
+
     const sessionUser: ActiveUserSession = {
       id: verifiedUser.id,
       name: verifiedUser.name,
       email: verifiedUser.email,
       role: verifiedUser.role,
       schoolId: verifiedUser.schoolId,
-      guardianId: verifiedUser.guardianId,
+      guardianId: resolvedGuardianId,
       responderUnit: verifiedUser.responderUnit,
       department: verifiedUser.department,
       organization: verifiedUser.organization,
@@ -583,9 +633,33 @@ app.post('/api/users', requireAuth, async (req, res) => {
       permissions
     }, req.user!.id);
 
+    await repository.auditLogs.logEvent({
+      actionType: 'USER_IDENTITY_PROVISIONED',
+      actorUserId: req.user!.id,
+      actorName: req.user!.name,
+      actorRole: req.user!.role,
+      targetEntity: 'USER',
+      targetId: created.id,
+      details: {
+        createdUserId: created.id,
+        createdUserEmail: created.email,
+        assignedRole: created.role,
+        organization: created.organization,
+        schoolId: created.schoolId,
+        responderUnit: created.responderUnit
+      },
+      ipAddress: req.ip || '127.0.0.1'
+    });
+
     res.status(201).json(created);
   } catch (err: any) {
-    res.status(400).json({ error: err.message });
+    if (err.message && (err.message.includes('already registered') || err.message.includes('already exists') || err.code === '23505')) {
+      return res.status(409).json({
+        error: 'This email address is already registered.',
+        violationCode: 'DUPLICATE_IDENTITY'
+      });
+    }
+    res.status(400).json({ error: err.message || 'User creation failed' });
   }
 });
 
@@ -923,6 +997,16 @@ app.get('/api/learners', requireAuth, async (req, res) => {
     targetSchoolId = schoolId as string;
   }
 
+  let allowedLearnerIds: string[] | undefined = undefined;
+  if (user.role === 'COMMAND_OPERATOR') {
+    // Command operators are scoped strictly to learners involved in active or historical emergency incidents
+    const incLearnersRes = await query(`SELECT DISTINCT learner_id FROM incidents WHERE learner_id IS NOT NULL;`);
+    allowedLearnerIds = incLearnersRes.rows.map(r => r.learner_id);
+    if (allowedLearnerIds.length === 0) {
+      return res.json(paginated === 'true' || page !== undefined || limit !== undefined ? { data: [], pagination: { total: 0, limit: 25, offset: 0, page: 1, totalPages: 0, hasMore: false } } : []);
+    }
+  }
+
   if (user.role === 'PARENT_GUARDIAN' && !effectiveGuardianId) {
     return res.json(paginated === 'true' || page !== undefined || limit !== undefined ? { data: [], pagination: { total: 0, limit: 25, offset: 0, page: 1, totalPages: 0, hasMore: false } } : []);
   }
@@ -930,6 +1014,7 @@ app.get('/api/learners', requireAuth, async (req, res) => {
   const queryOptions = {
     schoolId: targetSchoolId,
     guardianId: user.role === 'PARENT_GUARDIAN' ? effectiveGuardianId : (guardianId as string),
+    learnerIds: allowedLearnerIds,
     search: search as string,
     grade: grade as string,
     page: page ? Number(page) : undefined,
@@ -956,10 +1041,61 @@ app.get('/api/learners/:id', requireAuth, async (req, res) => {
   const user = req.user!;
   const learnerId = normalizeParam(req.params.id);
 
+  // For PARENT_GUARDIAN: Ensure guardianId is resolved from PostgreSQL if not already present
+  let effectiveGuardianId = user.guardianId;
+  if (user.role === 'PARENT_GUARDIAN') {
+    if (!effectiveGuardianId) {
+      try {
+        const gRes = await query(
+          `SELECT g.id FROM guardians g 
+           LEFT JOIN persons p ON g.person_id = p.id 
+           WHERE g.user_id = $1 
+              OR (p.email IS NOT NULL AND LOWER(TRIM(p.email)) = LOWER(TRIM($2)))
+           ORDER BY g.created_at ASC LIMIT 1;`,
+          [user.id, user.email]
+        );
+        if (gRes.rows.length > 0) {
+          effectiveGuardianId = gRes.rows[0].id;
+          user.guardianId = effectiveGuardianId;
+        }
+      } catch (gErr) {
+        console.error('[SingleLearner] Guardian ID resolution error:', gErr);
+      }
+    }
+
+    if (!effectiveGuardianId) {
+      return res.status(403).json({
+        error: 'ACCESS DENIED: No active guardian profile linked to your user account.'
+      });
+    }
+
+    // Direct relationship verification in PostgreSQL
+    const isLinked = await abacHelpers.isGuardianLinkedToLearner(effectiveGuardianId, learnerId);
+    if (!isLinked) {
+      await repository.auditLogs.logEvent({
+        actionType: 'UNAUTHORIZED_ACCESS_DENIED',
+        actorUserId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        targetEntity: 'LEARNER',
+        targetId: learnerId,
+        details: {
+          violation: 'UNLINKED_CHILD_ACCESS_BLOCKED',
+          guardianId: effectiveGuardianId,
+          requestedLearnerId: learnerId
+        },
+        ipAddress: getClientIp(req)
+      });
+      return res.status(403).json({
+        error: `ACCESS DENIED (POPIA Section 14 / Child Care Act): Guardian '${effectiveGuardianId}' does not possess verified legal custody/relationship to Learner '${learnerId}'.`
+      });
+    }
+  }
+
   const decision = await rbacEngine.evaluateAccess(
     user,
     user.role === 'PARENT_GUARDIAN' ? 'GUARDIAN_CHILDREN_VIEW' : 'LEARNERS_VIEW_SCOPED',
-    { learnerId },
+    { learnerId, guardianId: effectiveGuardianId },
     abacHelpers
   );
 
@@ -1220,11 +1356,59 @@ function recordIncidentDeltaEvent(type: IncidentDeltaEvent['type'], incident: In
 }
 
 // Delta events endpoint (Clients receive only what changed without polling the entire incident database)
-app.get('/api/incidents/events', requireAuth, (req, res) => {
+app.get('/api/incidents/events', requireAuth, async (req, res) => {
+  const user = req.user!;
   const { since } = req.query;
   const sinceMs = since ? new Date(since as string).getTime() : 0;
   
-  const deltas = recentIncidentEvents.filter(e => new Date(e.timestamp).getTime() > sinceMs);
+  let deltas = recentIncidentEvents.filter(e => new Date(e.timestamp).getTime() > sinceMs);
+
+  if (user.role === 'PARENT_GUARDIAN') {
+    let effectiveGuardianId = user.guardianId;
+    if (!effectiveGuardianId) {
+      const gRes = await query(
+        `SELECT g.id FROM guardians g 
+         JOIN persons p ON g.person_id = p.id 
+         JOIN users u ON (u.email = p.email OR u.id = g.user_id) 
+         WHERE u.id = $1 LIMIT 1;`,
+        [user.id]
+      );
+      if (gRes.rows.length > 0) {
+        effectiveGuardianId = gRes.rows[0].id;
+      }
+    }
+    if (!effectiveGuardianId) {
+      deltas = [];
+    } else {
+      const linkedLearnersRes = await query(
+        `SELECT learner_id FROM guardian_learner_relationships WHERE guardian_id = $1;`,
+        [effectiveGuardianId]
+      );
+      const childIds = new Set(linkedLearnersRes.rows.map(r => r.learner_id));
+      deltas = deltas.filter(e => {
+        const payloadLearnerId = e.payload?.learnerId || (e.payload as any)?.learner_id;
+        return payloadLearnerId ? childIds.has(payloadLearnerId) : false;
+      });
+    }
+  } else if (user.role === 'SCHOOL_PRINCIPAL' || user.role === 'SCHOOL_ADMIN_STAFF') {
+    if (!user.schoolId) {
+      deltas = [];
+    } else {
+      deltas = deltas.filter(e => {
+        const payloadSchoolId = e.payload?.schoolId || (e.payload as any)?.school_id;
+        return payloadSchoolId === user.schoolId;
+      });
+    }
+  } else if (user.role === 'FIELD_RESPONDER') {
+    deltas = deltas.filter(e => {
+      const respId = e.payload?.assignedResponder?.id;
+      const respName = e.payload?.assignedResponder?.name;
+      return respId === user.id || respId === user.responderUnit || (user.responderUnit && respName?.toLowerCase().includes(user.responderUnit.toLowerCase()));
+    });
+  } else if (user.role === 'TECHNICIAN') {
+    deltas = [];
+  }
+
   res.json({
     events: deltas,
     latestTimestamp: new Date().toISOString()
@@ -1311,6 +1495,54 @@ app.get('/api/incidents', requireAuth, async (req, res) => {
 app.post('/api/incidents/panic-trigger', async (req, res) => {
   try {
     const { learnerId, triggerType, location, customNotes } = req.body;
+    if (!learnerId) {
+      return res.status(400).json({ error: 'learnerId is required for panic triggers.' });
+    }
+
+    // If request has authenticated user with PARENT_GUARDIAN role, enforce PostgreSQL relationship boundary
+    if (req.user && req.user.role === 'PARENT_GUARDIAN') {
+      let effectiveGuardianId = req.user.guardianId;
+      if (!effectiveGuardianId) {
+        const gRes = await query(
+          `SELECT g.id FROM guardians g 
+           JOIN persons p ON g.person_id = p.id 
+           JOIN users u ON (u.email = p.email OR u.id = g.user_id) 
+           WHERE u.id = $1 LIMIT 1;`,
+          [req.user.id]
+        );
+        if (gRes.rows.length > 0) {
+          effectiveGuardianId = gRes.rows[0].id;
+        }
+      }
+
+      if (!effectiveGuardianId) {
+        return res.status(403).json({
+          error: 'ACCESS DENIED: No active guardian profile linked to your user account.'
+        });
+      }
+
+      const isLinked = await abacHelpers.isGuardianLinkedToLearner(effectiveGuardianId, learnerId);
+      if (!isLinked) {
+        await repository.auditLogs.logEvent({
+          actionType: 'UNAUTHORIZED_ACCESS_DENIED',
+          actorUserId: req.user.id,
+          actorName: req.user.name,
+          actorRole: req.user.role,
+          targetEntity: 'INCIDENT',
+          targetId: learnerId,
+          details: {
+            violation: 'UNLINKED_CHILD_PANIC_BLOCKED',
+            guardianId: effectiveGuardianId,
+            requestedLearnerId: learnerId
+          },
+          ipAddress: getClientIp(req)
+        });
+        return res.status(403).json({
+          error: `ACCESS DENIED (POPIA Section 14 / Child Care Act): Guardian is not authorized to trigger emergency panic for unlinked learner '${learnerId}'.`
+        });
+      }
+    }
+
     const hydrated = await repository.learners.findHydratedById(learnerId);
     if (!hydrated) return res.status(404).json({ error: 'Learner not found' });
 
@@ -1797,6 +2029,16 @@ app.get(
     }
   }
 );
+
+// ----------------------------------------------------
+// API 404 HANDLER: UNMATCHED /api/* MUST NEVER SERVE HTML
+// ----------------------------------------------------
+app.all('/api/*', (req, res) => {
+  res.status(404).json({
+    error: `API route not found: ${req.method} ${req.originalUrl || req.url}`,
+    violationCode: 'ENDPOINT_NOT_FOUND'
+  });
+});
 
 // ----------------------------------------------------
 // FRONTEND STATIC BUNDLE OR VITE DEV SERVER

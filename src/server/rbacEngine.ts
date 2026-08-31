@@ -410,6 +410,7 @@ export class AuthoritativeRbacEngine {
       isGuardianLinkedToLearner?: (guardianId: string, learnerId: string) => boolean | Promise<boolean>;
       isLearnerEnrolledInSchool?: (learnerId: string, schoolId: string) => boolean | Promise<boolean>;
       isIncidentAssignedToResponder?: (incidentId: string, responderUnit?: string, responderId?: string) => boolean | Promise<boolean>;
+      isLearnerInvolvedInIncident?: (learnerId: string) => boolean | Promise<boolean>;
     }
   ): Promise<AuthorizationDecision> {
     // 1. Authenticated Identity Check
@@ -511,6 +512,28 @@ export class AuthoritativeRbacEngine {
               schoolId: user.schoolId,
               unlinkedLearnerId: context.learnerId,
               violation: 'CROSS_SCHOOL_LEARNER_ACCESS_BLOCKED'
+            }
+          };
+        }
+      }
+    }
+
+    // 5c. ABAC: Command Operator -> Learner Emergency Scope Enforcement
+    if (user.role === 'COMMAND_OPERATOR' && context?.learnerId) {
+      if (helpers?.isLearnerInvolvedInIncident) {
+        const isAssociated = await helpers.isLearnerInvolvedInIncident(context.learnerId);
+        if (!isAssociated) {
+          return {
+            allowed: false,
+            statusCode: 403,
+            reason: `ACCESS DENIED (Operational Need-To-Know): Command Centre operators may only inspect learner records tied to active or historical emergency incidents under operational handling. Unrestricted browsing of unrelated learner records is prohibited.`,
+            auditActionRequired: true,
+            auditAction: 'UNAUTHORIZED_ACCESS_DENIED',
+            auditDetails: {
+              userId: user.id,
+              role: user.role,
+              unrelatedLearnerId: context.learnerId,
+              violation: 'COMMAND_OPERATOR_UNRELATED_LEARNER_ACCESS_BLOCKED'
             }
           };
         }

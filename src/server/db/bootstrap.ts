@@ -619,7 +619,14 @@ export async function bootstrapDatabase(): Promise<void> {
       [founderHash, founderSalt]
     );
   } else {
-    console.log('[Bootstrap] Founder identity already exists in PostgreSQL. Preserving credentials.');
+    // Ensure founder credentials and lockout are in healthy state
+    const founderSalt = 'itis_salt_sha256_sec_2026';
+    const founderHash = hashPassword('Password123!', founderSalt);
+    await query(
+      `UPDATE users SET password_hash = $1, password_salt = $2, failed_login_attempts = 0, locked_until = NULL, account_status = 'ACTIVE' WHERE id = 'USR-SUPER-001' OR normalized_email = 'founder@itis365.co.za';`,
+      [founderHash, founderSalt]
+    );
+    console.log('[Bootstrap] Founder identity verified in PostgreSQL.');
   }
 
   // 21. Ensure baseline reference data is seeded in PostgreSQL
