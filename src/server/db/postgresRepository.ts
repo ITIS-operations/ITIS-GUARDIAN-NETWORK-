@@ -29,6 +29,7 @@ import {
   ImmutableAuditEvent,
   PlatformUserItem,
   CreateUserPayload,
+  UpdateUserPayload,
   AuthoritativeOnboardPayload,
   AnnualSafetyUpdatePayload,
   RegisterSchoolPayload,
@@ -220,6 +221,134 @@ export class PostgresUserRepository implements IUserRepository {
       ...userItem,
       temporaryPassword: tempPassword
     };
+  }
+
+  async update(
+    id: string,
+    updates: UpdateUserPayload,
+    actorUserId: string
+  ): Promise<PlatformUserItem> {
+    const user = await this.findById(id);
+    if (!user) throw new Error('User record not found.');
+
+    // Protect Founder from unauthorized modifications
+    if (user.role === 'FOUNDER_EXECUTIVE' && updates.role && updates.role !== 'FOUNDER_EXECUTIVE') {
+      throw new Error('PROTECTION LOCK: Cannot downgrade or remove the role of the sovereign Founder/SuperAdmin account.');
+    }
+
+    let newEmail = user.email;
+    if (updates.email && updates.email.trim()) {
+      const cleanEmail = normalizeEmail(updates.email);
+      if (cleanEmail !== user.email) {
+        // Check uniqueness
+        const conflict = await query(`SELECT id FROM users WHERE (normalized_email = $1 OR email = $1) AND id != $2;`, [cleanEmail, id]);
+        if (conflict.rows.length > 0) {
+          const err: any = new Error('This email address is already in use by another user account.');
+          err.code = '23505';
+          throw err;
+        }
+        newEmail = cleanEmail;
+      }
+    }
+
+    const firstName = updates.firstName !== undefined ? updates.firstName.trim() : (user.firstName || '');
+    const surname = updates.surname !== undefined ? updates.surname.trim() : (user.surname || '');
+    const fullName = updates.name !== undefined && updates.name.trim() ? updates.name.trim() : `${firstName} ${surname}`.trim() || user.name;
+    const mobileNumber = updates.mobileNumber !== undefined ? updates.mobileNumber.trim() : user.mobileNumber;
+    const role = updates.role || user.role;
+    const status = updates.status || user.status || 'ACTIVE';
+    const schoolId = updates.schoolId !== undefined ? updates.schoolId : user.schoolId;
+    const guardianId = updates.guardianId !== undefined ? updates.guardianId : user.guardianId;
+    const responderUnit = updates.responderUnit !== undefined ? updates.responderUnit : user.responderUnit;
+    const department = updates.department !== undefined ? updates.department : user.department;
+    const organization = updates.organization !== undefined ? updates.organization : user.organization;
+    const permissions = updates.permissions || user.permissions;
+
+    let passwordHashUpdateClause = '';
+    const queryParams: any[] = [
+      newEmail,
+      newEmail,
+      fullName,
+      firstName,
+      surname,
+      mobileNumber,
+      role,
+      status,
+      schoolId,
+      guardianId,
+      responderUnit,
+      department,
+      organization,
+      permissions,
+      id
+    ];
+
+    if (updates.password && updates.password.trim()) {
+      const salt = generateSalt();
+      const hash = hashPassword(updates.password, salt);
+      queryParams.push(hash, salt);
+      passwordHashUpdateClause = `, password_hash = $${queryParams.length - 1}, password_salt = $${queryParams.length}, must_change_password = FALSE`;
+    }
+
+    const res = await query(
+      `UPDATE users 
+       SET email = $1, normalized_email = $2, name = $3, first_name = $4, surname = $5,
+           mobile_number = $6, role = $7, account_status = $8, school_id = $9,
+           guardian_id = $10, responder_unit = $11, department = $12, organization = $13,
+           permissions = $14, updated_at = CURRENT_TIMESTAMP
+           ${passwordHashUpdateClause}
+       WHERE id = $15
+       RETURNING id, email, aliases, name, first_name, surname, mobile_number, role,
+                 school_id, guardian_id, responder_unit, department, organization,
+                 permissions, account_status as status, is_demo_account, must_change_password,
+                 created_at;`,
+      queryParams
+    );
+
+    return this.mapRowToUserItem(res.rows[0]);
+  }
+
+  async deleteUser(
+    id: string,
+    actorUserId: string,
+    hardDelete?: boolean
+  ): Promise<{ success: boolean; softDeleted: boolean; hardDeleted: boolean }> {
+    const user = await this.findById(id);
+    if (!user) throw new Error('User record not found.');
+
+    if (user.role === 'FOUNDER_EXECUTIVE' || user.id === 'USR-SUPER-001') {
+      throw new Error('PROTECTION LOCK: The sovereign Founder/SuperAdmin account cannot be deleted.');
+    }
+
+    // Check protected relationships
+    let hasProtectedRelations = false;
+
+    if (user.guardianId) {
+      const gRels = await query(`SELECT 1 FROM guardian_learner_relationships WHERE guardian_id = $1 LIMIT 1;`, [user.guardianId]);
+      if (gRels.rows.length > 0) hasProtectedRelations = true;
+    }
+
+    const incidentCheck = await query(
+      `SELECT 1 FROM incidents WHERE assigned_responder_id = $1 OR acknowledged_by_user_id = $1 OR resolved_by_user_id = $1 LIMIT 1;`,
+      [id]
+    );
+    if (incidentCheck.rows.length > 0) hasProtectedRelations = true;
+
+    const auditCheck = await query(`SELECT 1 FROM audit_events WHERE actor_user_id = $1 LIMIT 1;`, [id]);
+    if (auditCheck.rows.length > 0) hasProtectedRelations = true;
+
+    if (hasProtectedRelations || !hardDelete) {
+      // Soft delete / archive
+      await query(
+        `UPDATE users SET account_status = 'DISABLED', updated_at = CURRENT_TIMESTAMP WHERE id = $1;`,
+        [id]
+      );
+      return { success: true, softDeleted: true, hardDeleted: false };
+    } else {
+      // Safe hard delete only when no protected relations exist
+      await query(`DELETE FROM users WHERE id = $1;`, [id]);
+      return { success: true, softDeleted: false, hardDeleted: true };
+    }
   }
 
   async updateStatus(
@@ -1470,8 +1599,8 @@ export class PostgresLearnerRepository implements ILearnerRepository {
           // Case 5: No matching user exists -> Create new Guardian User with PARENT_GUARDIAN role!
           const newUserId = 'usr-parent-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
           const salt = generateSalt();
-          const tempPassword = 'PendingActivation_' + Math.random().toString(36).slice(2, 10) + '!';
-          const hash = hashPassword(tempPassword, salt);
+          const initialGuardianPassword = process.env.GUARDIAN_INITIAL_PASSWORD || 'ITIS-Guardian!';
+          const hash = hashPassword(initialGuardianPassword, salt);
           const fullName = `${payload.guardian.firstName || ''} ${payload.guardian.lastName || ''}`.trim() || 'Guardian User';
           const defaultPermissions = [
             'GUARDIAN_CHILDREN_VIEW',
@@ -2158,18 +2287,178 @@ export class PostgresDeviceRepository implements IDeviceRepository {
       params
     );
 
+    return res.rows.map(r => {
+      const battery = r.battery_level !== null ? Number(r.battery_level) : 94;
+      const isAssigned = !!(r.assigned_learner_id || r.learner_id);
+      const isLowBatt = battery < 20;
+      const tamperFlagged = r.tamper_status === 'TRIGGERED' || r.tamper_status === 'TAMPER_FLAGGED';
+
+      let status = 'ONLINE';
+      if (r.device_status === 'MAINTENANCE' || r.device_status === 'MAINTENANCE_REQUIRED') {
+        status = 'MAINTENANCE_REQUIRED';
+      } else if (tamperFlagged) {
+        status = 'TAMPER_TRIGGERED';
+      } else if (isLowBatt) {
+        status = 'LOW_BATTERY';
+      } else if (r.device_status === 'OFFLINE') {
+        status = 'OFFLINE';
+      }
+
+      return {
+        id: r.id,
+        serialNumber: r.serial_number,
+        type: r.device_model?.includes('Gate')
+          ? 'RFID_GATE_READER'
+          : r.device_model?.includes('LoRa') || r.device_model?.includes('Gateway')
+          ? 'LORAWAN_GATEWAY'
+          : r.device_model?.includes('GPS') || r.device_model?.includes('Vehicle')
+          ? 'VEHICLE_GPS'
+          : r.device_model?.includes('Biometric')
+          ? 'BIOMETRIC_TERMINAL'
+          : 'WEARABLE_BEACON',
+        assignedSchool: r.school_name || 'Pretoria Boys High School',
+        assignedSubject: r.first_name && r.last_name
+          ? `${r.first_name} ${r.last_name} (${r.emis_id || 'EMIS-ACTIVE'})`
+          : r.emis_id
+          ? `Learner (${r.emis_id})`
+          : 'Unassigned / Spare Inventory',
+        assignmentState: isAssigned ? 'ASSIGNED' : r.device_status === 'MAINTENANCE' ? 'IN_MAINTENANCE' : 'UNASSIGNED',
+        batteryLevel: battery,
+        signalStrength: tamperFlagged ? -84 : isLowBatt ? -78 : -56,
+        snrDb: tamperFlagged ? 12 : 28,
+        firmwareVersion: r.firmware_version || 'v3.2.1-sec',
+        hardwareRevision: r.hardware_revision || 'REV-2.1',
+        status,
+        tamperStatus: r.tamper_status || 'SECURE',
+        calibrationStatus: r.tamper_status === 'CALIBRATED' ? 'CALIBRATED' : isLowBatt ? 'PENDING_RECALIBRATION' : 'CALIBRATED',
+        rfChannel: r.device_model?.includes('Gate') ? '868.3 MHz Ch 06' : '868.1 MHz Ch 04',
+        gatewayStatus: r.school_name ? `${r.school_name} RFID Gateway • Uplink Active` : 'Sovereign Core Gateway • Uplink Active',
+        lastHeartbeat: r.last_ping_at ? new Date(r.last_ping_at).toLocaleTimeString() : '12 seconds ago',
+        lastPingAt: r.last_ping_at ? new Date(r.last_ping_at).toISOString() : new Date().toISOString(),
+        maintenanceDueInDays: isLowBatt ? 3 : 90
+      };
+    });
+  }
+
+  async calibrate(deviceId: string): Promise<any> {
+    const res = await query(
+      `UPDATE devices 
+       SET battery_level = 100, 
+           tamper_status = 'CALIBRATED', 
+           device_status = 'ACTIVE',
+           last_ping_at = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 OR serial_number = $1
+       RETURNING *;`,
+      [deviceId]
+    );
+    return res.rows[0] || null;
+  }
+
+  async logMaintenance(payload: {
+    deviceId: string;
+    technicianUserId?: string;
+    technicianName?: string;
+    actionType: string;
+    description: string;
+    status?: string;
+  }): Promise<any> {
+    const id = 'mnt-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+    const res = await query(
+      `INSERT INTO device_maintenance_logs (
+        id, device_id, technician_user_id, technician_name, action_type, description, status, completed_date
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP)
+      RETURNING *;`,
+      [
+        id,
+        payload.deviceId,
+        payload.technicianUserId || null,
+        payload.technicianName || 'Field Technician',
+        payload.actionType,
+        payload.description,
+        payload.status || 'COMPLETED'
+      ]
+    );
+    return res.rows[0];
+  }
+
+  async getMaintenanceLogs(deviceId?: string): Promise<any[]> {
+    let sql = `SELECT m.*, d.serial_number as device_serial_number 
+               FROM device_maintenance_logs m
+               LEFT JOIN devices d ON m.device_id = d.id OR m.device_id = d.serial_number`;
+    const params: any[] = [];
+    if (deviceId) {
+      sql += ` WHERE m.device_id = $1 OR d.serial_number = $1`;
+      params.push(deviceId);
+    }
+    sql += ` ORDER BY m.created_at DESC LIMIT 50;`;
+    const res = await query(sql, params);
     return res.rows.map(r => ({
       id: r.id,
-      serialNumber: r.serial_number,
-      type: r.device_model?.includes('Gate') ? 'RFID_GATE_READER' : r.device_model?.includes('GPS') || r.device_model?.includes('Vehicle') ? 'VEHICLE_GPS' : r.device_model?.includes('Biometric') ? 'BIOMETRIC_TERMINAL' : 'WEARABLE_BEACON',
-      assignedSchool: r.school_name || 'Pretoria Boys High School',
-      assignedSubject: r.first_name && r.last_name ? `${r.first_name} ${r.last_name} (${r.emis_id || 'EMIS-ACTIVE'})` : r.emis_id ? `Assigned to ${r.emis_id}` : 'Unassigned / Inventory Spare',
-      batteryLevel: r.battery_level !== null ? Number(r.battery_level) : 94,
-      signalStrength: -58,
-      firmwareVersion: r.firmware_version || 'v3.2.1-sec',
-      status: r.device_status === 'ACTIVE' ? 'ONLINE' : r.device_status === 'MAINTENANCE' ? 'MAINTENANCE_REQUIRED' : r.device_status || 'ONLINE',
-      lastHeartbeat: r.last_ping_at ? new Date(r.last_ping_at).toLocaleTimeString() : '12 seconds ago'
+      deviceId: r.device_id,
+      deviceSerialNumber: r.device_serial_number || r.device_id,
+      technicianUserId: r.technician_user_id,
+      technicianName: r.technician_name,
+      actionType: r.action_type,
+      description: r.description,
+      status: r.status,
+      scheduledDate: r.scheduled_date ? new Date(r.scheduled_date).toISOString() : undefined,
+      completedDate: r.completed_date ? new Date(r.completed_date).toISOString() : undefined,
+      createdAt: r.created_at ? new Date(r.created_at).toISOString() : new Date().toISOString()
     }));
+  }
+
+  async updateConfig(deviceId: string, config: { firmwareVersion?: string; hardwareRevision?: string; status?: string }): Promise<any> {
+    const res = await query(
+      `UPDATE devices 
+       SET firmware_version = COALESCE($1, firmware_version),
+           hardware_revision = COALESCE($2, hardware_revision),
+           device_status = COALESCE($3, device_status),
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $4 OR serial_number = $4
+       RETURNING *;`,
+      [config.firmwareVersion || null, config.hardwareRevision || null, config.status || null, deviceId]
+    );
+    return res.rows[0] || null;
+  }
+
+  async reassignDevice(params: {
+    oldDeviceId?: string;
+    newDeviceId: string;
+    learnerId: string;
+    assignedByUserId: string;
+    notes?: string;
+  }): Promise<void> {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      if (params.oldDeviceId) {
+        await client.query(
+          `UPDATE devices SET assigned_learner_id = NULL, device_status = 'MAINTENANCE', updated_at = CURRENT_TIMESTAMP WHERE id = $1 OR serial_number = $1;`,
+          [params.oldDeviceId]
+        );
+      }
+      await client.query(
+        `UPDATE devices SET assigned_learner_id = $1, device_status = 'ACTIVE', updated_at = CURRENT_TIMESTAMP WHERE id = $2 OR serial_number = $2;`,
+        [params.learnerId, params.newDeviceId]
+      );
+      await client.query(
+        `UPDATE learners SET current_device_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2;`,
+        [params.newDeviceId, params.learnerId]
+      );
+      const assignId = 'asn-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+      await client.query(
+        `INSERT INTO learner_devices (id, device_id, learner_id, assignment_status, assigned_by_user_id, assignment_notes)
+         VALUES ($1, $2, $3, 'ACTIVE', $4, $5);`,
+        [assignId, params.newDeviceId, params.learnerId, params.assignedByUserId, params.notes || 'Hardware swap/reassignment']
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
   }
 }
 
@@ -2366,6 +2655,211 @@ export class PostgresIncidentRepository implements IIncidentRepository {
     return (await this.findById(incidentId)) || this.mapRowToIncident(res.rows[0]);
   }
 
+  async claimIncident(incidentId: string, officer: { id: string; name: string; role: string }): Promise<IncidentAlert> {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const lockRes = await client.query(`SELECT * FROM incidents WHERE id = $1 FOR UPDATE;`, [incidentId]);
+      if (lockRes.rows.length === 0) {
+        throw new Error('Incident not found.');
+      }
+      const current = lockRes.rows[0];
+      if (current.primary_command_officer_id && current.primary_command_officer_id !== officer.id) {
+        throw new Error(`Incident is already claimed by Officer ${current.primary_command_officer_name || current.primary_command_officer_id}. Request a handover to take over.`);
+      }
+      const noteMsg = `Incident claimed by Command Officer ${officer.name} (${officer.role}) at ${new Date().toLocaleTimeString()}`;
+      await client.query(
+        `UPDATE incidents 
+         SET primary_command_officer_id = $1,
+             primary_command_officer_name = $2,
+             primary_command_officer_role = $3,
+             claimed_at = CURRENT_TIMESTAMP,
+             notes = array_append(notes, $4)
+         WHERE id = $5;`,
+        [officer.id, officer.name, officer.role, noteMsg, incidentId]
+      );
+      const evId = 'ev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+      await client.query(
+        `INSERT INTO incident_events (id, incident_id, event_type, actor_user_id, actor_name, actor_role, notes)
+         VALUES ($1, $2, 'INCIDENT_CLAIMED', $3, $4, $5, $6);`,
+        [evId, incidentId, officer.id, officer.name, officer.role, noteMsg]
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+    return (await this.findById(incidentId))!;
+  }
+
+  async releaseIncident(incidentId: string, officer: { id: string; name: string; role: string }, reason?: string): Promise<IncidentAlert> {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const lockRes = await client.query(`SELECT * FROM incidents WHERE id = $1 FOR UPDATE;`, [incidentId]);
+      if (lockRes.rows.length === 0) {
+        throw new Error('Incident not found.');
+      }
+      const current = lockRes.rows[0];
+      if (current.primary_command_officer_id && current.primary_command_officer_id !== officer.id && officer.role !== 'FOUNDER_EXECUTIVE' && officer.role !== 'SYSTEM_ADMIN') {
+        throw new Error('You cannot release an incident claimed by another officer.');
+      }
+      const noteMsg = `Incident released back to general queue by ${officer.name} (${officer.role})${reason ? ': ' + reason : ''}`;
+      await client.query(
+        `UPDATE incidents 
+         SET primary_command_officer_id = NULL,
+             primary_command_officer_name = NULL,
+             primary_command_officer_role = NULL,
+             claimed_at = NULL,
+             notes = array_append(notes, $1)
+         WHERE id = $2;`,
+        [noteMsg, incidentId]
+      );
+      const evId = 'ev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+      await client.query(
+        `INSERT INTO incident_events (id, incident_id, event_type, actor_user_id, actor_name, actor_role, notes)
+         VALUES ($1, $2, 'INCIDENT_RELEASED', $3, $4, $5, $6);`,
+        [evId, incidentId, officer.id, officer.name, officer.role, noteMsg]
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+    return (await this.findById(incidentId))!;
+  }
+
+  async handoverIncident(
+    incidentId: string,
+    fromOfficer: { id: string; name: string; role: string },
+    targetOfficer: { id: string; name: string; role: string },
+    reason: string
+  ): Promise<IncidentAlert> {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const lockRes = await client.query(`SELECT * FROM incidents WHERE id = $1 FOR UPDATE;`, [incidentId]);
+      if (lockRes.rows.length === 0) {
+        throw new Error('Incident not found.');
+      }
+      const noteMsg = `Incident command transferred from ${fromOfficer.name} to ${targetOfficer.name}. Reason: ${reason}`;
+      await client.query(
+        `UPDATE incidents 
+         SET primary_command_officer_id = $1,
+             primary_command_officer_name = $2,
+             primary_command_officer_role = $3,
+             claimed_at = CURRENT_TIMESTAMP,
+             notes = array_append(notes, $4)
+         WHERE id = $5;`,
+        [targetOfficer.id, targetOfficer.name, targetOfficer.role, noteMsg, incidentId]
+      );
+      const evId = 'ev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
+      await client.query(
+        `INSERT INTO incident_events (id, incident_id, event_type, actor_user_id, actor_name, actor_role, notes, payload)
+         VALUES ($1, $2, 'COMMAND_HANDOVER', $3, $4, $5, $6, $7);`,
+        [evId, incidentId, fromOfficer.id, fromOfficer.name, fromOfficer.role, noteMsg, JSON.stringify({ from: fromOfficer, to: targetOfficer, reason })]
+      );
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
+    }
+    return (await this.findById(incidentId))!;
+  }
+
+  async joinMonitoring(incidentId: string, officer: { id: string; name: string; role: string }): Promise<IncidentAlert> {
+    const existing = await this.findById(incidentId);
+    if (!existing) throw new Error('Incident not found.');
+
+    const monitors = existing.monitoringOfficers || [];
+    if (!monitors.some(m => m.userId === officer.id)) {
+      monitors.push({
+        userId: officer.id,
+        name: officer.name,
+        role: officer.role,
+        joinedAt: new Date().toISOString()
+      });
+      await query(
+        `UPDATE incidents SET monitoring_officers = $1 WHERE id = $2;`,
+        [JSON.stringify(monitors), incidentId]
+      );
+      await this.addEvent(incidentId, {
+        eventType: 'MONITOR_JOINED',
+        actorUserId: officer.id,
+        actorName: officer.name,
+        actorRole: officer.role,
+        notes: `Officer ${officer.name} joined incident monitoring.`
+      });
+    }
+    return (await this.findById(incidentId))!;
+  }
+
+  async leaveMonitoring(incidentId: string, officerId: string): Promise<IncidentAlert> {
+    const existing = await this.findById(incidentId);
+    if (!existing) throw new Error('Incident not found.');
+
+    const monitors = (existing.monitoringOfficers || []).filter(m => m.userId !== officerId);
+    await query(
+      `UPDATE incidents SET monitoring_officers = $1 WHERE id = $2;`,
+      [JSON.stringify(monitors), incidentId]
+    );
+    return (await this.findById(incidentId))!;
+  }
+
+  async addTacticalNote(incidentId: string, officer: { id: string; name: string; role: string }, noteText: string): Promise<IncidentAlert> {
+    const noteWithTimestamp = `[${new Date().toLocaleTimeString()} - ${officer.name}]: ${noteText}`;
+    await query(
+      `UPDATE incidents SET notes = array_append(notes, $1) WHERE id = $2;`,
+      [noteWithTimestamp, incidentId]
+    );
+    await this.addEvent(incidentId, {
+      eventType: 'TACTICAL_NOTE',
+      actorUserId: officer.id,
+      actorName: officer.name,
+      actorRole: officer.role,
+      notes: noteText
+    });
+    return (await this.findById(incidentId))!;
+  }
+
+  async getOfficersWorkload(): Promise<any[]> {
+    const officersRes = await query(
+      `SELECT id, name, role, email, status FROM users WHERE role IN ('COMMAND_OPERATOR', 'FOUNDER_EXECUTIVE', 'SYSTEM_ADMIN') AND status = 'ACTIVE' ORDER BY name ASC;`
+    );
+    const activeIncidentsRes = await query(
+      `SELECT id, status, severity, primary_command_officer_id, primary_command_officer_name, monitoring_officers FROM incidents WHERE status != 'RESOLVED';`
+    );
+
+    return officersRes.rows.map(officer => {
+      const claimedIncidents = activeIncidentsRes.rows.filter(i => i.primary_command_officer_id === officer.id);
+      const monitoredIncidents = activeIncidentsRes.rows.filter(i => {
+        if (!i.monitoring_officers) return false;
+        const list = Array.isArray(i.monitoring_officers) ? i.monitoring_officers : (typeof i.monitoring_officers === 'string' ? JSON.parse(i.monitoring_officers || '[]') : []);
+        return list.some((m: any) => m.userId === officer.id);
+      });
+
+      const totalWorkload = claimedIncidents.length + monitoredIncidents.length * 0.5;
+
+      return {
+        userId: officer.id,
+        name: officer.name,
+        role: officer.role,
+        status: claimedIncidents.length > 0 ? 'ACTIVE' : 'AVAILABLE',
+        activeIncidentCount: claimedIncidents.length,
+        monitoredIncidentCount: monitoredIncidents.length,
+        totalWorkload: Math.round(totalWorkload * 10) / 10,
+        assignedIncidentIds: claimedIncidents.map(i => i.id),
+        isOverloaded: claimedIncidents.length >= 3
+      };
+    });
+  }
+
   async getTimelineEvents(incidentId: string): Promise<any[]> {
     const res = await query(
       `SELECT * FROM incident_events WHERE incident_id = $1 ORDER BY created_at ASC;`,
@@ -2418,6 +2912,17 @@ export class PostgresIncidentRepository implements IIncidentRepository {
       } catch {}
     }
 
+    let monitoringOfficers: any[] = [];
+    if (row.monitoring_officers) {
+      if (Array.isArray(row.monitoring_officers)) {
+        monitoringOfficers = row.monitoring_officers;
+      } else if (typeof row.monitoring_officers === 'string') {
+        try {
+          monitoringOfficers = JSON.parse(row.monitoring_officers);
+        } catch {}
+      }
+    }
+
     return {
       id: row.id,
       learnerId: row.learner_id,
@@ -2436,8 +2941,15 @@ export class PostgresIncidentRepository implements IIncidentRepository {
         lat: Number(row.latitude) || -26.2041,
         lng: Number(row.longitude) || 28.0473,
         addressDescription: row.location_description || 'Sector Alert',
-        accuracyMeters: row.accuracy_meters ? Number(row.accuracy_meters) : 4.2
+        accuracyMeters: row.accuracy_meters ? Number(row.accuracy_meters) : 4.2,
+        locationSource: row.location_source || 'GPS_RADIO_TELEMETRY',
+        locationTimestamp: row.location_timestamp ? new Date(row.location_timestamp).toISOString() : undefined
       },
+      primaryOfficerId: row.primary_command_officer_id || undefined,
+      primaryOfficerName: row.primary_command_officer_name || undefined,
+      primaryOfficerRole: row.primary_command_officer_role || undefined,
+      claimedAt: row.claimed_at ? new Date(row.claimed_at).toISOString() : undefined,
+      monitoringOfficers: monitoringOfficers.length > 0 ? monitoringOfficers : undefined,
       assignedResponder: assignedResp || undefined,
       slaTargetSeconds: 180,
       elapsedSeconds: 45,
@@ -2703,6 +3215,74 @@ export class PostgresResponderRepository implements IResponderRepository {
     return updated;
   }
 
+  async updateLiveLocation(
+    responderIdOrUserId: string,
+    locationData: {
+      latitude: number;
+      longitude: number;
+      accuracyMeters?: number;
+      heading?: number;
+      speed?: number;
+      locationSharingStatus?: string;
+      addressDescription?: string;
+    }
+  ): Promise<ResponderUnit> {
+    const res = await query(
+      `UPDATE responders 
+       SET current_latitude = $1,
+           current_longitude = $2,
+           accuracy_meters = COALESCE($3, accuracy_meters),
+           heading = COALESCE($4, heading),
+           speed = COALESCE($5, speed),
+           location_sharing_status = COALESCE($6, location_sharing_status),
+           address_description = COALESCE($7, address_description),
+           last_location_update = CURRENT_TIMESTAMP,
+           last_heartbeat = CURRENT_TIMESTAMP,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $8 OR assigned_user_id = $8 OR callsign = $8
+       RETURNING *;`,
+      [
+        locationData.latitude,
+        locationData.longitude,
+        locationData.accuracyMeters || 4.5,
+        locationData.heading !== undefined ? locationData.heading : null,
+        locationData.speed !== undefined ? locationData.speed : null,
+        locationData.locationSharingStatus || 'AVAILABLE',
+        locationData.addressDescription || null,
+        responderIdOrUserId
+      ]
+    );
+    if (res.rows.length === 0) {
+      // Fallback: try search by unit prefix
+      const fallbackRes = await query(
+        `UPDATE responders 
+         SET current_latitude = $1, current_longitude = $2, last_location_update = CURRENT_TIMESTAMP, last_heartbeat = CURRENT_TIMESTAMP
+         WHERE LOWER(name) LIKE '%' || LOWER($3) || '%' OR LOWER(callsign) LIKE '%' || LOWER($3) || '%'
+         RETURNING *;`,
+        [locationData.latitude, locationData.longitude, responderIdOrUserId]
+      );
+      if (fallbackRes.rows.length > 0) {
+        return this.mapRowToResponder(fallbackRes.rows[0]);
+      }
+      throw new Error(`Responder unit not found for ID/Callsign '${responderIdOrUserId}'`);
+    }
+    return this.mapRowToResponder(res.rows[0]);
+  }
+
+  async updateAvailability(responderIdOrUserId: string, status: string, isAvailable: boolean): Promise<ResponderUnit> {
+    const res = await query(
+      `UPDATE responders 
+       SET status = $1, is_available = $2, location_sharing_status = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $3 OR assigned_user_id = $3 OR callsign = $3
+       RETURNING *;`,
+      [status, isAvailable, responderIdOrUserId]
+    );
+    if (res.rows.length === 0) {
+      throw new Error(`Responder unit not found for ID/Callsign '${responderIdOrUserId}'`);
+    }
+    return this.mapRowToResponder(res.rows[0]);
+  }
+
   private mapRowToResponder(row: any): ResponderUnit {
     return {
       id: row.id,
@@ -2716,7 +3296,8 @@ export class PostgresResponderRepository implements IResponderRepository {
         lat: row.current_latitude ? Number(row.current_latitude) : -25.7550,
         lng: row.current_longitude ? Number(row.current_longitude) : 28.2310,
         addressDescription: row.address_description || 'Sector Patrol',
-        isVerified: true
+        isVerified: true,
+        lastReportedAt: row.last_location_update ? new Date(row.last_location_update).toISOString() : undefined
       },
       status: row.status as any,
       assignedUserId: row.assigned_user_id || undefined,

@@ -15,6 +15,7 @@ import { AdminPortal } from './components/AdminPortal.js';
 import { RbacSecurityConsole } from './components/RbacSecurityConsole.js';
 import { AuthoritativeEnrolmentModal } from './components/AuthoritativeEnrolmentModal.js';
 import { PanicConsole } from './components/PanicConsole.js';
+import { ForceChangePasswordModal } from './components/ForceChangePasswordModal.js';
 import { api } from './services/api.js';
 import { HydratedLearnerRecord, School, IncidentAlert, ActiveUserSession, UserRole } from './types.js';
 
@@ -411,6 +412,7 @@ export function App() {
                   <CommandCentre
                     incidents={incidents}
                     learners={learners}
+                    currentUser={currentUser}
                     onRefresh={loadData}
                     onOpenEnrolment={() => setIsEnrolmentOpen(true)}
                     onOpenPanic={() => setIsPanicOpen(true)}
@@ -500,6 +502,17 @@ export function App() {
         learners={learners}
         onTriggerSuccess={loadData}
       />
+
+      {/* Mandatory First-Time Force Password Change Modal */}
+      {currentUser && currentUser.mustChangePassword && (
+        <ForceChangePasswordModal
+          currentUser={currentUser}
+          onPasswordChanged={() => {
+            setCurrentUser(prev => prev ? { ...prev, mustChangePassword: false } : null);
+          }}
+          onLogout={handleLogout}
+        />
+      )}
 
       {/* Complete Corporate Footer */}
       <Footer 

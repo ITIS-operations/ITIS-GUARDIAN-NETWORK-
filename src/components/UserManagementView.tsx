@@ -18,11 +18,14 @@ import {
   School as SchoolIcon,
   Shield,
   Layers,
-  ChevronRight
+  ChevronRight,
+  Edit,
+  Trash2
 } from 'lucide-react';
 import { PlatformUserItem, UserRole, AccountStatus, School as SchoolType, ActiveUserSession } from '../types.js';
 import { api } from '../services/api.js';
 import { CreateUserModal } from './CreateUserModal.js';
+import { EditUserModal } from './EditUserModal.js';
 
 interface Props {
   schools: SchoolType[];
@@ -38,6 +41,9 @@ export const UserManagementView: React.FC<Props> = ({ schools = [], currentUser 
   
   // Create User Modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  // Edit User Modal state
+  const [editingUser, setEditingUser] = useState<PlatformUserItem | null>(null);
   
   // Status change notification
   const [statusChangeMsg, setStatusChangeMsg] = useState<{ id: string; msg: string; type: 'success' | 'error' } | null>(null);
@@ -97,6 +103,16 @@ export const UserManagementView: React.FC<Props> = ({ schools = [], currentUser 
 
   const handleUserCreated = (newUser: PlatformUserItem) => {
     setUsers(prev => [newUser, ...prev]);
+    fetchUsers();
+  };
+
+  const handleUserUpdated = (updatedUser: PlatformUserItem) => {
+    setUsers(prev => prev.map(u => u.id === updatedUser.id ? updatedUser : u));
+    fetchUsers();
+  };
+
+  const handleUserDeleted = (userId: string) => {
+    setUsers(prev => prev.filter(u => u.id !== userId));
     fetchUsers();
   };
 
@@ -456,31 +472,43 @@ export const UserManagementView: React.FC<Props> = ({ schools = [], currentUser 
                         )}
                       </td>
 
-                      {/* Quick Action / Status Toggle */}
+                      {/* Quick Action / Status Toggle & Edit */}
                       <td className="py-3.5 px-4 text-right">
-                        {!isFounder && (
-                          <div className="flex items-center justify-end gap-1.5">
-                            {currentStatus === 'ACTIVE' ? (
-                              <button
-                                id={`btn-suspend-${user.id}`}
-                                onClick={() => handleStatusChange(user.id, 'SUSPENDED', user.isDemoAccount, user.role)}
-                                disabled={isUpdatingStatus === user.id}
-                                className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 text-[10px] font-semibold transition-all"
-                              >
-                                Suspend
-                              </button>
-                            ) : (
-                              <button
-                                id={`btn-activate-${user.id}`}
-                                onClick={() => handleStatusChange(user.id, 'ACTIVE', user.isDemoAccount, user.role)}
-                                disabled={isUpdatingStatus === user.id}
-                                className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold transition-all"
-                              >
-                                Activate
-                              </button>
-                            )}
-                          </div>
-                        )}
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            id={`btn-edit-${user.id}`}
+                            onClick={() => setEditingUser(user)}
+                            className="px-2.5 py-1 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-400 border border-cyan-500/20 text-[10px] font-semibold flex items-center gap-1 transition-all"
+                            title="Edit User Identity"
+                          >
+                            <Edit className="w-3 h-3" />
+                            <span>Edit</span>
+                          </button>
+
+                          {!isFounder && (
+                            <>
+                              {currentStatus === 'ACTIVE' ? (
+                                <button
+                                  id={`btn-suspend-${user.id}`}
+                                  onClick={() => handleStatusChange(user.id, 'SUSPENDED', user.isDemoAccount, user.role)}
+                                  disabled={isUpdatingStatus === user.id}
+                                  className="px-2.5 py-1 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/20 text-[10px] font-semibold transition-all"
+                                >
+                                  Suspend
+                                </button>
+                              ) : (
+                                <button
+                                  id={`btn-activate-${user.id}`}
+                                  onClick={() => handleStatusChange(user.id, 'ACTIVE', user.isDemoAccount, user.role)}
+                                  disabled={isUpdatingStatus === user.id}
+                                  className="px-2.5 py-1 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-[10px] font-semibold transition-all"
+                                >
+                                  Activate
+                                </button>
+                              )}
+                            </>
+                          )}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -496,6 +524,16 @@ export const UserManagementView: React.FC<Props> = ({ schools = [], currentUser 
         isOpen={isCreateModalOpen}
         onClose={() => setIsCreateModalOpen(false)}
         onUserCreated={handleUserCreated}
+        schools={schools}
+      />
+
+      {/* Edit User Modal */}
+      <EditUserModal
+        isOpen={!!editingUser}
+        user={editingUser}
+        onClose={() => setEditingUser(null)}
+        onUserUpdated={handleUserUpdated}
+        onUserDeleted={handleUserDeleted}
         schools={schools}
       />
     </div>

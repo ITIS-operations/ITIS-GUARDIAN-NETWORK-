@@ -411,11 +411,26 @@ export interface ImmutableAuditEvent {
     | 'SECURITY_POLICY_MODIFIED'
     | 'DISPATCH_AUTHORIZATION_VERIFIED'
     | 'NEED_TO_KNOW_DATA_ACCESSED'
-    | 'RBAC_PERMISSION_CHECK_FAILED';
+    | 'RBAC_PERMISSION_CHECK_FAILED'
+    | 'DEVICE_ASSIGNMENT'
+    | 'DEVICE_REASSIGNMENT'
+    | 'DIAGNOSTIC_ACTION'
+    | 'DEVICE_CALIBRATION'
+    | 'MAINTENANCE_ACTION'
+    | 'TECHNICAL_CONFIG_CHANGED'
+    | 'INCIDENT_CLAIMED'
+    | 'INCIDENT_RELEASED'
+    | 'COMMAND_INCIDENT_HANDOVER'
+    | 'INCIDENT_MONITOR_JOINED'
+    | 'INCIDENT_MONITOR_LEFT'
+    | 'RESPONDER_LOCATION_SHARING_ENABLED'
+    | 'RESPONDER_LOCATION_SHARING_DISABLED'
+    | 'RESPONDER_LOCATION_UPDATED'
+    | 'RESPONDER_AVAILABILITY_CHANGED';
   actorUserId: string;
   actorName: string;
   actorRole: string;
-  targetEntity: 'PERSON' | 'LEARNER' | 'GUARDIAN' | 'RELATIONSHIP' | 'ENROLMENT' | 'ACADEMIC_RECORD' | 'INCIDENT' | 'USER' | 'POLICY' | 'SYSTEM' | 'SCHOOL' | 'RESPONDER';
+  targetEntity: 'PERSON' | 'LEARNER' | 'GUARDIAN' | 'RELATIONSHIP' | 'ENROLMENT' | 'ACADEMIC_RECORD' | 'INCIDENT' | 'USER' | 'POLICY' | 'SYSTEM' | 'SCHOOL' | 'RESPONDER' | 'DEVICE' | 'HARDWARE' | 'GATEWAY';
   targetId: string;
   details: Record<string, any>;
   ipAddress: string;
@@ -566,6 +581,45 @@ export interface IncidentOutcomeReport {
   submittedAt: string;
 }
 
+export interface MonitoringOfficer {
+  userId: string;
+  name: string;
+  role?: string;
+  joinedAt: string;
+}
+
+export interface CommandOfficerWorkload {
+  userId: string;
+  name: string;
+  role: string;
+  status: 'AVAILABLE' | 'ACTIVE' | 'OFFLINE';
+  activeIncidentCount: number;
+  monitoredIncidentCount: number;
+  totalWorkload: number;
+  assignedIncidentIds: string[];
+  isOverloaded?: boolean;
+}
+
+export interface ResponderLocationUpdate {
+  latitude: number;
+  longitude: number;
+  accuracyMeters?: number;
+  heading?: number;
+  speed?: number;
+  locationSharingStatus: 'OFF_DUTY' | 'AVAILABLE' | 'ON_INCIDENT' | 'EMERGENCY_MODE';
+  timestamp?: string;
+  addressDescription?: string;
+}
+
+export interface TacticalMapLayerSettings {
+  showIncidents: boolean;
+  showResponders: boolean;
+  showSchools: boolean;
+  showSafeZones: boolean;
+  showRoutes: boolean;
+  showHeatmap?: boolean;
+}
+
 export interface IncidentAlert {
   id: string;
   learnerId: string;
@@ -585,7 +639,14 @@ export interface IncidentAlert {
     lng: number;
     addressDescription: string;
     accuracyMeters: number;
+    locationSource?: string;
+    locationTimestamp?: string;
   };
+  primaryOfficerId?: string;
+  primaryOfficerName?: string;
+  primaryOfficerRole?: string;
+  claimedAt?: string;
+  monitoringOfficers?: MonitoringOfficer[];
   assignedResponder?: {
     id: string;
     name: string;
@@ -595,6 +656,11 @@ export interface IncidentAlert {
     distanceKm?: number;
     acceptedAt?: string;
     arrivedAt?: string;
+    currentLat?: number;
+    currentLng?: number;
+    heading?: number;
+    speed?: number;
+    lastLocationUpdate?: string;
   };
   isSimulation?: boolean;
   slaTargetSeconds: number; // e.g. 180 (3 min)
@@ -654,6 +720,24 @@ export interface CreateUserPayload {
   department?: string;
   status?: AccountStatus;
   permissions?: string[];
+}
+
+export interface UpdateUserPayload {
+  firstName?: string;
+  surname?: string;
+  name?: string;
+  email?: string;
+  mobileNumber?: string;
+  role?: UserRole;
+  password?: string;
+  organization?: string;
+  schoolId?: string | null;
+  guardianId?: string | null;
+  responderUnit?: string | null;
+  department?: string | null;
+  status?: AccountStatus;
+  permissions?: string[];
+  mustChangePassword?: boolean;
 }
 
 export interface RegisterUserPayload {
@@ -802,3 +886,184 @@ export interface AuditLogQueryOptions {
   page?: number;
   cursor?: string;
 }
+
+// ----------------------------------------------------
+// PHASE 6: TECHNICIAN & HARDWARE TELEMETRY MODELS
+// ----------------------------------------------------
+export interface DeviceRecord {
+  id: string;
+  serialNumber: string;
+  type: 'WEARABLE_BEACON' | 'RFID_GATE_READER' | 'VEHICLE_GPS' | 'BIOMETRIC_TERMINAL' | 'LORAWAN_GATEWAY';
+  assignedSchool: string;
+  assignedSubject?: string;
+  assignmentState: 'ASSIGNED' | 'UNASSIGNED' | 'IN_MAINTENANCE';
+  batteryLevel: number;
+  signalStrength: number; // dBm e.g. -58
+  snrDb?: number; // SNR in dB e.g. +28
+  firmwareVersion: string;
+  hardwareRevision?: string;
+  status: 'ONLINE' | 'LOW_BATTERY' | 'OFFLINE' | 'MAINTENANCE_REQUIRED' | 'TAMPER_TRIGGERED';
+  tamperStatus: 'SECURE' | 'TAMPER_FLAGGED' | 'CALIBRATED';
+  calibrationStatus: 'CALIBRATED' | 'PENDING_RECALIBRATION' | 'CALIBRATING';
+  rfChannel?: string;
+  gatewayStatus?: string;
+  lastHeartbeat: string;
+  lastPingAt?: string;
+  maintenanceDueInDays?: number;
+}
+
+export interface DeviceGatewayRecord {
+  id: string;
+  name: string;
+  schoolName: string;
+  type: 'RFID_LONG_RANGE' | 'LORAWAN_868' | 'BLE_MESH_REPEATER' | 'BIOMETRIC_GATE';
+  rfChannel: string;
+  frequencyMhz: number;
+  snrDb: number;
+  uplinkStatus: 'OPERATIONAL' | 'DEGRADED' | 'OFFLINE';
+  latencyMs: number;
+  activeConnectedNodes: number;
+  icasaCertified: boolean;
+}
+
+export interface DeviceMaintenanceRecord {
+  id: string;
+  deviceId: string;
+  serialNumber?: string;
+  deviceSerialNumber?: string;
+  technicianUserId: string;
+  technicianName: string;
+  actionType: string;
+  description: string;
+  status: string;
+  scheduledDate?: string;
+  completedDate?: string;
+  performedAt?: string;
+  createdAt: string;
+}
+
+export interface TechnicianValidationResult {
+  suiteId: string;
+  timestamp: string;
+  totalTests: number;
+  passedTests: number;
+  failedTests: number;
+  allPassed: boolean;
+  results: {
+    id: string;
+    name: string;
+    requirement: string;
+    expected: string;
+    actual: string;
+    status: 'PASS' | 'FAIL';
+    auditEventLogged?: boolean;
+    evidence: Record<string, any>;
+  }[];
+}
+
+// ----------------------------------------------------
+// PHASE 9: FOUNDER / EXECUTIVE GOVERNANCE DATA & VALIDATION
+// ----------------------------------------------------
+export interface ExecutiveProvincialMetric {
+  province: string;
+  district: string;
+  schoolsCount: number;
+  learnersCount: number;
+  activeDevicesCount: number;
+  incidentCount: number;
+  resolvedCount: number;
+  slaCompliance: string;
+  gatewayStatus: 'OPTIMAL' | 'DEGRADED' | 'OPERATIONAL';
+}
+
+export interface StrategicKpiItem {
+  id: string;
+  title: string;
+  value: string | number;
+  target: string | number;
+  unit?: string;
+  trend: 'UP' | 'DOWN' | 'STABLE';
+  status: 'EXCELLENT' | 'ON_TRACK' | 'ATTENTION';
+  description: string;
+}
+
+export interface ExecutiveOperationalAlert {
+  id: string;
+  level: 'CRITICAL' | 'WARNING' | 'INFO';
+  title: string;
+  category: string;
+  description: string;
+  recommendedAction: string;
+  timestamp: string;
+  affectedCount?: number;
+}
+
+export interface ExecutiveOverviewData {
+  nationalSafetyIndex: number; // e.g. 99.8%
+  totalLearnersProtected: number;
+  totalSchoolsOnboarded: number;
+  totalGuardiansLinked: number;
+  totalActiveIncidents: number;
+  totalResolvedIncidents: number;
+  emergencyResponseAverageEtaSeconds: number; // e.g. 142
+  slaComplianceRate: number; // e.g. 99.6
+  systemAvailability: number; // e.g. 99.99
+  provincialBreakdown: ExecutiveProvincialMetric[];
+  schoolCoverage: {
+    totalSchools: number;
+    certifiedSchools: number;
+    adoptionVelocityMonthly: string;
+    averageSafetyTier: string;
+  };
+  learnerProtection: {
+    totalActive: number;
+    monitoredBeacons: number;
+    safeZoneContainmentRate: string;
+    unresolvedIncidents: number;
+  };
+  deviceNetworkHealth: {
+    totalDevices: number;
+    activeBeacons: number;
+    lowBatteryAlerts: number;
+    gatewaysOnline: number;
+    gatewaysTotal: number;
+    spectrumCompliance: string;
+  };
+  guardianAdoption: {
+    totalGuardians: number;
+    multiChildLinkRatio: string;
+    averageVerificationTimeDays: number;
+    pushSmsDeliveryRate: string;
+  };
+  auditCompliance: {
+    totalAuditEvents: number;
+    tamperProofChecksumsVerified: boolean;
+    popiaDataResidency: string;
+    dbeEmisSyncStatus: string;
+    lastIntegrityVerification: string;
+  };
+  operationalAlerts: ExecutiveOperationalAlert[];
+  strategicKpis: StrategicKpiItem[];
+  timestamp: string;
+}
+
+export interface FounderValidationResult {
+  suiteId: string;
+  timestamp: string;
+  totalTests: number;
+  passedTests: number;
+  failedTests: number;
+  allPassed: boolean;
+  results: {
+    id: string;
+    name: string;
+    requirement: string;
+    expected: string;
+    actual: string;
+    status: 'PASS' | 'FAIL';
+    auditEventLogged?: boolean;
+    evidence: Record<string, any>;
+  }[];
+}
+
+

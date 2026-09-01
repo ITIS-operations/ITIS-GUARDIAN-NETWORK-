@@ -16,6 +16,7 @@ import {
   RegisterUserPayload,
   PlatformUserItem,
   CreateUserPayload,
+  UpdateUserPayload,
   AuthoritativeOnboardPayload,
   AnnualSafetyUpdatePayload,
   RegisterSchoolPayload,
@@ -46,6 +47,8 @@ export interface IUserRepository {
   findByEmailOrAlias(identifier: string): Promise<PlatformUserItem | null>;
   findAll(): Promise<PlatformUserItem[]>;
   create(payload: CreateUserPayload, actorUserId: string): Promise<PlatformUserItem>;
+  update(id: string, updates: UpdateUserPayload, actorUserId: string): Promise<PlatformUserItem>;
+  deleteUser(id: string, actorUserId: string, hardDelete?: boolean): Promise<{ success: boolean; softDeleted: boolean; hardDeleted: boolean }>;
   updateStatus(id: string, status: 'ACTIVE' | 'SUSPENDED' | 'DISABLED', actorUserId: string): Promise<PlatformUserItem>;
   updatePassword(userId: string, newPasswordPlain: string): Promise<void>;
   verifyCredentials(identifier: string, passwordPlain: string): Promise<PlatformUserItem | null>;
@@ -120,6 +123,11 @@ export interface IDeviceRepository {
   queryDevices?(options?: { schoolId?: string; search?: string; status?: string }): Promise<any[]>;
   assignToLearner(deviceId: string, learnerId: string, assignedByUserId: string): Promise<void>;
   updateDiagnostic(deviceId: string, telemetry: { batteryLevel?: number; tamperStatus?: string; lastPingAt?: string }): Promise<void>;
+  calibrate?(deviceId: string): Promise<any>;
+  logMaintenance?(payload: { deviceId: string; technicianUserId?: string; technicianName?: string; actionType: string; description: string; status?: string }): Promise<any>;
+  getMaintenanceLogs?(deviceId?: string): Promise<any[]>;
+  updateConfig?(deviceId: string, config: { firmwareVersion?: string; hardwareRevision?: string; status?: string }): Promise<any>;
+  reassignDevice?(params: { oldDeviceId?: string; newDeviceId: string; learnerId: string; assignedByUserId: string; notes?: string }): Promise<void>;
 }
 
 export interface IIncidentRepository {
@@ -128,6 +136,13 @@ export interface IIncidentRepository {
   create(alert: IncidentAlert, actorContext: any): Promise<IncidentAlert>;
   update(id: string, updates: Partial<IncidentAlert>): Promise<IncidentAlert>;
   updateStatus(incidentId: string, status: string, notes?: string): Promise<IncidentAlert>;
+  claimIncident?(incidentId: string, officer: { id: string; name: string; role: string }): Promise<IncidentAlert>;
+  releaseIncident?(incidentId: string, officer: { id: string; name: string; role: string }, reason?: string): Promise<IncidentAlert>;
+  handoverIncident?(incidentId: string, fromOfficer: { id: string; name: string; role: string }, targetOfficer: { id: string; name: string; role: string }, reason: string): Promise<IncidentAlert>;
+  joinMonitoring?(incidentId: string, officer: { id: string; name: string; role: string }): Promise<IncidentAlert>;
+  leaveMonitoring?(incidentId: string, officerId: string): Promise<IncidentAlert>;
+  addTacticalNote?(incidentId: string, officer: { id: string; name: string; role: string }, noteText: string): Promise<IncidentAlert>;
+  getOfficersWorkload?(): Promise<any[]>;
   getTimelineEvents(incidentId: string): Promise<any[]>;
   addEvent(incidentId: string, event: {
     eventType: string;
@@ -152,6 +167,8 @@ export interface IResponderRepository {
   declineAssignment(incidentId: string, user: any, reason: string): Promise<any>;
   updateOperationalStatus(incidentId: string, user: any, status: string, note?: string, telemetry?: any): Promise<any>;
   submitOutcomeReport(report: IncidentOutcomeReport, user: any): Promise<IncidentAlert>;
+  updateLiveLocation?(responderIdOrUserId: string, locationData: { latitude: number; longitude: number; accuracyMeters?: number; heading?: number; speed?: number; locationSharingStatus?: string; addressDescription?: string }): Promise<ResponderUnit>;
+  updateAvailability?(responderIdOrUserId: string, status: string, isAvailable: boolean): Promise<ResponderUnit>;
 }
 
 export interface IAuditRepository {

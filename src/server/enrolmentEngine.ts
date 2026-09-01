@@ -751,8 +751,8 @@ export class EnrolmentEngine {
         // Create new Guardian User
         const newUserId = 'usr-parent-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6);
         const salt = generateSalt();
-        const tempPassword = 'PendingActivation_' + Math.random().toString(36).slice(2, 10) + '!';
-        const hash = hashPassword(tempPassword, salt);
+        const initialGuardianPassword = process.env.GUARDIAN_INITIAL_PASSWORD || 'ITIS-Guardian!';
+        const hash = hashPassword(initialGuardianPassword, salt);
         const parentUser = {
           id: newUserId,
           email: cleanEmail,

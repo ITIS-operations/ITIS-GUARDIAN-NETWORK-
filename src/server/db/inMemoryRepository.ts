@@ -119,6 +119,76 @@ class InMemoryUserRepository implements IUserRepository {
     return this.toPlatformUserItem(full);
   }
 
+  async update(id: string, updates: any, actorUserId: string): Promise<PlatformUserItem> {
+    const u = db.users.get(id);
+    if (!u) throw new Error(`User ${id} not found`);
+
+    if (u.role === 'FOUNDER_EXECUTIVE' && updates.role && updates.role !== 'FOUNDER_EXECUTIVE') {
+      throw new Error('PROTECTION LOCK: Cannot downgrade or remove the role of the sovereign Founder/SuperAdmin account.');
+    }
+
+    if (updates.email && updates.email.trim()) {
+      const cleanEmail = updates.email.trim().toLowerCase();
+      if (cleanEmail !== u.email) {
+        for (const other of db.users.values()) {
+          if (other.id !== id && (other.email === cleanEmail || other.normalizedEmail === cleanEmail)) {
+            const err: any = new Error('This email address is already in use by another user account.');
+            err.code = '23505';
+            throw err;
+          }
+        }
+        u.email = cleanEmail;
+        u.normalizedEmail = cleanEmail;
+      }
+    }
+
+    if (updates.firstName !== undefined) u.firstName = updates.firstName.trim();
+    if (updates.surname !== undefined) u.surname = updates.surname.trim();
+    if (updates.name !== undefined && updates.name.trim()) {
+      u.name = updates.name.trim();
+    } else if (updates.firstName !== undefined || updates.surname !== undefined) {
+      u.name = `${u.firstName || ''} ${u.surname || ''}`.trim() || u.name;
+    }
+    if (updates.mobileNumber !== undefined) u.mobileNumber = updates.mobileNumber.trim();
+    if (updates.role) u.role = updates.role;
+    if (updates.status) u.status = updates.status;
+    if (updates.schoolId !== undefined) u.schoolId = updates.schoolId;
+    if (updates.guardianId !== undefined) u.guardianId = updates.guardianId;
+    if (updates.responderUnit !== undefined) u.responderUnit = updates.responderUnit;
+    if (updates.department !== undefined) u.department = updates.department;
+    if (updates.organization !== undefined) u.organization = updates.organization;
+    if (updates.permissions) u.permissions = updates.permissions;
+
+    if (updates.password && updates.password.trim()) {
+      u.password = updates.password.trim();
+      u.mustChangePassword = false;
+    }
+
+    u.updatedAt = new Date().toISOString();
+    db.persistToDisk();
+    return this.toPlatformUserItem(u);
+  }
+
+  async deleteUser(id: string, actorUserId: string, hardDelete?: boolean): Promise<{ success: boolean; softDeleted: boolean; hardDeleted: boolean }> {
+    const u = db.users.get(id);
+    if (!u) throw new Error(`User ${id} not found`);
+
+    if (u.role === 'FOUNDER_EXECUTIVE' || u.id === 'USR-SUPER-001') {
+      throw new Error('PROTECTION LOCK: The sovereign Founder/SuperAdmin account cannot be deleted.');
+    }
+
+    if (!hardDelete) {
+      u.status = 'DISABLED';
+      u.updatedAt = new Date().toISOString();
+      db.persistToDisk();
+      return { success: true, softDeleted: true, hardDeleted: false };
+    } else {
+      db.users.delete(id);
+      db.persistToDisk();
+      return { success: true, softDeleted: false, hardDeleted: true };
+    }
+  }
+
   async updateStatus(id: string, status: 'ACTIVE' | 'SUSPENDED' | 'DISABLED', actorUserId: string): Promise<PlatformUserItem> {
     const u = db.users.get(id);
     if (!u) throw new Error(`User ${id} not found`);

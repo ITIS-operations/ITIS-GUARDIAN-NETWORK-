@@ -17,13 +17,20 @@ import {
   IncidentOutcomeReport,
   PlatformUserItem,
   CreateUserPayload,
+  UpdateUserPayload,
   RegisterUserPayload,
   AccountStatus,
   PaginatedResponse,
   LearnerQueryOptions,
   SchoolQueryOptions,
   IncidentQueryOptions,
-  AuditLogQueryOptions
+  AuditLogQueryOptions,
+  DeviceRecord,
+  DeviceGatewayRecord,
+  DeviceMaintenanceRecord,
+  TechnicianValidationResult,
+  ExecutiveOverviewData,
+  FounderValidationResult
 } from '../types.js';
 
 const API_BASE = '/api';
@@ -535,6 +542,140 @@ export const api = {
     return safeFetchJson<IncidentAlert>(res, 'Status update failed');
   },
 
+  // Multi-Officer Incident Coordination
+  async claimIncident(id: string): Promise<{ success: boolean; incident: IncidentAlert }> {
+    const res = await fetch(`${API_BASE}/incidents/${id}/claim`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      }
+    });
+    return safeFetchJson<{ success: boolean; incident: IncidentAlert }>(res, 'Failed to claim incident');
+  },
+
+  async releaseIncident(id: string, reason?: string): Promise<{ success: boolean; incident: IncidentAlert }> {
+    const res = await fetch(`${API_BASE}/incidents/${id}/release`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify({ reason })
+    });
+    return safeFetchJson<{ success: boolean; incident: IncidentAlert }>(res, 'Failed to release incident');
+  },
+
+  async handoverIncident(id: string, targetOfficer: { id: string; name: string; role?: string }, reason: string): Promise<{ success: boolean; incident: IncidentAlert }> {
+    const res = await fetch(`${API_BASE}/incidents/${id}/handover`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify({
+        targetOfficerId: targetOfficer.id,
+        targetOfficerName: targetOfficer.name,
+        targetOfficerRole: targetOfficer.role || 'COMMAND_OPERATOR',
+        reason
+      })
+    });
+    return safeFetchJson<{ success: boolean; incident: IncidentAlert }>(res, 'Failed to transfer incident command');
+  },
+
+  async joinIncidentMonitoring(id: string): Promise<{ success: boolean; incident: IncidentAlert }> {
+    const res = await fetch(`${API_BASE}/incidents/${id}/monitor/join`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      }
+    });
+    return safeFetchJson<{ success: boolean; incident: IncidentAlert }>(res, 'Failed to join incident monitoring');
+  },
+
+  async leaveIncidentMonitoring(id: string): Promise<{ success: boolean; incident: IncidentAlert }> {
+    const res = await fetch(`${API_BASE}/incidents/${id}/monitor/leave`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      }
+    });
+    return safeFetchJson<{ success: boolean; incident: IncidentAlert }>(res, 'Failed to leave incident monitoring');
+  },
+
+  async addIncidentTacticalNote(id: string, note: string): Promise<{ success: boolean; incident: IncidentAlert }> {
+    const res = await fetch(`${API_BASE}/incidents/${id}/notes`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify({ note })
+    });
+    return safeFetchJson<{ success: boolean; incident: IncidentAlert }>(res, 'Failed to add tactical note');
+  },
+
+  async getIncidentTimeline(id: string): Promise<any[]> {
+    try {
+      const res = await fetch(`${API_BASE}/incidents/${id}/timeline`, {
+        headers: this.getAuthHeaders()
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.events || [];
+    } catch {
+      return [];
+    }
+  },
+
+  async getCommandOfficersWorkload(): Promise<any[]> {
+    try {
+      const res = await fetch(`${API_BASE}/command-centre/officers`, {
+        headers: this.getAuthHeaders()
+      });
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.officers || [];
+    } catch {
+      return [];
+    }
+  },
+
+  async updateResponderLiveLocation(locationData: {
+    latitude: number;
+    longitude: number;
+    accuracyMeters?: number;
+    heading?: number;
+    speed?: number;
+    locationSharingStatus?: string;
+    addressDescription?: string;
+    responderId?: string;
+  }): Promise<{ success: boolean; responder: ResponderUnit }> {
+    const res = await fetch(`${API_BASE}/responders/location`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify(locationData)
+    });
+    return safeFetchJson<{ success: boolean; responder: ResponderUnit }>(res, 'Failed to publish location telemetry');
+  },
+
+  async updateResponderAvailability(status: string, isAvailable?: boolean, responderId?: string): Promise<{ success: boolean; responder: ResponderUnit }> {
+    const res = await fetch(`${API_BASE}/responders/availability`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify({ status, isAvailable, responderId })
+    });
+    return safeFetchJson<{ success: boolean; responder: ResponderUnit }>(res, 'Failed to update responder availability');
+  },
+
   // RBAC & Security Matrix
   async getRbacMatrix(): Promise<{ matrix: any; version?: string }> {
     const res = await fetch(`${API_BASE}/rbac/matrix`, {
@@ -559,6 +700,17 @@ export const api = {
       }
     });
     return safeFetchJson<any>(res, 'Failed to run security test suite');
+  },
+
+  async runOperationalSuite(): Promise<any> {
+    const res = await fetch(`${API_BASE}/command-centre/run-validation-suite`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      }
+    });
+    return safeFetchJson<any>(res, 'Failed to run operational validation suite');
   },
 
   // Platform User Governance (Founder Only)
@@ -587,6 +739,28 @@ export const api = {
       body: JSON.stringify(payload)
     });
     return safeFetchJson<PlatformUserItem>(res, 'User creation failed');
+  },
+
+  async updateUser(userId: string, payload: UpdateUserPayload): Promise<PlatformUserItem> {
+    const res = await fetch(`${API_BASE}/users/${userId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify(payload)
+    });
+    return safeFetchJson<PlatformUserItem>(res, 'User update failed');
+  },
+
+  async deleteUser(userId: string, hard: boolean = false): Promise<{ success: boolean; softDeleted?: boolean; hardDeleted?: boolean; message?: string }> {
+    const res = await fetch(`${API_BASE}/users/${userId}${hard ? '?hard=true' : ''}`, {
+      method: 'DELETE',
+      headers: {
+        ...this.getAuthHeaders()
+      }
+    });
+    return safeFetchJson<{ success: boolean; softDeleted?: boolean; hardDeleted?: boolean; message?: string }>(res, 'User deletion failed');
   },
 
   async updateUserStatus(userId: string, status: AccountStatus): Promise<{ success: boolean; user: PlatformUserItem }> {
@@ -772,5 +946,141 @@ export const api = {
       body: JSON.stringify(payload)
     });
     return safeFetchJson<{ success: boolean; message: string }>(res, 'Failed to update Founder password');
+  },
+
+  // ----------------------------------------------------
+  // PHASE 6: TECHNICIAN & HARDWARE API METHODS
+  // ----------------------------------------------------
+  async getDevices(filters?: { schoolId?: string; search?: string; status?: string }): Promise<DeviceRecord[]> {
+    const params = new URLSearchParams();
+    if (filters?.schoolId) params.append('schoolId', filters.schoolId);
+    if (filters?.search) params.append('search', filters.search);
+    if (filters?.status) params.append('status', filters.status);
+
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`${API_BASE}/devices${qs}`, {
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<DeviceRecord[]>(res, 'Failed to fetch hardware device telemetry');
+  },
+
+  async pingDevice(deviceId: string): Promise<{ success: boolean; deviceId: string; status: string; signalStrength: number; latencyMs: number; timestamp: string }> {
+    const res = await fetch(`${API_BASE}/devices/ping`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify({ deviceId })
+    });
+    return safeFetchJson<{ success: boolean; deviceId: string; status: string; signalStrength: number; latencyMs: number; timestamp: string }>(res, 'Failed to ping hardware device');
+  },
+
+  async calibrateDevice(deviceId: string): Promise<{ success: boolean; deviceId: string; status: string; batteryLevel?: number; signalStrength: number; tamperStatus: string; calibrationStatus: string }> {
+    const res = await fetch(`${API_BASE}/devices/calibrate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify({ deviceId })
+    });
+    return safeFetchJson<{ success: boolean; deviceId: string; status: string; batteryLevel?: number; signalStrength: number; tamperStatus: string; calibrationStatus: string }>(res, 'Failed to calibrate hardware device');
+  },
+
+  async logDeviceMaintenance(payload: {
+    deviceId: string;
+    actionType: string;
+    description: string;
+    status?: string;
+  }): Promise<{ success: boolean; message: string; record: DeviceMaintenanceRecord }> {
+    const res = await fetch(`${API_BASE}/devices/maintenance`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify(payload)
+    });
+    return safeFetchJson<{ success: boolean; message: string; record: DeviceMaintenanceRecord }>(res, 'Failed to record maintenance action');
+  },
+
+  async getDeviceMaintenanceLogs(deviceId?: string): Promise<DeviceMaintenanceRecord[]> {
+    const qs = deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : '';
+    const res = await fetch(`${API_BASE}/devices/maintenance${qs}`, {
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<DeviceMaintenanceRecord[]>(res, 'Failed to fetch maintenance logs');
+  },
+
+  async updateDeviceConfig(payload: {
+    deviceId: string;
+    firmwareVersion?: string;
+    hardwareRevision?: string;
+    status?: string;
+  }): Promise<{ success: boolean; message: string; updatedConfig: any }> {
+    const res = await fetch(`${API_BASE}/devices/config`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify(payload)
+    });
+    return safeFetchJson<{ success: boolean; message: string; updatedConfig: any }>(res, 'Failed to update device configuration');
+  },
+
+  async reassignDevice(payload: {
+    oldDeviceId?: string;
+    newDeviceId: string;
+    learnerEmis?: string;
+    learnerId?: string;
+    reason?: string;
+  }): Promise<{ success: boolean; message: string; newDeviceId: string; serialNumber: string }> {
+    const res = await fetch(`${API_BASE}/devices/reassign`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify(payload)
+    });
+    return safeFetchJson<{ success: boolean; message: string; newDeviceId: string; serialNumber: string }>(res, 'Failed to assign or reassign hardware device');
+  },
+
+  async getDeviceGateways(): Promise<DeviceGatewayRecord[]> {
+    const res = await fetch(`${API_BASE}/devices/gateways`, {
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<DeviceGatewayRecord[]>(res, 'Failed to fetch IoT gateways');
+  },
+
+  async runTechnicianValidationSuite(): Promise<TechnicianValidationResult> {
+    const res = await fetch(`${API_BASE}/technician/run-validation-suite`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      }
+    });
+    return safeFetchJson<TechnicianValidationResult>(res, 'Failed to run Phase 6 technician validation suite');
+  },
+
+  async getExecutiveOverview(): Promise<ExecutiveOverviewData> {
+    const res = await fetch(`${API_BASE}/governance/executive-overview`, {
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<ExecutiveOverviewData>(res, 'Failed to fetch executive overview data');
+  },
+
+  async runFounderValidationSuite(): Promise<FounderValidationResult> {
+    const res = await fetch(`${API_BASE}/founder/run-validation-suite`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      }
+    });
+    return safeFetchJson<FounderValidationResult>(res, 'Failed to run Phase 9 Founder validation suite');
   }
 };

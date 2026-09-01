@@ -181,12 +181,24 @@ export async function bootstrapDatabase(): Promise<void> {
       ALTER TABLE responders ADD COLUMN IF NOT EXISTS capabilities TEXT[] DEFAULT '{}';
       ALTER TABLE responders ADD COLUMN IF NOT EXISTS rating_score REAL DEFAULT 4.8;
       ALTER TABLE responders ADD COLUMN IF NOT EXISTS address_description TEXT;
+      ALTER TABLE responders ADD COLUMN IF NOT EXISTS accuracy_meters REAL DEFAULT 5.0;
+      ALTER TABLE responders ADD COLUMN IF NOT EXISTS heading REAL;
+      ALTER TABLE responders ADD COLUMN IF NOT EXISTS speed REAL;
+      ALTER TABLE responders ADD COLUMN IF NOT EXISTS location_sharing_status VARCHAR(32) NOT NULL DEFAULT 'AVAILABLE';
+      ALTER TABLE responders ADD COLUMN IF NOT EXISTS last_heartbeat TIMESTAMPTZ;
 
       -- Incidents
       ALTER TABLE incidents ADD COLUMN IF NOT EXISTS accuracy_meters REAL DEFAULT 5.0;
       ALTER TABLE incidents ADD COLUMN IF NOT EXISTS assigned_responder JSONB;
       ALTER TABLE incidents ADD COLUMN IF NOT EXISTS responder_status VARCHAR(64);
       ALTER TABLE incidents ADD COLUMN IF NOT EXISTS timeline JSONB[] NOT NULL DEFAULT '{}';
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS primary_command_officer_id VARCHAR(64);
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS primary_command_officer_name VARCHAR(128);
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS primary_command_officer_role VARCHAR(64);
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS claimed_at TIMESTAMPTZ;
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS monitoring_officers JSONB NOT NULL DEFAULT '[]'::jsonb;
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS location_source VARCHAR(64) DEFAULT 'GPS_RADIO_TELEMETRY';
+      ALTER TABLE incidents ADD COLUMN IF NOT EXISTS location_timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
     END $$;
   `);
 
@@ -353,6 +365,22 @@ export async function bootstrapDatabase(): Promise<void> {
       assigned_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
       unassigned_at TIMESTAMPTZ,
       assignment_notes TEXT
+    );
+  `);
+
+  // 13b. Device Maintenance & Diagnostic History (Phase 6 Technician Architecture)
+  await query(`
+    CREATE TABLE IF NOT EXISTS device_maintenance_logs (
+      id VARCHAR(64) PRIMARY KEY,
+      device_id VARCHAR(64) REFERENCES devices(id) ON DELETE CASCADE,
+      technician_user_id VARCHAR(64) REFERENCES users(id),
+      technician_name VARCHAR(128) NOT NULL,
+      action_type VARCHAR(64) NOT NULL,
+      description TEXT NOT NULL,
+      status VARCHAR(32) NOT NULL DEFAULT 'COMPLETED',
+      scheduled_date TIMESTAMPTZ,
+      completed_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
   `);
 
