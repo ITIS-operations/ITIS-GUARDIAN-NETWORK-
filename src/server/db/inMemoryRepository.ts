@@ -410,6 +410,20 @@ class InMemoryDeviceRepository implements IDeviceRepository {
     return null;
   }
 
+  async findByImeiOrSerial(identifier: string): Promise<any | null> {
+    const clean = identifier.trim().toLowerCase();
+    for (const d of db.devices.values()) {
+      if (
+        (d.id && d.id.toLowerCase() === clean) ||
+        (d.serialNumber && d.serialNumber.toLowerCase() === clean) ||
+        (d.imei && d.imei.toLowerCase() === clean)
+      ) {
+        return d;
+      }
+    }
+    return null;
+  }
+
   async findAssignedToLearner(learnerId: string): Promise<any | null> {
     const learner = db.learners.get(learnerId);
     if (!learner || !learner.trackingBeaconId) return null;
@@ -467,6 +481,29 @@ class InMemoryIncidentRepository implements IIncidentRepository {
     const inc = db.incidents.get(incidentId);
     if (!inc) return [];
     return inc.notes.map((n, i) => ({ id: `note-${i}`, note: n, timestamp: inc.timestamp }));
+  }
+
+  async getOfficersWorkload(): Promise<any[]> {
+    const officers: any[] = [];
+    for (const u of db.users.values()) {
+      if (['COMMAND_OPERATOR', 'FOUNDER_EXECUTIVE', 'SYSTEM_ADMIN'].includes(u.role) && u.status === 'ACTIVE') {
+        const activeIncidents = Array.from(db.incidents.values()).filter(i => i.status !== 'RESOLVED');
+        const claimed = activeIncidents.filter((i: any) => i.primaryOfficerId === u.id);
+        const monitored = activeIncidents.filter((i: any) => (i.monitoringOfficers || []).some((m: any) => m.userId === u.id));
+        officers.push({
+          userId: u.id,
+          name: u.name,
+          role: u.role,
+          status: claimed.length > 0 ? 'ACTIVE' : 'AVAILABLE',
+          activeIncidentCount: claimed.length,
+          monitoredIncidentCount: monitored.length,
+          totalWorkload: claimed.length + monitored.length * 0.5,
+          assignedIncidentIds: claimed.map(i => i.id),
+          isOverloaded: claimed.length >= 3
+        });
+      }
+    }
+    return officers;
   }
 
   async addEvent(incidentId: string, event: any): Promise<any> {

@@ -30,7 +30,10 @@ import {
   DeviceMaintenanceRecord,
   TechnicianValidationResult,
   ExecutiveOverviewData,
-  FounderValidationResult
+  FounderValidationResult,
+  TelemetrySimulationRequest,
+  TelemetrySimulationResult,
+  TelemetrySimulatorTestSuiteResult
 } from '../types.js';
 
 const API_BASE = '/api';
@@ -41,6 +44,9 @@ const TOKEN_KEY = 'itis_auth_session_token';
 let cachedSchools: { data: School[]; timestamp: number } | null = null;
 const SCHOOLS_CACHE_TTL_MS = 60 * 1000; // 1 minute
 
+// In-memory token fallback if storage is restricted
+let inMemoryToken: string | null = null;
+
 async function safeFetchJson<T>(res: Response, fallbackError: string): Promise<T> {
   const contentType = res.headers.get('content-type') || '';
   const isJson = contentType.toLowerCase().includes('application/json');
@@ -49,13 +55,13 @@ async function safeFetchJson<T>(res: Response, fallbackError: string): Promise<T
     if (res.status === 404) {
       throw new Error('API service endpoint not found (HTTP 404). Please verify server routing.');
     } else if (res.status === 401) {
-      throw new Error('Invalid credentials or session expired. Access Denied (HTTP 401).');
+      throw new Error('Your session has expired or authentication is no longer valid. Please sign in again.');
     } else if (res.status === 403) {
-      throw new Error('Access Denied. Insufficient clearance or permission (HTTP 403).');
+      throw new Error('You do not have permission to perform this action (HTTP 403).');
     } else if (res.status === 409) {
-      throw new Error('Identity or resource conflict (HTTP 409).');
+      throw new Error('Identity or resource conflict detected (HTTP 409).');
     } else if (res.status >= 500) {
-      throw new Error(`Server error encountered (HTTP ${res.status}). Please try again shortly.`);
+      throw new Error('The ITIS service is temporarily unavailable. Please try again.');
     }
     throw new Error('Server returned an unexpected response. Please check the API route.');
   }
@@ -63,10 +69,34 @@ async function safeFetchJson<T>(res: Response, fallbackError: string): Promise<T
   if (!res.ok) {
     try {
       const errorData = await res.json();
-      throw new Error(errorData.error || errorData.message || `${fallbackError} (HTTP ${res.status})`);
+      const rawError = errorData.error || errorData.message || '';
+      
+      if (res.status === 401) {
+        throw new Error('Your session has expired or authentication is no longer valid. Please sign in again.');
+      }
+      if (res.status === 403) {
+        if (rawError.includes('ENROLMENT_MANAGE') || rawError.includes('Learner') || rawError.includes('clearance') || rawError.includes('permission')) {
+          throw new Error('You do not have permission to create learner enrollments.');
+        }
+        throw new Error(rawError || 'You do not have permission to perform this action.');
+      }
+      if (res.status === 503) {
+        throw new Error('The ITIS service is temporarily unavailable. Please try again.');
+      }
+
+      throw new Error(rawError || `${fallbackError} (HTTP ${res.status})`);
     } catch (err: any) {
       if (err.message && !err.message.includes('JSON')) {
         throw err;
+      }
+      if (res.status === 401) {
+        throw new Error('Your session has expired or authentication is no longer valid. Please sign in again.');
+      }
+      if (res.status === 403) {
+        throw new Error('You do not have permission to create learner enrollments.');
+      }
+      if (res.status === 503) {
+        throw new Error('The ITIS service is temporarily unavailable. Please try again.');
       }
       throw new Error(`${fallbackError} (HTTP ${res.status})`);
     }
@@ -79,26 +109,38 @@ export const api = {
   // Token helper
   getToken(): string | null {
     try {
-      return localStorage.getItem(TOKEN_KEY);
-    } catch {
-      return null;
-    }
+      const local = localStorage.getItem(TOKEN_KEY);
+      if (local) {
+        inMemoryToken = local;
+        return local;
+      }
+      const session = sessionStorage.getItem(TOKEN_KEY);
+      if (session) {
+        inMemoryToken = session;
+        return session;
+      }
+    } catch {}
+    return inMemoryToken;
   },
 
   setToken(token: string) {
+    inMemoryToken = token;
     try {
       localStorage.setItem(TOKEN_KEY, token);
+      sessionStorage.setItem(TOKEN_KEY, token);
     } catch {}
   },
 
   clearToken() {
+    inMemoryToken = null;
     try {
       localStorage.removeItem(TOKEN_KEY);
+      sessionStorage.removeItem(TOKEN_KEY);
     } catch {}
   },
 
-  getAuthHeaders(): Record<string, string> {
-    const token = this.getToken();
+  getAuthHeaders(tokenOverride?: string): Record<string, string> {
+    const token = tokenOverride || this.getToken();
     return token ? { Authorization: `Bearer ${token}` } : {};
   },
 
@@ -239,7 +281,10 @@ export const api = {
   }): Promise<IdentitySearchResult> {
     const res = await fetch(`${API_BASE}/enrolment/search-identity`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
       body: JSON.stringify(params)
     });
     return safeFetchJson<IdentitySearchResult>(res, 'Identity search failed');
@@ -1082,5 +1127,32 @@ export const api = {
       }
     });
     return safeFetchJson<FounderValidationResult>(res, 'Failed to run Phase 9 Founder validation suite');
+  },
+
+  async simulateTelemetry(payload: TelemetrySimulationRequest): Promise<TelemetrySimulationResult> {
+    const res = await fetch(`${API_BASE}/telemetry/simulate`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify(payload)
+    });
+    return safeFetchJson<TelemetrySimulationResult>(res, 'Failed to execute telemetry simulation');
+  },
+
+  async getTelemetryTemplates(deviceId?: string): Promise<Array<{ id: string; name: string; protocol: string; packetType: string; description: string; rawPacketHex: string }>> {
+    const query = deviceId ? `?deviceId=${encodeURIComponent(deviceId)}` : '';
+    const res = await fetch(`${API_BASE}/telemetry/templates${query}`, {
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<Array<{ id: string; name: string; protocol: string; packetType: string; description: string; rawPacketHex: string }>>(res, 'Failed to fetch telemetry templates');
+  },
+
+  async runTelemetrySimulatorSuite(): Promise<TelemetrySimulatorTestSuiteResult> {
+    const res = await fetch(`${API_BASE}/system/test-suites/telemetry-simulator`, {
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<TelemetrySimulatorTestSuiteResult>(res, 'Failed to run telemetry simulator test suite');
   }
 };

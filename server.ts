@@ -12,10 +12,26 @@ import { enrolmentTestSuite } from './src/server/enrolmentTestSuite.js';
 import { technicianTestSuite } from './src/server/technicianTestSuite.js';
 import { founderTestSuite } from './src/server/founderTestSuite.js';
 import { operationalTestSuite } from './src/server/operationalTestSuite.js';
+import { GT012Protocol } from './src/server/gt012/gt012Protocol.js';
+import { GT012TelemetryService } from './src/server/gt012/gt012TelemetryService.js';
+import { GT012Simulator } from './src/server/gt012/gt012Simulator.js';
+import { GT012TestSuite } from './src/server/gt012/gt012TestSuite.js';
+import { GT012ProtocolNumber } from './src/server/gt012/gt012Types.js';
+import { deviceRegistryEngine } from './src/server/deviceRegistryEngine.js';
+import { deviceRegistryTestSuite } from './src/server/deviceRegistryTestSuite.js';
+import { telemetrySimulationEngine } from './src/server/telemetrySimulationEngine.js';
+import { telemetrySimulatorTestSuite } from './src/server/telemetrySimulatorTestSuite.js';
+import { telemetryGatewayEngine } from './src/server/telemetryGatewayEngine.js';
+import { telemetryGatewayTestSuite } from './src/server/telemetryGatewayTestSuite.js';
 import { IncidentAlert, ActiveUserSession, PermissionKey, UserRole, ExecutiveOverviewData } from './src/types.js';
 
 const app = express();
 const PORT = 3000;
+
+// GT012 GPS Protocol Gateway & Telemetry Service
+const gt012Protocol = new GT012Protocol();
+const gt012Service = new GT012TelemetryService(repository);
+const gt012TestSuite = new GT012TestSuite(repository);
 
 app.use(cors());
 app.use(express.json());
@@ -1396,7 +1412,21 @@ app.get('/api/guardians', requireAuth, async (req, res) => {
 
 app.get('/api/devices', requireAuth, async (req, res) => {
   const user = req.user!;
-  const { schoolId, search, status } = req.query;
+  const { schoolId, search, status, scope } = req.query;
+
+  // If guardian or explicit scope=registry, route to authoritative device registry
+  if (user.role === 'PARENT_GUARDIAN' || scope === 'registry') {
+    try {
+      const devices = deviceRegistryEngine.getDevicesScoped(user, {
+        schoolId: schoolId as string,
+        search: search as string,
+        status: status as string
+      });
+      return res.json(devices);
+    } catch (err: any) {
+      return res.status(err.statusCode || 403).json({ error: err.message });
+    }
+  }
 
   let effectiveSchoolId: string | undefined = undefined;
   if (user.role === 'SCHOOL_PRINCIPAL' || user.role === 'SCHOOL_ADMIN_STAFF') {
@@ -3143,6 +3173,666 @@ app.get(
     }
   }
 );
+
+// ----------------------------------------------------
+// 8. GT012 GPS TRACKER PROTOCOL & TELEMETRY APIS
+// ----------------------------------------------------
+
+// Run 20-Step GT012 Protocol & Telemetry Acceptance Validation Suite
+app.post(
+  '/api/gt012/test-suite',
+  requireAuth,
+  async (req, res) => {
+    try {
+      const user = req.user!;
+      const report = await gt012TestSuite.runAllTests();
+
+      await repository.auditLogs.logEvent({
+        actionType: 'VALIDATION_SUITE_EXECUTED',
+        actorUserId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        targetEntity: 'DEVICE',
+        targetId: report.suiteId,
+        details: {
+          suite: 'GT012_GPS_TRACKER_PROTOCOL_VALIDATION',
+          totalTests: report.totalTests,
+          passedTests: report.passedTests,
+          allPassed: report.allPassed
+        },
+        ipAddress: getClientIp(req)
+      });
+
+      res.json(report);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message || 'Failed to execute GT012 validation suite.' });
+    }
+  }
+);
+
+// Ingest Raw Binary Packet (Hex String or Buffer)
+app.post(
+  '/api/gt012/packet-ingest',
+  async (req, res) => {
+    try {
+      const { rawHex } = req.body;
+      if (!rawHex || typeof rawHex !== 'string') {
+        return res.status(400).json({ error: 'Valid hexadecimal rawHex string is required.' });
+      }
+
+      const cleanHex = rawHex.replace(/\s+/g, '').toLowerCase();
+      const packetBuf = Buffer.from(cleanHex, 'hex');
+
+      const parsed = gt012Protocol.parseSinglePacket(packetBuf);
+      if (!parsed) {
+        return res.status(400).json({
+          success: false,
+          error: 'MALFORMED_GT012_PACKET: Header framing or stop bytes not recognized.'
+        });
+      }
+
+      const clientIp = getClientIp(req);
+      const result = await gt012Service.processPacket(parsed, clientIp);
+
+      res.json({
+        success: result.success,
+        packetType: result.packetType,
+        parsed,
+        ingestResult: result,
+        ackHex: result.responseBuffer ? result.responseBuffer.toString('hex').toUpperCase() : undefined
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
+);
+
+// Protocol Simulator & Test Fixture Dispatcher
+app.post(
+  '/api/gt012/simulate',
+  requireAuth,
+  async (req, res) => {
+    try {
+      const user = req.user!;
+      const {
+        scenario = 'LOCATION',
+        imei = '867543029182734',
+        latitude = -25.7589,
+        longitude = 28.2321,
+        speedKmh = 22,
+        courseDegrees = 90,
+        voltageLevel = 5,
+        gsmSignal = 4,
+        alarmCode = 0x01,
+        serialNumber = Math.floor(Math.random() * 65000) + 1
+      } = req.body;
+
+      let packetBuf: Buffer;
+
+      switch (scenario) {
+        case 'LOGIN':
+          packetBuf = GT012Simulator.generateLoginPacket(imei, serialNumber);
+          break;
+
+        case 'HEARTBEAT':
+          packetBuf = GT012Simulator.generateHeartbeatPacket({
+            voltageLevel,
+            gsmSignal,
+            serialNumber
+          });
+          break;
+
+        case 'ALARM_SOS':
+          packetBuf = GT012Simulator.generateAlarmPacket({
+            alarmCode: 0x01,
+            latitude,
+            longitude,
+            serialNumber
+          });
+          break;
+
+        case 'ALARM_LOW_BATT':
+          packetBuf = GT012Simulator.generateAlarmPacket({
+            alarmCode: 0x0A,
+            latitude,
+            longitude,
+            serialNumber
+          });
+          break;
+
+        case 'ALARM_GEOFENCE':
+          packetBuf = GT012Simulator.generateAlarmPacket({
+            alarmCode: 0x04,
+            latitude,
+            longitude,
+            serialNumber
+          });
+          break;
+
+        case 'CORRUPT_CRC': {
+          const valid = GT012Simulator.generateHeartbeatPacket({ serialNumber });
+          packetBuf = GT012Simulator.generateCorruptCrcPacket(valid);
+          break;
+        }
+
+        case 'LOCATION':
+        default:
+          packetBuf = GT012Simulator.generateLocationPacket({
+            latitude,
+            longitude,
+            speedKmh,
+            courseDegrees,
+            serialNumber
+          });
+          break;
+      }
+
+      const rawHex = packetBuf.toString('hex').toUpperCase();
+      const parsed = gt012Protocol.parseSinglePacket(packetBuf);
+      const clientIp = getClientIp(req);
+      
+      let ingestResult = null;
+      if (parsed) {
+        ingestResult = await gt012Service.processPacket(parsed, clientIp);
+      }
+
+      await repository.auditLogs.logEvent({
+        actionType: 'DIAGNOSTIC_ACTION',
+        actorUserId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        targetEntity: 'DEVICE',
+        targetId: imei,
+        details: {
+          action: 'GT012_SIMULATOR_PACKET_DISPATCHED',
+          scenario,
+          rawHex,
+          serialNumber
+        },
+        ipAddress: clientIp
+      });
+
+      res.json({
+        success: true,
+        scenario,
+        rawHex,
+        byteLength: packetBuf.length,
+        parsed,
+        ingestResult,
+        ackHex: ingestResult?.responseBuffer ? ingestResult.responseBuffer.toString('hex').toUpperCase() : undefined
+      });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  }
+);
+
+// Query Device Live Telemetry & Health Record (ABAC Scoped)
+app.get(
+  '/api/gt012/devices/:identifier/telemetry',
+  requireAuth,
+  async (req, res) => {
+    try {
+      const user = req.user!;
+      const identifier = normalizeParam(req.params.identifier);
+
+      // Lookup device
+      const device = await (repository.devices as any).findByImeiOrSerial?.(identifier) ||
+                     await repository.devices.findById(identifier) ||
+                     await repository.devices.findBySerialNumber(identifier);
+
+      if (!device) {
+        return res.status(404).json({ error: `Device "${identifier}" not found in registry.` });
+      }
+
+      // ABAC Authorization Checks
+      if (user.role === 'PARENT_GUARDIAN') {
+        if (!device.assigned_learner_id) {
+          return res.status(403).json({ error: 'FORBIDDEN: Unassigned device telemetry is restricted.' });
+        }
+        const hasAccess = await abacHelpers.isLearnerLinkedToGuardian(device.assigned_learner_id, user.guardianId, user.id);
+        if (!hasAccess) {
+          return res.status(403).json({ error: 'FORBIDDEN: Telemetry restricted to authorized guardian only.' });
+        }
+      } else if (user.role === 'SCHOOL_PRINCIPAL' || user.role === 'SCHOOL_ADMIN' || user.role === 'HOMEROOM_TEACHER') {
+        if (device.assigned_learner_id) {
+          const isEnrolled = await abacHelpers.isLearnerEnrolledInSchool(device.assigned_learner_id, user.schoolId);
+          if (!isEnrolled) {
+            return res.status(403).json({ error: 'FORBIDDEN: Telemetry restricted to enrolled school.' });
+          }
+        }
+      }
+
+      const imeiOrSn = device.imei || device.serial_number || device.id;
+      const history = gt012Service.getRecentTelemetry(imeiOrSn);
+      const session = gt012Service.getActiveSession(imeiOrSn);
+
+      res.json({
+        deviceId: device.id,
+        serialNumber: device.serial_number,
+        imei: device.imei || device.serial_number,
+        assignedLearnerId: device.assigned_learner_id,
+        recentTelemetry: history,
+        activeSession: session || null,
+        health: session?.health || {
+          deviceId: device.id,
+          terminalIdentifier: imeiOrSn,
+          lastHeartbeatAt: device.last_ping_at || new Date().toISOString(),
+          lastLocationAt: device.last_ping_at || new Date().toISOString(),
+          connectivityStatus: device.device_status === 'ACTIVE' ? 'ONLINE' : 'UNKNOWN',
+          batteryStatus: device.battery_level < 20 ? 'LOW' : 'NORMAL',
+          batteryPercentage: device.battery_level || 85,
+          signalStatus: 'GOOD',
+          signalDbm: -75,
+          defenseStatus: 'ARMED'
+        }
+      });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  }
+);
+
+// List Active GT012 Terminal Sessions
+app.get(
+  '/api/gt012/sessions',
+  requireAuth,
+  async (req, res) => {
+    try {
+      const user = req.user!;
+      if (!['SYSTEM_ADMIN', 'FOUNDER_EXECUTIVE', 'COMMAND_OPERATOR', 'FIELD_TECHNICIAN'].includes(user.role)) {
+        return res.status(403).json({ error: 'FORBIDDEN: Role not authorized to inspect terminal sessions.' });
+      }
+
+      const sessions = gt012Service.getAllActiveSessions();
+      res.json({ sessions });
+    } catch (err: any) {
+      res.status(400).json({ error: err.message });
+    }
+  }
+);
+
+// ----------------------------------------------------
+// 9. AUTHORITATIVE GPS DEVICE REGISTRY & LEARNER LINKING APIS
+// ----------------------------------------------------
+
+// List Authoritative Devices (Scoped by Role)
+app.get('/api/devices/registry', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const { schoolId, search, status } = req.query;
+    const devices = deviceRegistryEngine.getDevicesScoped(user, {
+      schoolId: schoolId as string,
+      search: search as string,
+      status: status as string
+    });
+    res.json(devices);
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
+// Register Physical GPS Tracker (Technician / System Admin / Founder)
+app.post('/api/devices/register', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const device = deviceRegistryEngine.registerDevice(req.body, user);
+    res.status(201).json({
+      success: true,
+      message: 'Physical GPS tracker registered successfully in authoritative registry.',
+      device
+    });
+  } catch (err: any) {
+    const status = err.message?.includes('already exists') || err.message?.includes('Duplicate') ? 409 : (err.statusCode || 400);
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// Provision Physical GPS Tracker (Technician / System Admin / Founder)
+app.post('/api/devices/provision', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const device = deviceRegistryEngine.provisionDevice(req.body, user);
+    res.status(201).json({
+      success: true,
+      message: 'Physical GPS tracker provisioned successfully in authoritative registry.',
+      device
+    });
+  } catch (err: any) {
+    const status = err.message?.includes('already exists') || err.message?.includes('Duplicate') ? 409 : (err.statusCode || 400);
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// Get Single Device by ID or Tracker Identifier (Scoped by Role)
+app.get('/api/devices/:id', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const deviceId = normalizeParam(req.params.id);
+    const device = deviceRegistryEngine.getDeviceByIdScoped(deviceId, user);
+    res.json(device);
+  } catch (err: any) {
+    res.status(err.statusCode || 404).json({ error: err.message });
+  }
+});
+
+// Assign Device to Learner (1:1 active mapping, records history)
+app.post('/api/devices/:id/assign', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const deviceId = normalizeParam(req.params.id);
+    const payload = {
+      deviceId,
+      learnerId: req.body.learnerId,
+      notes: req.body.notes,
+      forceReassignIfOccupied: req.body.forceReassignIfOccupied
+    };
+    const result = deviceRegistryEngine.assignDeviceToLearner(payload, user);
+    res.status(200).json({
+      success: true,
+      message: 'Device assigned to learner successfully.',
+      device: result.device,
+      assignment: result.assignment,
+      auditEventId: result.auditEvent.id
+    });
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
+// Assign Device to Learner (Direct payload endpoint)
+app.post('/api/devices/assign-learner', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const result = deviceRegistryEngine.assignDeviceToLearner(req.body, user);
+    res.status(200).json({
+      success: true,
+      message: 'Device assigned to learner successfully.',
+      device: result.device,
+      assignment: result.assignment,
+      auditEventId: result.auditEvent.id
+    });
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
+// Unassign Device from Learner by device ID parameter
+app.post('/api/devices/:id/unassign', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const deviceId = normalizeParam(req.params.id);
+    const { reason, notes } = req.body;
+    const result = deviceRegistryEngine.unassignDevice(deviceId, user, reason, notes);
+    res.json({
+      success: true,
+      message: 'Device unassigned from learner successfully.',
+      device: result.device,
+      closedAssignment: result.closedAssignment
+    });
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
+// Unassign Device from Learner (Direct payload endpoint)
+app.post('/api/devices/unassign', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const { deviceId, reason, notes } = req.body;
+    if (!deviceId) {
+      return res.status(400).json({ error: 'deviceId is required' });
+    }
+    const result = deviceRegistryEngine.unassignDevice(deviceId, user, reason, notes);
+    res.json({
+      success: true,
+      message: 'Device unassigned from learner successfully.',
+      device: result.device,
+      closedAssignment: result.closedAssignment
+    });
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
+// Suspend Device
+app.post('/api/devices/:id/suspend', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const deviceId = normalizeParam(req.params.id);
+    const device = deviceRegistryEngine.suspendDevice(deviceId, user, req.body.reason);
+    res.json({
+      success: true,
+      message: `Device '${deviceId}' suspended successfully.`,
+      device
+    });
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
+// Activate / Reactivate Device
+app.post('/api/devices/:id/activate', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const deviceId = normalizeParam(req.params.id);
+    const device = deviceRegistryEngine.activateDevice(deviceId, user, req.body.reason);
+    res.json({
+      success: true,
+      message: `Device '${deviceId}' activated successfully.`,
+      device
+    });
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
+// Reassign Device (atomic swap, preserves all history)
+app.post('/api/devices/reassign-learner', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const result = deviceRegistryEngine.reassignDevice(req.body, user);
+    res.json({
+      success: true,
+      message: 'Device reassigned successfully with history preserved.',
+      oldDevice: result.oldDevice,
+      newDevice: result.newDevice,
+      newAssignment: result.newAssignment
+    });
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
+// Guardian Authoritative Device View (Strict ABAC & Privacy Isolation)
+app.get('/api/guardian/learners/:learnerId/device', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const learnerId = normalizeParam(req.params.learnerId);
+    const guardianId = user.guardianId || user.id;
+
+    const deviceView = deviceRegistryEngine.getDeviceForGuardian(guardianId, learnerId);
+    res.json(deviceView);
+  } catch (err: any) {
+    res.status(err.statusCode || 403).json({
+      error: err.message,
+      code: err.code || 'ACCESS_DENIED'
+    });
+  }
+});
+
+// Device Assignment History
+app.get('/api/devices/:id/history', requireAuth, async (req, res) => {
+  try {
+    const deviceId = normalizeParam(req.params.id);
+    const history = deviceRegistryEngine.getDeviceAssignmentHistory(deviceId);
+    res.json(history);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Run Device Registry Acceptance Test Suite
+app.get('/api/system/test-suites/device-registry', requireAuth, async (req, res) => {
+  try {
+    const results = await deviceRegistryTestSuite.runAllAcceptanceTests();
+    res.json(results);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================================
+// PROMPT 8: GPS TELEMETRY SIMULATOR & PACKET TESTING ENDPOINTS
+// =============================================================================
+
+// Telemetry Simulation Ingestion Endpoint
+app.post('/api/telemetry/simulate', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const authorizedRoles = ['FOUNDER_EXECUTIVE', 'SYSTEM_ADMIN', 'TECHNICIAN'];
+
+    if (!authorizedRoles.includes(user.role)) {
+      await repository.auditLogs.logEvent({
+        actionType: 'UNAUTHORIZED_ACCESS_DENIED',
+        actorUserId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        targetEntity: 'HARDWARE',
+        targetId: req.body.targetDeviceId || 'SIMULATOR_ENDPOINT',
+        details: {
+          attempt: 'POST /api/telemetry/simulate',
+          reason: 'Unauthorized role attempted raw telemetry simulation'
+        }
+      });
+
+      return res.status(403).json({
+        error: 'ACCESS DENIED: Guardian, School, and Responder roles are strictly forbidden from raw telemetry simulation.',
+        code: 'ACCESS_DENIED',
+        diagnosticCode: 'ACCESS_DENIED'
+      });
+    }
+
+    const simResult = await telemetrySimulationEngine.simulatePacket(req.body, user);
+    res.json(simResult);
+  } catch (err: any) {
+    res.status(500).json({
+      error: 'TELEMETRY_SIMULATION_INTERNAL_ERROR',
+      diagnosticCode: 'MALFORMED_PACKET',
+      message: err.message
+    });
+  }
+});
+
+// Telemetry Test Packet Templates
+app.get('/api/telemetry/templates', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const authorizedRoles = ['FOUNDER_EXECUTIVE', 'SYSTEM_ADMIN', 'TECHNICIAN'];
+
+    if (!authorizedRoles.includes(user.role)) {
+      return res.status(403).json({
+        error: 'ACCESS DENIED: Insufficient permissions to view telemetry templates.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const deviceId = req.query.deviceId ? String(req.query.deviceId) : 'GT012-TRK-8812';
+    const templates = telemetrySimulationEngine.getPresetTemplates(deviceId);
+    res.json(templates);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Telemetry Simulator Acceptance Test Suite
+app.get('/api/system/test-suites/telemetry-simulator', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const authorizedRoles = ['FOUNDER_EXECUTIVE', 'SYSTEM_ADMIN', 'TECHNICIAN'];
+
+    if (!authorizedRoles.includes(user.role)) {
+      return res.status(403).json({
+        error: 'ACCESS DENIED: Insufficient permissions to run telemetry test suite.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const results = await telemetrySimulatorTestSuite.runAllAcceptanceTests();
+    res.json(results);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================================
+// PROMPT 9: REAL GPS TELEMETRY INGESTION GATEWAY ENDPOINTS
+// =============================================================================
+
+// Telemetry Gateway Status & Diagnostics
+app.get('/api/telemetry/gateway/status', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const authorizedRoles = ['FOUNDER_EXECUTIVE', 'SYSTEM_ADMIN', 'TECHNICIAN', 'COMMAND_OPERATOR', 'DISPATCHER'];
+
+    if (!authorizedRoles.includes(user.role)) {
+      return res.status(403).json({
+        error: 'ACCESS DENIED: Insufficient permissions to inspect Telemetry Gateway status.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const status = telemetryGatewayEngine.getGatewayStatus();
+    res.json(status);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Authoritative Gateway Packet Ingestion (Transport Agnostic)
+app.post('/api/telemetry/gateway/ingest', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const authorizedRoles = ['FOUNDER_EXECUTIVE', 'SYSTEM_ADMIN', 'TECHNICIAN'];
+
+    if (!authorizedRoles.includes(user.role)) {
+      return res.status(403).json({
+        error: 'ACCESS DENIED: Insufficient permissions to submit raw telemetry packets.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const envelope = req.body;
+    const result = await telemetryGatewayEngine.ingestTelemetryPacket(envelope, user);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({
+      error: 'TELEMETRY_INGESTION_ERROR',
+      diagnosticCode: 'MALFORMED_PACKET',
+      message: err.message
+    });
+  }
+});
+
+// Telemetry Gateway Acceptance Test Suite
+app.get('/api/system/test-suites/telemetry-gateway', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const authorizedRoles = ['FOUNDER_EXECUTIVE', 'SYSTEM_ADMIN', 'TECHNICIAN'];
+
+    if (!authorizedRoles.includes(user.role)) {
+      return res.status(403).json({
+        error: 'ACCESS DENIED: Insufficient permissions to run Telemetry Gateway test suite.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const results = await telemetryGatewayTestSuite.runAllTests();
+    res.json(results);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 // ----------------------------------------------------
 // API 404 HANDLER: UNMATCHED /api/* MUST NEVER SERVE HTML

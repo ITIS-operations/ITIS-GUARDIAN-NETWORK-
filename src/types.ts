@@ -426,7 +426,26 @@ export interface ImmutableAuditEvent {
     | 'RESPONDER_LOCATION_SHARING_ENABLED'
     | 'RESPONDER_LOCATION_SHARING_DISABLED'
     | 'RESPONDER_LOCATION_UPDATED'
-    | 'RESPONDER_AVAILABILITY_CHANGED';
+    | 'RESPONDER_AVAILABILITY_CHANGED'
+    | 'DEVICE_REGISTERED'
+    | 'DEVICE_PROVISIONED'
+    | 'DEVICE_ASSIGNED_TO_LEARNER'
+    | 'DEVICE_UNASSIGNED'
+    | 'DEVICE_SUSPENDED'
+    | 'DEVICE_ACTIVATED'
+    | 'DEVICE_RETIRED'
+    | 'SUSPENDED_DEVICE_TELEMETRY_BLOCKED'
+    | 'DUPLICATE_DEVICE_REGISTRATION_BLOCKED'
+    | 'TELEMETRY_SIMULATION_EXECUTED'
+    | 'TELEMETRY_PACKET_RECEIVED'
+    | 'TELEMETRY_PACKET_ACCEPTED'
+    | 'TELEMETRY_PACKET_REJECTED'
+    | 'TELEMETRY_DUPLICATE_SUPPRESSED'
+    | 'TELEMETRY_DEVICE_QUARANTINED'
+    | 'TELEMETRY_GATEWAY_STARTED'
+    | 'UNKNOWN_DEVICE_TELEMETRY_ATTEMPT'
+    | 'SUSPENDED_DEVICE_TELEMETRY_ATTEMPT'
+    | 'MALFORMED_PACKET_RECEIVED';
   actorUserId: string;
   actorName: string;
   actorRole: string;
@@ -1065,5 +1084,481 @@ export interface FounderValidationResult {
     evidence: Record<string, any>;
   }[];
 }
+
+// ----------------------------------------------------
+// GT012 GPS TRACKER PROTOCOL & TELEMETRY CONTRACTS
+// ----------------------------------------------------
+
+export type GT012DeviceHealthStatus = 
+  | 'ONLINE' 
+  | 'OFFLINE' 
+  | 'LOW_BATTERY' 
+  | 'POOR_SIGNAL' 
+  | 'UNKNOWN';
+
+export type GT012AlarmClassification = 
+  | 'DEVICE_HEALTH_ALERT' 
+  | 'SAFETY_ALERT' 
+  | 'EMERGENCY_CANDIDATE' 
+  | 'CRITICAL_EMERGENCY';
+
+export type GT012AlarmType = 
+  | 'SOS_PANIC' 
+  | 'LOW_BATTERY_WARNING' 
+  | 'GEOFENCE_EXIT' 
+  | 'GEOFENCE_ENTER' 
+  | 'POWER_CUT' 
+  | 'VIBRATION_SHOCK' 
+  | 'TAMPER_SENSOR' 
+  | 'OVERSPEED' 
+  | 'NORMAL_STATUS';
+
+export interface GT012DeviceTelemetryRecord {
+  id: string;
+  deviceId: string;
+  terminalIdentifier: string;
+  timestamp: string;
+  latitude: number;
+  longitude: number;
+  speed: number;
+  course: number;
+  batteryLevel: number;
+  voltage: number;
+  gsmSignal: number;
+  gpsValidity: boolean;
+  satelliteCount: number;
+  mcc?: number;
+  mnc?: number;
+  lac?: number;
+  cellId?: number;
+  source: 'GT012_GPS' | 'GT012_ALARM' | 'GT012_HEARTBEAT' | 'SIMULATED_GT012';
+  isSimulated?: boolean;
+}
+
+export interface GT012DeviceHealthRecord {
+  deviceId: string;
+  terminalIdentifier: string;
+  lastHeartbeatAt: string;
+  lastLocationAt: string;
+  connectivityStatus: GT012DeviceHealthStatus;
+  batteryStatus: 'NORMAL' | 'LOW' | 'CRITICAL' | 'CHARGING';
+  batteryPercentage: number;
+  signalStatus: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR' | 'NO_SIGNAL';
+  signalDbm: number;
+  defenseStatus: 'ARMED' | 'DISARMED';
+}
+
+// ====================================================
+// ITIS AUTHORITATIVE GPS DEVICE REGISTRY & LEARNER LINKING
+// ====================================================
+
+export type ItisDeviceState = 
+  | 'UNREGISTERED' 
+  | 'REGISTERED'
+  | 'PROVISIONING' 
+  | 'ACTIVE' 
+  | 'ASSIGNED'
+  | 'SUSPENDED' 
+  | 'LOST' 
+  | 'STOLEN'
+  | 'RETIRED' 
+  | 'FAULT';
+
+export type ItisDeviceActivationStatus = 
+  | 'ACTIVATED' 
+  | 'PENDING_ACTIVATION' 
+  | 'DEACTIVATED';
+
+export type ItisDeviceProtocolType = 
+  | 'GT012' 
+  | 'CONCOX' 
+  | 'TOPIN' 
+  | 'SIMULATED_JSON' 
+  | 'SIMULATED'
+  | 'CUSTOM_BINARY' 
+  | 'LORAWAN' 
+  | 'BLE_BEACON';
+
+export type ItisDeviceConnectionStatus = 
+  | 'ONLINE' 
+  | 'OFFLINE' 
+  | 'STANDBY' 
+  | 'STALE'
+  | 'DISCONNECTED';
+
+export type ItisDeviceBatteryHealth = 
+  | 'NORMAL' 
+  | 'LOW' 
+  | 'CRITICAL' 
+  | 'CHARGING';
+
+export type UnassignReason = 
+  | 'LEARNER_LEFT_SCHOOL' 
+  | 'DEVICE_REPLACEMENT' 
+  | 'MAINTENANCE_REQUIRED' 
+  | 'DEVICE_RETIRED' 
+  | 'LOST_DEVICE' 
+  | 'UPGRADE' 
+  | 'ADMIN_REASSIGNMENT';
+
+export interface ItisDeviceRecord {
+  itisDeviceId: string;
+  trackerDeviceId: string; // Supported hardware identifier (Serial, MAC, or protocol ID)
+  hardwareSerialNumber?: string;
+  imei?: string; // Optional: where supported by hardware/protocol (do not assume all trackers have IMEI)
+  simIdentifier?: string; // Optional: ICCID / MSISDN where appropriate
+  phoneNumber?: string;
+  protocolType: ItisDeviceProtocolType;
+  manufacturer?: string;
+  deviceModel: string;
+  deviceStatus: ItisDeviceState;
+  activationStatus: ItisDeviceActivationStatus;
+  assignedLearnerId?: string | null;
+  assignedLearnerName?: string;
+  assignedLearnerEmis?: string;
+  assignedSchoolId?: string | null;
+  assignedSchoolName?: string;
+  assignedTechnicianId?: string;
+  lastKnownLocation?: {
+    latitude: number;
+    longitude: number;
+    accuracyMeters?: number;
+    addressDescription?: string;
+    timestamp?: string;
+    speed?: number;
+    heading?: number;
+  };
+  lastTelemetryTimestamp?: string;
+  lastCommunicationTimestamp?: string;
+  batteryStatus: {
+    percentage: number;
+    voltage?: number;
+    healthStatus: ItisDeviceBatteryHealth;
+    chargingState?: boolean;
+  };
+  connectionStatus: ItisDeviceConnectionStatus;
+  healthClassification?: 'HEALTHY' | 'WARNING' | 'CRITICAL' | 'UNPROVISIONED';
+  firmwareVersion: string;
+  hardwareRevision?: string;
+  registeredAt: string;
+  activatedAt?: string;
+  updatedAt: string;
+  provisionedAt?: string;
+  provisionedByUserId?: string;
+  provisionedByUserName?: string;
+}
+
+export interface RegisterDevicePayload {
+  trackerDeviceId?: string;
+  serialNumber?: string;
+  hardwareSerialNumber?: string;
+  imei?: string;
+  protocolType?: ItisDeviceProtocolType | string;
+  protocol?: string;
+  deviceModel?: string;
+  model?: string;
+  manufacturer?: string;
+  simIdentifier?: string;
+  iccid?: string;
+  phoneNumber?: string;
+  firmwareVersion?: string;
+  hardwareRevision?: string;
+  initialBatteryPercentage?: number;
+  assignedSchoolId?: string;
+}
+
+export interface DeviceAssignmentHistoryRecord {
+  id: string;
+  deviceId: string;
+  trackerDeviceId: string;
+  learnerId: string;
+  learnerEmisId: string;
+  learnerName: string;
+  schoolId?: string;
+  schoolName?: string;
+  assignedAt: string;
+  assignedByUserId: string;
+  assignedByUserName: string;
+  assignedByUserRole: string;
+  unassignedAt?: string | null;
+  unassignedByUserId?: string;
+  unassignedByUserName?: string;
+  unassignReason?: UnassignReason | string;
+  notes?: string;
+  status: 'ACTIVE' | 'TERMINATED' | 'TRANSFERRED';
+}
+
+export interface GuardianAuthorizedDeviceView {
+  deviceId: string;
+  trackerDeviceId: string;
+  learnerId: string;
+  learnerName: string;
+  learnerEmis: string;
+  deviceStatus: ItisDeviceState;
+  connectionStatus: ItisDeviceConnectionStatus;
+  batteryPercentage: number;
+  batteryHealth: ItisDeviceBatteryHealth;
+  approvedLocation?: {
+    latitude: number;
+    longitude: number;
+    addressDescription?: string;
+    lastReportedAt?: string;
+    isVerified: boolean;
+  };
+  lastTelemetryAt?: string;
+  activeAlertCount: number;
+  isEmergencyAlertActive: boolean;
+}
+
+export interface ProvisionDevicePayload {
+  trackerDeviceId: string;
+  protocolType: ItisDeviceProtocolType;
+  deviceModel: string;
+  imei?: string;
+  simIdentifier?: string;
+  firmwareVersion?: string;
+  hardwareRevision?: string;
+  initialBatteryPercentage?: number;
+}
+
+export interface AssignDeviceToLearnerPayload {
+  deviceId: string;
+  learnerId: string;
+  notes?: string;
+  forceReassignIfOccupied?: boolean;
+}
+
+export interface ReassignDevicePayload {
+  oldDeviceId?: string;
+  newDeviceId: string;
+  learnerId: string;
+  unassignReason: UnassignReason | string;
+  notes?: string;
+}
+
+export interface DeviceRegistryValidationResult {
+  suiteId: string;
+  timestamp: string;
+  totalTests: number;
+  passedTests: number;
+  failedTests: number;
+  allPassed: boolean;
+  results: {
+    id: string;
+    name: string;
+    requirement: string;
+    expected: string;
+    actual: string;
+    status: 'PASS' | 'FAIL';
+    auditEventLogged?: boolean;
+    evidence: Record<string, any>;
+  }[];
+}
+
+// ==============================================================================
+// PROMPT 8: GPS TELEMETRY SIMULATOR & PROTOCOL PACKET TESTING
+// ==============================================================================
+
+export type TelemetrySimulationDiagnosticCode =
+  | 'PACKET_RECEIVED'
+  | 'PACKET_VALID'
+  | 'DEVICE_IDENTIFIED'
+  | 'DEVICE_AUTHORIZED'
+  | 'TELEMETRY_NORMALIZED'
+  | 'SIMULATION_SUCCESS'
+  | 'PACKET_REJECTED'
+  | 'DEVICE_NOT_FOUND'
+  | 'DEVICE_NOT_REGISTERED'
+  | 'DEVICE_SUSPENDED'
+  | 'DEVICE_RETIRED'
+  | 'INVALID_COORDINATES'
+  | 'MALFORMED_PACKET'
+  | 'CRC_INVALID'
+  | 'UNSUPPORTED_PACKET'
+  | 'DUPLICATE_PACKET'
+  | 'ACCESS_DENIED'
+  | 'TELEMETRY_PROCESSING_ERROR';
+
+export interface TelemetrySimulationRequest {
+  rawPacket: string; // Hex string (e.g. "7878...0D0A") or JSON string
+  protocolFormat?: 'GT012' | 'SIMULATED_TEST_PROTOCOL' | 'AUTO';
+  targetDeviceId?: string; // Optional override or context tracker ID
+  notes?: string;
+}
+
+export interface TelemetrySimulationResult {
+  status: 'SIMULATION_SUCCESS' | 'PACKET_REJECTED' | 'ACCESS_DENIED';
+  diagnosticCode: TelemetrySimulationDiagnosticCode;
+  protocolName: string;
+  packetType: 'LOGIN' | 'HEARTBEAT' | 'LOCATION' | 'ALARM' | 'STATUS' | 'UNKNOWN';
+  deviceIdentifier?: string;
+  itisDeviceId?: string;
+  deviceRegistryStatus?: ItisDeviceState | 'NOT_FOUND' | 'INVALID';
+  isDuplicate?: boolean;
+  duplicateFingerprint?: string;
+  validationResult: {
+    validFraming: boolean;
+    validCrc: boolean;
+    validCoordinates: boolean;
+    validBattery: boolean;
+    validSpeed: boolean;
+    validHeading: boolean;
+    validTimestamp: boolean;
+    reason?: string;
+  };
+  extractedLocation?: {
+    latitude: number;
+    longitude: number;
+    speed?: number;
+    heading?: number;
+    accuracy?: number;
+    altitude?: number;
+    isRealTime?: boolean;
+    satellites?: number;
+  };
+  extractedBattery?: {
+    percentage: number;
+    voltageLevel?: number;
+    charging?: boolean;
+  };
+  extractedEvent?: {
+    eventType: string;
+    sosActive: boolean;
+    alarmType?: string | null;
+  };
+  processingTimestamp: string;
+  requiresAck?: boolean;
+  ackHex?: string;
+  error?: string;
+}
+
+export interface TelemetrySimulatorTestSuiteResult {
+  suiteId: string;
+  timestamp: string;
+  totalTests: number;
+  passedTests: number;
+  failedTests: number;
+  allPassed: boolean;
+  results: {
+    id: string;
+    name: string;
+    requirement: string;
+    expected: string;
+    actual: string;
+    status: 'PASS' | 'FAIL';
+    evidence?: Record<string, any>;
+  }[];
+}
+
+// ==============================================================================
+// PROMPT 9: REAL GPS TELEMETRY INGESTION GATEWAY & TRANSPORT ARCHITECTURE
+// ==============================================================================
+
+export type TelemetryTransportType = 'SIMULATOR' | 'TCP' | 'UDP' | 'HTTP';
+
+export interface TelemetryEnvelope {
+  transportType: TelemetryTransportType;
+  rawPacket: string; // Hex string for binary packets or stringified payload
+  receivedAt: string;
+  remoteAddress?: string;
+  deviceIdentifier?: string; // Optional target device ID from transport metadata
+  protocol?: string; // 'GT012' | 'SIMULATED_TEST_PROTOCOL' | 'AUTO'
+  packetMetadata?: Record<string, any>;
+}
+
+export interface TelemetryIngestionResult {
+  accepted: boolean;
+  status: 'INGESTED' | 'REJECTED' | 'QUARANTINED' | 'ACCESS_DENIED';
+  diagnosticCode: TelemetrySimulationDiagnosticCode;
+  deviceId?: string;
+  itisDeviceId?: string;
+  deviceRegistryStatus?: ItisDeviceState | 'NOT_FOUND' | 'INVALID';
+  protocol: string;
+  packetType: 'LOGIN' | 'HEARTBEAT' | 'LOCATION' | 'ALARM' | 'STATUS' | 'UNKNOWN';
+  telemetry?: {
+    latitude?: number;
+    longitude?: number;
+    speed?: number;
+    heading?: number;
+    accuracy?: number;
+    altitude?: number;
+    satellites?: number;
+    isRealTime?: boolean;
+    batteryPercentage?: number;
+    voltageLevel?: number;
+    sosActive?: boolean;
+    alarmType?: string | null;
+  };
+  ackRequired: boolean;
+  ackPayload?: string; // Downlink ACK hex representation (e.g. 10-byte Concox ACK)
+  duplicate: boolean;
+  duplicateFingerprint?: string;
+  quarantined: boolean;
+  validationResult: {
+    validFraming: boolean;
+    validCrc: boolean;
+    validCoordinates: boolean;
+    validBattery: boolean;
+    validSpeed: boolean;
+    validHeading: boolean;
+    validTimestamp: boolean;
+    reason?: string;
+  };
+  errorCode?: string;
+  error?: string;
+  receivedAt: string;
+  processedAt: string;
+  transportType: TelemetryTransportType;
+  remoteAddress?: string;
+}
+
+export interface TelemetryGatewayStatus {
+  gatewayStatus: 'ONLINE' | 'DEGRADED' | 'OFFLINE';
+  enabledTransports: TelemetryTransportType[];
+  telemetryServerEnabled: boolean;
+  simulatorEnabled: boolean;
+  tcpReady: boolean;
+  udpReady: boolean;
+  tcpStatus: 'ACTIVE' | 'READY_DISABLED' | 'ERROR';
+  udpStatus: 'ACTIVE' | 'READY_DISABLED' | 'ERROR';
+  processingPipelineStatus: 'HEALTHY' | 'DEGRADED' | 'ERROR';
+  activeProtocols: string[];
+  metrics: {
+    totalIngested: number;
+    totalAccepted: number;
+    totalRejected: number;
+    totalDuplicates: number;
+    totalQuarantined: number;
+    lastIngestionTimestamp: string | null;
+  };
+  serverEnvironment: {
+    nodeEnv: string;
+    isContainerized: boolean;
+    configuredTcpPort: number;
+    configuredUdpPort: number;
+    networkNotice: string;
+  };
+}
+
+export interface TelemetryGatewayTestSuiteResult {
+  suiteId: string;
+  timestamp: string;
+  totalTests: number;
+  passedTests: number;
+  failedTests: number;
+  allPassed: boolean;
+  results: {
+    id: string;
+    name: string;
+    requirement: string;
+    expected: string;
+    actual: string;
+    status: 'PASS' | 'FAIL';
+    evidence?: Record<string, any>;
+  }[];
+}
+
+
+
 
 

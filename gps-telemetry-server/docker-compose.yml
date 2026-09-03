@@ -1,0 +1,77 @@
+# ==============================================================================
+# ITIS GPS TELEMETRY SERVER — DOCKER COMPOSE DEPLOYMENT
+# Independent deployment template for local testing, VPS, or dedicated servers
+# ==============================================================================
+
+version: '3.8'
+
+services:
+  # ----------------------------------------------------------------------------
+  # GPS Telemetry Ingestion Service (TCP, UDP, HTTP)
+  # ----------------------------------------------------------------------------
+  telemetry-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: itis-telemetry-server
+    restart: unless-stopped
+    ports:
+      # Administrative & Health REST API
+      - "8080:8080"
+      # Hardware GPS Tracker TCP Ingestion Port
+      - "5000:5000"
+      # Hardware GPS Tracker UDP Ingestion Port
+      - "5001:5001/udp"
+    environment:
+      - NODE_ENV=production
+      - HOST=0.0.0.0
+      - PORT=8080
+      - TCP_PORT=5000
+      - UDP_PORT=5001
+      - TELEMETRY_STORAGE_MODE=postgresql
+      - DATABASE_URL=postgresql://telemetry_svc:telemetry_secret_change_me@postgres:5432/itis_telemetry
+      - DEVICE_CONNECTION_LIMIT=5000
+      - DEVICE_IDLE_TIMEOUT_SECONDS=300
+      - RATE_LIMIT_MAX_PACKETS_PER_MINUTE=60
+      - ITIS_CORE_API_URL=http://host.docker.internal:3000/api
+      - ITIS_TELEMETRY_API_KEY=
+      - ITIS_EVENT_DISPATCH_ENABLED=false
+      - ENABLE_DEV_SIMULATOR=false
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - itis-telemetry-net
+
+  # ----------------------------------------------------------------------------
+  # Dedicated PostgreSQL Telemetry Database
+  # ----------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: itis-telemetry-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=itis_telemetry
+      - POSTGRES_USER=telemetry_svc
+      - POSTGRES_PASSWORD=telemetry_secret_change_me
+    volumes:
+      - telemetry_pgdata:/var/lib/postgresql/data
+    ports:
+      # Bound to loopback interface only (not exposed externally)
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U telemetry_svc -d itis_telemetry"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - itis-telemetry-net
+
+volumes:
+  telemetry_pgdata:
+    driver: local
+
+networks:
+  itis-telemetry-net:
+    driver: bridge

@@ -1,0 +1,36 @@
+{
+  "name": "itis-gps-telemetry-server",
+  "version": "1.0.0",
+  "description": "Independent GPS Telemetry Ingestion & Normalization Server for ITIS Guardian Network",
+  "main": "dist/server/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/server/index.ts",
+    "build": "tsc",
+    "start": "node dist/server/index.js",
+    "test": "tsx tests/runAllTests.ts",
+    "simulate": "tsx src/simulator/deviceSimulator.ts"
+  },
+  "keywords": [
+    "gps",
+    "telemetry",
+    "iot",
+    "itis",
+    "tracking",
+    "emergency-response"
+  ],
+  "author": "ITIS Technical Directorate",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.13.4",
+    "@types/pg": "^8.23.1",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

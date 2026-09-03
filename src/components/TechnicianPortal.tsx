@@ -37,6 +37,7 @@ import {
   TechnicianValidationResult 
 } from '../types.js';
 import { api } from '../services/api.js';
+import { GpsTelemetrySimulator } from './GpsTelemetrySimulator.js';
 
 export type TechSection = 
   | 'ASSIGNED_DEVICES' 
@@ -45,6 +46,7 @@ export type TechSection =
   | 'INVENTORY' 
   | 'GATEWAYS'
   | 'VALIDATION_SUITE'
+  | 'GPS_SIMULATOR'
   | 'REPORTS';
 
 interface Props {
@@ -339,6 +341,18 @@ export const TechnicianPortal: React.FC<Props> = ({
         >
           <ShieldCheck className="w-4 h-4" />
           <span>Phase 6 Validation Suite</span>
+        </button>
+
+        <button
+          onClick={() => handleTabChange('GPS_SIMULATOR')}
+          className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 ${
+            currentTab === 'GPS_SIMULATOR'
+              ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 shadow-sm'
+              : 'text-slate-400 hover:text-white hover:bg-slate-900 border border-transparent'
+          }`}
+        >
+          <Radio className="w-4 h-4 text-cyan-400" />
+          <span>GPS Simulator & Testing</span>
         </button>
 
         <button
@@ -807,6 +821,16 @@ export const TechnicianPortal: React.FC<Props> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* ==================================================== */}
+      {/* 6. GPS TELEMETRY SIMULATOR & PACKET TESTING          */}
+      {/* ==================================================== */}
+      {currentTab === 'GPS_SIMULATOR' && (
+        <GpsTelemetrySimulator 
+          currentUser={currentUser}
+          devices={devices}
+        />
       )}
 
       {/* Modal: Log Maintenance */}

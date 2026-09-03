@@ -151,6 +151,9 @@ export const AuthoritativeEnrolmentModal: React.FC<Props> = ({
 
   // Perform Guardian Search (SA ID is primary, Mobile is secondary)
   const performGuardianSearch = async () => {
+    if (currentUser?.token && !api.getToken()) {
+      api.setToken(currentUser.token);
+    }
     setIsSearching(true);
     setErrorMessage(null);
     try {
@@ -173,7 +176,16 @@ export const AuthoritativeEnrolmentModal: React.FC<Props> = ({
         setExistingGuardianData(null);
       }
     } catch (err: any) {
-      setErrorMessage(`Search error: ${err.message}`);
+      const msg = err.message || '';
+      if (msg.includes('AUTHENTICATION_REQUIRED') || msg.includes('401') || msg.includes('session expired') || msg.includes('sovereign session token')) {
+        setErrorMessage('Your session has expired or authentication is no longer valid. Please sign in again.');
+      } else if (msg.includes('ENROLMENT_MANAGE') || msg.includes('403') || msg.includes('ACCESS_DENIED')) {
+        setErrorMessage('You do not have permission to create learner enrollments.');
+      } else if (msg.includes('503') || msg.includes('DATABASE_UNAVAILABLE')) {
+        setErrorMessage('The ITIS service is temporarily unavailable. Please try again.');
+      } else {
+        setErrorMessage(`Search error: ${msg}`);
+      }
     } finally {
       setIsSearching(false);
     }
@@ -262,6 +274,18 @@ export const AuthoritativeEnrolmentModal: React.FC<Props> = ({
 
   // Step 7: Atomic Commit to Server
   const handleSaveEnrolment = async () => {
+    if (isSubmitting) return;
+
+    // Ensure session token is present and synchronized
+    const token = api.getToken() || currentUser?.token;
+    if (!token) {
+      setErrorMessage('Your session has expired or authentication is no longer valid. Please sign in again.');
+      return;
+    }
+    if (currentUser?.token && !api.getToken()) {
+      api.setToken(currentUser.token);
+    }
+
     setIsSubmitting(true);
     setErrorMessage(null);
 
@@ -319,7 +343,16 @@ export const AuthoritativeEnrolmentModal: React.FC<Props> = ({
       setSubmissionSuccess(result);
       onSuccess();
     } catch (err: any) {
-      setErrorMessage(err.message || 'Onboarding transaction failed.');
+      const msg = err.message || '';
+      if (msg.includes('AUTHENTICATION_REQUIRED') || msg.includes('401') || msg.includes('session expired') || msg.includes('sovereign session token')) {
+        setErrorMessage('Your session has expired or authentication is no longer valid. Please sign in again.');
+      } else if (msg.includes('ENROLMENT_MANAGE') || msg.includes('403') || msg.includes('ACCESS_DENIED') || msg.includes('clearance') || msg.includes('permission')) {
+        setErrorMessage('You do not have permission to create learner enrollments.');
+      } else if (msg.includes('DATABASE_UNAVAILABLE') || msg.includes('503') || msg.includes('degraded') || msg.includes('temporarily unavailable')) {
+        setErrorMessage('The ITIS service is temporarily unavailable. Please try again.');
+      } else {
+        setErrorMessage(msg || 'Onboarding transaction failed.');
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -1661,10 +1694,19 @@ export const AuthoritativeEnrolmentModal: React.FC<Props> = ({
                 type="button"
                 onClick={handleSaveEnrolment}
                 disabled={isSubmitting}
-                className="px-6 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-cyan-950/50"
+                className="px-6 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed text-slate-950 text-xs font-bold flex items-center gap-1.5 transition-all shadow-md shadow-cyan-950/50"
               >
-                <ShieldCheck className="w-4 h-4" />
-                <span>SAVE ENROLMENT</span>
+                {isSubmitting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>COMMITTING...</span>
+                  </>
+                ) : (
+                  <>
+                    <ShieldCheck className="w-4 h-4" />
+                    <span>SAVE ENROLMENT</span>
+                  </>
+                )}
               </button>
             )}
           </div>

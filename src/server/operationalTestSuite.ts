@@ -1,7 +1,6 @@
 import { query, pool } from './db/client.js';
 import { repository } from './db/index.js';
 import { rbacEngine } from './rbacEngine.js';
-import { abacHelpers } from './rbacEngine.js';
 import { 
   ActiveUserSession, 
   IncidentAlert, 
@@ -194,7 +193,7 @@ export class OperationalTestSuite {
         guardianName: 'Guardian Concurrency',
         guardianMobile: '+27 82 333 4444',
         timestamp: new Date().toISOString(),
-        severity: 'HIGH_PRIORITY',
+        severity: 'HIGH',
         status: 'ACTIVE_ALARM',
         triggerType: 'APP_PANIC',
         location: { lat: -25.7592, lng: 28.2340, addressDescription: 'Safe Zone Gate', accuracyMeters: 3.5 },
@@ -267,7 +266,7 @@ export class OperationalTestSuite {
         guardianName: 'Guardian Handover',
         guardianMobile: '+27 82 555 6666',
         timestamp: new Date().toISOString(),
-        severity: 'HIGH_PRIORITY',
+        severity: 'HIGH',
         status: 'ACTIVE_ALARM',
         triggerType: 'APP_PANIC',
         location: { lat: -25.7592, lng: 28.2340, addressDescription: 'Gate 2', accuracyMeters: 3.5 },
@@ -662,7 +661,7 @@ export class OperationalTestSuite {
         guardianName: 'Guardian Closure',
         guardianMobile: '+27 82 777 8888',
         timestamp: new Date().toISOString(),
-        severity: 'HIGH_PRIORITY',
+        severity: 'HIGH',
         status: 'ACTIVE_ALARM',
         triggerType: 'APP_PANIC',
         location: { lat: -25.7592, lng: 28.2340, addressDescription: 'Gate 3', accuracyMeters: 3.5 },

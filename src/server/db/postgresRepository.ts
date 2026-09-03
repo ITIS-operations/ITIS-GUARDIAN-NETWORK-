@@ -2199,6 +2199,19 @@ export class PostgresDeviceRepository implements IDeviceRepository {
     return res.rows[0] || null;
   }
 
+  async findByImeiOrSerial(identifier: string): Promise<any | null> {
+    const clean = identifier.trim();
+    const res = await query(
+      `SELECT * FROM devices 
+       WHERE UPPER(serial_number) = UPPER($1) 
+          OR UPPER(id) = UPPER($1) 
+          OR (imei IS NOT NULL AND UPPER(imei) = UPPER($1))
+       LIMIT 1;`,
+      [clean]
+    );
+    return res.rows[0] || null;
+  }
+
   async findAssignedToLearner(learnerId: string): Promise<any | null> {
     const res = await query(`SELECT * FROM devices WHERE assigned_learner_id = $1;`, [learnerId]);
     return res.rows[0] || null;
@@ -2830,7 +2843,7 @@ export class PostgresIncidentRepository implements IIncidentRepository {
 
   async getOfficersWorkload(): Promise<any[]> {
     const officersRes = await query(
-      `SELECT id, name, role, email, status FROM users WHERE role IN ('COMMAND_OPERATOR', 'FOUNDER_EXECUTIVE', 'SYSTEM_ADMIN') AND status = 'ACTIVE' ORDER BY name ASC;`
+      `SELECT id, name, role, email, account_status as status FROM users WHERE role IN ('COMMAND_OPERATOR', 'FOUNDER_EXECUTIVE', 'SYSTEM_ADMIN') AND account_status = 'ACTIVE' ORDER BY name ASC;`
     );
     const activeIncidentsRes = await query(
       `SELECT id, status, severity, primary_command_officer_id, primary_command_officer_name, monitoring_officers FROM incidents WHERE status != 'RESOLVED';`
