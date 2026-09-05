@@ -26,7 +26,10 @@ import {
   IncidentQueryOptions,
   AuditLogQueryOptions,
   IdentitySearchResult,
-  EligibleResponderRanking
+  EligibleResponderRanking,
+  AuthoritativeTelemetryRecord,
+  AuthoritativeLatestLocationRecord,
+  TelemetryHistoryQueryOptions
 } from '../../types.js';
 
 export interface DatabaseTransaction {
@@ -178,6 +181,16 @@ export interface IAuditRepository {
   verifyIntegrity(): Promise<{ valid: boolean; totalChecked: number; corruptedBlocks: string[] }>;
 }
 
+export interface ITelemetryRepository {
+  recordTelemetry(record: Omit<AuthoritativeTelemetryRecord, 'id' | 'ingestedAt'>): Promise<AuthoritativeTelemetryRecord>;
+  getLatestLocation(deviceIdOrTrackerId: string): Promise<AuthoritativeLatestLocationRecord | null>;
+  getLatestLocationByLearner(learnerId: string): Promise<AuthoritativeLatestLocationRecord | null>;
+  updateLatestLocation(location: AuthoritativeLatestLocationRecord): Promise<void>;
+  queryHistory(options?: TelemetryHistoryQueryOptions): Promise<PaginatedResponse<AuthoritativeTelemetryRecord>>;
+  purgeOldTelemetry?(retentionDays: number, actorUserId: string): Promise<{ purgedCount: number; remainingCount: number }>;
+  count(filter?: { deviceId?: string; learnerId?: string }): Promise<number>;
+}
+
 export interface IDataRepository {
   users: IUserRepository;
   sessions: ISessionRepository;
@@ -189,6 +202,7 @@ export interface IDataRepository {
   incidents: IIncidentRepository;
   responders: IResponderRepository;
   auditLogs: IAuditRepository;
+  telemetry: ITelemetryRepository;
   
   beginTransaction(): Promise<DatabaseTransaction>;
   checkHealth(): Promise<{ status: 'HEALTHY' | 'DEGRADED'; provider: 'POSTGRES' | 'DEVELOPMENT_MEMORY'; details?: any }>;

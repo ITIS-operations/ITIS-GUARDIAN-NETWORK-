@@ -475,6 +475,36 @@ export async function bootstrapDatabase(): Promise<void> {
     );
   `);
 
+  // 17.1 Authoritative Telemetry Persistence Table
+  await query(`
+    CREATE TABLE IF NOT EXISTS telemetry (
+      id VARCHAR(64) PRIMARY KEY,
+      device_id VARCHAR(64) NOT NULL,
+      tracker_device_id VARCHAR(64),
+      learner_id VARCHAR(64),
+      school_id VARCHAR(64),
+      latitude DOUBLE PRECISION NOT NULL,
+      longitude DOUBLE PRECISION NOT NULL,
+      accuracy_meters REAL,
+      speed_kmh REAL,
+      heading REAL,
+      altitude_meters REAL,
+      battery_level REAL,
+      battery_voltage REAL,
+      protocol VARCHAR(32) NOT NULL DEFAULT 'GT012',
+      packet_type VARCHAR(32) NOT NULL DEFAULT 'LOCATION',
+      packet_serial_number INT,
+      transport_source VARCHAR(32) NOT NULL DEFAULT 'TCP',
+      validation_status VARCHAR(32) NOT NULL DEFAULT 'VALIDATED',
+      raw_packet_fingerprint VARCHAR(128),
+      is_sos BOOLEAN NOT NULL DEFAULT FALSE,
+      alarm_type VARCHAR(64),
+      satellites INT,
+      recorded_at TIMESTAMPTZ NOT NULL,
+      ingested_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
   // 18. Indexes
   await query(`
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
@@ -500,6 +530,9 @@ export async function bootstrapDatabase(): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_audit_action_type ON audit_events(action_type);
     CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_events(target_entity, target_id);
     CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_events(created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_telemetry_device_time ON telemetry(device_id, recorded_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_telemetry_learner_time ON telemetry(learner_id, recorded_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_telemetry_school_time ON telemetry(school_id, recorded_at DESC);
   `);
 
   // 19. Seed Roles

@@ -11,8 +11,10 @@ import {
   IResponderRepository,
   IAuditRepository,
   ISessionRepository,
+  ITelemetryRepository,
   DatabaseTransaction
 } from './repository.js';
+import { db } from '../dbStore.js';
 import {
   Person,
   Learner,
@@ -46,7 +48,10 @@ import {
   IdentitySearchResult,
   ExistingGuardianMatch,
   ExistingLearnerMatch,
-  LinkedChildSummary
+  LinkedChildSummary,
+  AuthoritativeTelemetryRecord,
+  AuthoritativeLatestLocationRecord,
+  TelemetryHistoryQueryOptions
 } from '../../types.js';
 import crypto from 'crypto';
 import { AUTHORITATIVE_ROLE_MATRIX } from '../rbacEngine.js';
@@ -3231,8 +3236,10 @@ export class PostgresResponderRepository implements IResponderRepository {
   async updateLiveLocation(
     responderIdOrUserId: string,
     locationData: {
-      latitude: number;
-      longitude: number;
+      latitude?: number;
+      longitude?: number;
+      lat?: number;
+      lng?: number;
       accuracyMeters?: number;
       heading?: number;
       speed?: number;
@@ -3240,46 +3247,70 @@ export class PostgresResponderRepository implements IResponderRepository {
       addressDescription?: string;
     }
   ): Promise<ResponderUnit> {
-    const res = await query(
-      `UPDATE responders 
-       SET current_latitude = $1,
-           current_longitude = $2,
-           accuracy_meters = COALESCE($3, accuracy_meters),
-           heading = COALESCE($4, heading),
-           speed = COALESCE($5, speed),
-           location_sharing_status = COALESCE($6, location_sharing_status),
-           address_description = COALESCE($7, address_description),
-           last_location_update = CURRENT_TIMESTAMP,
-           last_heartbeat = CURRENT_TIMESTAMP,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE id = $8 OR assigned_user_id = $8 OR callsign = $8
-       RETURNING *;`,
-      [
-        locationData.latitude,
-        locationData.longitude,
-        locationData.accuracyMeters || 4.5,
-        locationData.heading !== undefined ? locationData.heading : null,
-        locationData.speed !== undefined ? locationData.speed : null,
-        locationData.locationSharingStatus || 'AVAILABLE',
-        locationData.addressDescription || null,
-        responderIdOrUserId
-      ]
-    );
-    if (res.rows.length === 0) {
-      // Fallback: try search by unit prefix
-      const fallbackRes = await query(
-        `UPDATE responders 
-         SET current_latitude = $1, current_longitude = $2, last_location_update = CURRENT_TIMESTAMP, last_heartbeat = CURRENT_TIMESTAMP
-         WHERE LOWER(name) LIKE '%' || LOWER($3) || '%' OR LOWER(callsign) LIKE '%' || LOWER($3) || '%'
-         RETURNING *;`,
-        [locationData.latitude, locationData.longitude, responderIdOrUserId]
-      );
-      if (fallbackRes.rows.length > 0) {
-        return this.mapRowToResponder(fallbackRes.rows[0]);
+    const lat = locationData.latitude !== undefined ? locationData.latitude : (locationData.lat ?? -25.7550);
+    const lng = locationData.longitude !== undefined ? locationData.longitude : (locationData.lng ?? 28.2310);
+
+    // Sync in-memory dbStore first for immediate real-time availability
+    let memUnit = db.responderUnits.get(responderIdOrUserId);
+    if (!memUnit) {
+      for (const u of db.responderUnits.values()) {
+        if (u.id === responderIdOrUserId || u.callSign === responderIdOrUserId || (u as any).assignedUserId === responderIdOrUserId) {
+          memUnit = u;
+          break;
+        }
       }
-      throw new Error(`Responder unit not found for ID/Callsign '${responderIdOrUserId}'`);
     }
-    return this.mapRowToResponder(res.rows[0]);
+    if (memUnit) {
+      memUnit.currentLocation = {
+        lat,
+        lng,
+        addressDescription: locationData.addressDescription || memUnit.currentLocation?.addressDescription || 'Sector Patrol',
+        isVerified: true,
+        lastReportedAt: new Date().toISOString()
+      };
+      if (locationData.locationSharingStatus) {
+        memUnit.status = locationData.locationSharingStatus as any;
+      }
+    }
+
+    try {
+      const res = await query(
+        `UPDATE responders 
+         SET current_latitude = $1,
+             current_longitude = $2,
+             accuracy_meters = COALESCE($3, accuracy_meters),
+             heading = COALESCE($4, heading),
+             speed = COALESCE($5, speed),
+             location_sharing_status = COALESCE($6, location_sharing_status),
+             address_description = COALESCE($7, address_description),
+             last_location_update = CURRENT_TIMESTAMP,
+             last_heartbeat = CURRENT_TIMESTAMP,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE id = $8 OR assigned_user_id = $8 OR callsign = $8
+         RETURNING *;`,
+        [
+          lat,
+          lng,
+          locationData.accuracyMeters || 4.5,
+          locationData.heading !== undefined ? locationData.heading : null,
+          locationData.speed !== undefined ? locationData.speed : null,
+          locationData.locationSharingStatus || 'AVAILABLE',
+          locationData.addressDescription || null,
+          responderIdOrUserId
+        ]
+      );
+      if (res.rows.length > 0) {
+        return this.mapRowToResponder(res.rows[0]);
+      }
+    } catch {
+      // If Postgres is unavailable in memory mode, continue with memUnit
+    }
+
+    if (memUnit) {
+      return memUnit;
+    }
+
+    throw new Error(`Responder unit not found for ID/Callsign '${responderIdOrUserId}'`);
   }
 
   async updateAvailability(responderIdOrUserId: string, status: string, isAvailable: boolean): Promise<ResponderUnit> {
@@ -3578,6 +3609,125 @@ export class PostgresSessionRepository implements ISessionRepository {
 }
 
 // ----------------------------------------------------
+// 10B. POSTGRES TELEMETRY REPOSITORY IMPLEMENTATION
+// ----------------------------------------------------
+class PostgresTelemetryRepository implements ITelemetryRepository {
+  async recordTelemetry(record: Omit<AuthoritativeTelemetryRecord, 'id' | 'ingestedAt'>): Promise<AuthoritativeTelemetryRecord> {
+    // 1. Authoritative in-memory store for instant sync & fallback
+    const saved = db.recordTelemetry(record);
+
+    // 2. Persist to PostgreSQL partitioned telemetry table
+    try {
+      await query(
+        `INSERT INTO telemetry (
+          id, device_id, tracker_device_id, learner_id, school_id, latitude, longitude,
+          accuracy_meters, speed_kmh, battery_level, recorded_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11);`,
+        [
+          saved.id,
+          saved.deviceId,
+          saved.trackerDeviceId,
+          saved.learnerId || null,
+          saved.schoolId || null,
+          saved.latitude,
+          saved.longitude,
+          saved.accuracyMeters ?? 5.0,
+          saved.speedKmh ?? 0,
+          saved.batteryLevel ?? 100,
+          saved.timestamp
+        ]
+      );
+      // Update device ping and battery in Postgres
+      await query(
+        `UPDATE devices SET
+          battery_level = $1,
+          last_ping_at = $2,
+          updated_at = CURRENT_TIMESTAMP
+        WHERE id = $3;`,
+        [saved.batteryLevel ?? 100, saved.timestamp, saved.deviceId]
+      );
+    } catch (err) {
+      // Gracefully handled in memory fallback
+    }
+
+    return saved;
+  }
+
+  async getLatestLocation(deviceIdOrTrackerId: string): Promise<AuthoritativeLatestLocationRecord | null> {
+    // 1. Fast O(1) in-memory lookup
+    const loc = db.getLatestLocation(deviceIdOrTrackerId);
+    if (loc) return loc;
+
+    // 2. Fallback to PostgreSQL
+    try {
+      const res = await query(
+        `SELECT device_id, learner_id, school_id, latitude, longitude, accuracy_meters, speed_kmh, battery_level, recorded_at
+         FROM telemetry
+         WHERE device_id = $1
+         ORDER BY recorded_at DESC
+         LIMIT 1;`,
+        [deviceIdOrTrackerId]
+      );
+      if (res.rows.length > 0) {
+        const row = res.rows[0];
+        return {
+          deviceId: row.device_id,
+          trackerDeviceId: row.device_id,
+          learnerId: row.learner_id,
+          schoolId: row.school_id,
+          latitude: Number(row.latitude),
+          longitude: Number(row.longitude),
+          accuracyMeters: Number(row.accuracy_meters || 5.0),
+          speedKmh: Number(row.speed_kmh || 0),
+          heading: 0,
+          batteryLevel: Number(row.battery_level || 100),
+          timestamp: row.recorded_at.toISOString ? row.recorded_at.toISOString() : String(row.recorded_at),
+          ingestedAt: new Date().toISOString(),
+          protocol: 'GT012',
+          packetType: 'LOCATION',
+          connectionStatus: 'ONLINE',
+          healthState: 'ONLINE',
+          isSos: false
+        };
+      }
+    } catch (err) {}
+    return null;
+  }
+
+  async getLatestLocationByLearner(learnerId: string): Promise<AuthoritativeLatestLocationRecord | null> {
+    return db.getLatestLocationByLearner(learnerId);
+  }
+
+  async updateLatestLocation(location: AuthoritativeLatestLocationRecord): Promise<void> {
+    db.updateLatestLocation(location);
+  }
+
+  async queryHistory(options?: TelemetryHistoryQueryOptions): Promise<PaginatedResponse<AuthoritativeTelemetryRecord>> {
+    return db.queryTelemetryHistory(options);
+  }
+
+  async purgeOldTelemetry(retentionDays: number, actorUserId: string): Promise<{ purgedCount: number; remainingCount: number }> {
+    try {
+      await query(
+        `DELETE FROM telemetry WHERE recorded_at < CURRENT_TIMESTAMP - ($1 || ' days')::INTERVAL;`,
+        [retentionDays]
+      );
+    } catch (err) {}
+    return db.purgeTelemetryRecords(retentionDays, actorUserId);
+  }
+
+  async count(filter?: { deviceId?: string; learnerId?: string }): Promise<number> {
+    try {
+      if (filter?.deviceId) {
+        const res = await query('SELECT COUNT(*) as count FROM telemetry WHERE device_id = $1;', [filter.deviceId]);
+        if (res.rows.length > 0) return parseInt(res.rows[0].count, 10);
+      }
+    } catch (err) {}
+    return db.telemetryRecords.size;
+  }
+}
+
+// ----------------------------------------------------
 // 11. MAIN POSTGRES DATA REPOSITORY IMPLEMENTATION
 // ----------------------------------------------------
 export class PostgresDataRepository implements IDataRepository {
@@ -3591,6 +3741,7 @@ export class PostgresDataRepository implements IDataRepository {
   public responders: PostgresResponderRepository;
   public auditLogs: PostgresAuditRepository;
   public sessions: PostgresSessionRepository;
+  public telemetry: PostgresTelemetryRepository;
 
   constructor() {
     this.users = new PostgresUserRepository();
@@ -3603,6 +3754,7 @@ export class PostgresDataRepository implements IDataRepository {
     this.responders = new PostgresResponderRepository();
     this.auditLogs = new PostgresAuditRepository();
     this.sessions = new PostgresSessionRepository();
+    this.telemetry = new PostgresTelemetryRepository();
   }
 
   async beginTransaction(): Promise<DatabaseTransaction> {

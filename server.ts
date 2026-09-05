@@ -23,6 +23,10 @@ import { telemetrySimulationEngine } from './src/server/telemetrySimulationEngin
 import { telemetrySimulatorTestSuite } from './src/server/telemetrySimulatorTestSuite.js';
 import { telemetryGatewayEngine } from './src/server/telemetryGatewayEngine.js';
 import { telemetryGatewayTestSuite } from './src/server/telemetryGatewayTestSuite.js';
+import { telemetryPersistenceEngine } from './src/server/telemetryPersistenceEngine.js';
+import { telemetryPersistenceTestSuite } from './src/server/telemetryPersistenceTestSuite.js';
+import { liveLocationService } from './src/server/liveLocationService.js';
+import { liveLocationTestSuite } from './src/server/liveLocationTestSuite.js';
 import { IncidentAlert, ActiveUserSession, PermissionKey, UserRole, ExecutiveOverviewData } from './src/types.js';
 
 const app = express();
@@ -3644,6 +3648,83 @@ app.post('/api/devices/reassign-learner', requireAuth, async (req, res) => {
   }
 });
 
+// Procure Physical GPS Tracker into Authoritative Inventory
+app.post('/api/devices/procure', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const device = deviceRegistryEngine.procureDevice(req.body, user);
+    res.status(201).json({
+      success: true,
+      message: 'Physical GPS tracker procured successfully into authoritative inventory.',
+      device
+    });
+  } catch (err: any) {
+    const status = err.message?.includes('already present') || err.message?.includes('Duplicate') ? 409 : (err.statusCode || 400);
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// Replace Physical GPS Tracker for Learner
+app.post('/api/devices/replace', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const result = deviceRegistryEngine.replaceDevice(req.body, user);
+    res.status(200).json({
+      success: true,
+      message: 'Physical GPS tracker replaced successfully with lineage preserved.',
+      oldDevice: result.oldDevice,
+      newDevice: result.newDevice,
+      closedAssignment: result.closedAssignment,
+      newAssignment: result.newAssignment
+    });
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
+// Retire / Decommission Device Permanently
+app.post('/api/devices/:id/retire', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const deviceId = normalizeParam(req.params.id);
+    const device = deviceRegistryEngine.retireDevice(deviceId, user, req.body.reason);
+    res.json({
+      success: true,
+      message: `Device '${deviceId}' decommissioned and retired successfully.`,
+      device
+    });
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
+// Mark Device as Lost
+app.post('/api/devices/:id/lost', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const deviceId = normalizeParam(req.params.id);
+    const device = deviceRegistryEngine.markDeviceLost(deviceId, user, req.body.reason);
+    res.json({
+      success: true,
+      message: `Device '${deviceId}' marked as lost and unassigned successfully.`,
+      device
+    });
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
+// Get Authoritative Device Health Summary
+app.get('/api/devices/:id/health', requireAuth, async (req, res) => {
+  try {
+    const deviceId = normalizeParam(req.params.id);
+    const health = deviceRegistryEngine.getDeviceHealthSummary(deviceId);
+    res.json(health);
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
 // Guardian Authoritative Device View (Strict ABAC & Privacy Isolation)
 app.get('/api/guardian/learners/:learnerId/device', requireAuth, async (req, res) => {
   try {
@@ -3829,6 +3910,339 @@ app.get('/api/system/test-suites/telemetry-gateway', requireAuth, async (req, re
 
     const results = await telemetryGatewayTestSuite.runAllTests();
     res.json(results);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================================
+// PROMPT 10: AUTHORITATIVE GPS TELEMETRY PERSISTENCE & HISTORY ENDPOINTS
+// =============================================================================
+
+// Get Authoritative Latest Location (O(1) with ABAC Scoping)
+app.get('/api/telemetry/latest/:identifier', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const identifier = req.params.identifier;
+    const latest = await telemetryPersistenceEngine.getLatestLocationForActor(user, identifier);
+    res.json({ success: true, data: latest });
+  } catch (err: any) {
+    const status = err.message.includes('Unauthorized') || err.message.includes('not authorized') ? 403 : 404;
+    res.status(status).json({
+      error: err.message,
+      code: status === 403 ? 'ACCESS_DENIED' : 'LOCATION_NOT_FOUND'
+    });
+  }
+});
+
+// Query Chronological Telemetry History with ABAC Scoping and Pagination
+app.get('/api/telemetry/history', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const { deviceId, trackerDeviceId, learnerId, schoolId, startTime, endTime, limit, page, offset, order } = req.query;
+
+    const options = {
+      deviceId: deviceId ? String(deviceId) : undefined,
+      trackerDeviceId: trackerDeviceId ? String(trackerDeviceId) : undefined,
+      learnerId: learnerId ? String(learnerId) : undefined,
+      schoolId: schoolId ? String(schoolId) : undefined,
+      startTime: startTime ? String(startTime) : undefined,
+      endTime: endTime ? String(endTime) : undefined,
+      limit: limit ? parseInt(String(limit), 10) : 50,
+      page: page ? parseInt(String(page), 10) : 1,
+      offset: offset ? parseInt(String(offset), 10) : undefined,
+      order: order === 'ASC' ? ('ASC' as const) : ('DESC' as const)
+    };
+
+    const history = await telemetryPersistenceEngine.getTelemetryHistoryForActor(user, options);
+    res.json(history);
+  } catch (err: any) {
+    const status = err.message.includes('Unauthorized') || err.message.includes('not authorized') ? 403 : 400;
+    res.status(status).json({
+      error: err.message,
+      code: status === 403 ? 'ACCESS_DENIED' : 'QUERY_ERROR'
+    });
+  }
+});
+
+// Authoritatively Persist Telemetry Packet
+app.post('/api/telemetry/persist', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const authorizedRoles = ['FOUNDER_EXECUTIVE', 'SYSTEM_ADMIN', 'TECHNICIAN', 'DISPATCHER'];
+
+    if (!authorizedRoles.includes(user.role)) {
+      return res.status(403).json({
+        error: 'ACCESS DENIED: Insufficient permissions to authoritatively persist telemetry.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const result = await telemetryPersistenceEngine.persistAuthoritativeTelemetry(req.body, user);
+    res.status(201).json({ success: true, data: result });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Retention Purge (Admin Only)
+app.post('/api/telemetry/retention/purge', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const retentionDays = parseInt(String(req.body.retentionDays || 90), 10);
+    const result = await telemetryPersistenceEngine.purgeOldTelemetry(retentionDays, user);
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    const status = err.message.includes('Unauthorized') ? 403 : 400;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// Run Authoritative Telemetry Persistence Acceptance Test Suite
+app.post('/api/telemetry/persistence/test-suite/run', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const authorizedRoles = ['FOUNDER_EXECUTIVE', 'SYSTEM_ADMIN', 'TECHNICIAN'];
+
+    if (!authorizedRoles.includes(user.role)) {
+      return res.status(403).json({
+        error: 'ACCESS DENIED: Insufficient permissions to execute telemetry test suite.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const testResults = await telemetryPersistenceTestSuite.runAllTests();
+    res.json(testResults);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get Latest Test Suite Results
+app.get('/api/telemetry/persistence/test-suite', requireAuth, async (req, res) => {
+  try {
+    const testResults = await telemetryPersistenceTestSuite.runAllTests();
+    res.json(testResults);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =========================================================================
+// LIVE GPS LOCATION SERVICE & MAP DATA API (Prompt 11)
+// =========================================================================
+
+// 1. Latest Device Location (Map-Ready GeoJSON)
+app.get('/api/map/device/:deviceId/latest', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const deviceId = req.params.deviceId;
+    const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
+    const location = await liveLocationService.getLatestDeviceLocation(user, deviceId, ipAddress);
+    res.json({ success: true, data: location });
+  } catch (err: any) {
+    const status = err.message.includes('403') || err.message.includes('Forbidden')
+      ? 403
+      : err.message.includes('404')
+      ? 404
+      : 400;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// 2. Learner Current Location (Role-Scoped with Safe Metadata & Geofencing)
+app.get('/api/map/learner/:learnerId/latest', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const learnerId = req.params.learnerId;
+    const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
+    const location = await liveLocationService.getLearnerCurrentLocation(user, learnerId, ipAddress);
+    res.json({ success: true, data: location });
+  } catch (err: any) {
+    const status = err.message.includes('403') || err.message.includes('Forbidden')
+      ? 403
+      : err.message.includes('404')
+      ? 404
+      : 400;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// 3. Authorized Location History (Learner-scoped)
+app.get('/api/map/learner/:learnerId/history', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const learnerId = req.params.learnerId;
+    const { startTime, endTime, page, limit } = req.query;
+    const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
+
+    const history = await liveLocationService.getLocationHistory(
+      user,
+      {
+        subjectType: 'LEARNER',
+        subjectId: learnerId,
+        startTime: startTime ? String(startTime) : undefined,
+        endTime: endTime ? String(endTime) : undefined,
+        page: page ? parseInt(String(page), 10) : 1,
+        limit: limit ? parseInt(String(limit), 10) : 50
+      },
+      ipAddress
+    );
+    res.json(history);
+  } catch (err: any) {
+    const status = err.message.includes('403') || err.message.includes('Forbidden')
+      ? 403
+      : err.message.includes('400')
+      ? 400
+      : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// 3b. Authorized Location History (Device-scoped)
+app.get('/api/map/device/:deviceId/history', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const deviceId = req.params.deviceId;
+    const { startTime, endTime, page, limit } = req.query;
+    const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
+
+    const history = await liveLocationService.getLocationHistory(
+      user,
+      {
+        subjectType: 'DEVICE',
+        subjectId: deviceId,
+        startTime: startTime ? String(startTime) : undefined,
+        endTime: endTime ? String(endTime) : undefined,
+        page: page ? parseInt(String(page), 10) : 1,
+        limit: limit ? parseInt(String(limit), 10) : 50
+      },
+      ipAddress
+    );
+    res.json(history);
+  } catch (err: any) {
+    const status = err.message.includes('403') || err.message.includes('Forbidden')
+      ? 403
+      : err.message.includes('400')
+      ? 400
+      : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// 3c. Authorized Location History (General query)
+app.get('/api/map/history', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const { subjectType, subjectId, startTime, endTime, page, limit } = req.query;
+    const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
+
+    if (!subjectId) {
+      return res.status(400).json({ error: 'subjectId parameter is required.' });
+    }
+
+    const history = await liveLocationService.getLocationHistory(
+      user,
+      {
+        subjectType: subjectType === 'LEARNER' ? 'LEARNER' : 'DEVICE',
+        subjectId: String(subjectId),
+        startTime: startTime ? String(startTime) : undefined,
+        endTime: endTime ? String(endTime) : undefined,
+        page: page ? parseInt(String(page), 10) : 1,
+        limit: limit ? parseInt(String(limit), 10) : 50
+      },
+      ipAddress
+    );
+    res.json(history);
+  } catch (err: any) {
+    const status = err.message.includes('403') || err.message.includes('Forbidden')
+      ? 403
+      : err.message.includes('400')
+      ? 400
+      : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// 4. Incident Tactical Location Context (Command Centre)
+app.get('/api/map/incidents/:incidentId/tactical-context', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const incidentId = req.params.incidentId;
+    const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
+
+    const context = await liveLocationService.getIncidentTacticalContext(user, incidentId, ipAddress);
+    res.json({ success: true, data: context });
+  } catch (err: any) {
+    const status = err.message.includes('403') || err.message.includes('Forbidden')
+      ? 403
+      : err.message.includes('404')
+      ? 404
+      : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// 5. Device Health & Telemetry Status
+app.get('/api/map/device/:deviceId/health', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const deviceId = req.params.deviceId;
+    const ipAddress = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '127.0.0.1';
+
+    const health = await liveLocationService.getDeviceHealthStatus(user, deviceId, ipAddress);
+    res.json({ success: true, data: health });
+  } catch (err: any) {
+    const status = err.message.includes('403') || err.message.includes('Forbidden')
+      ? 403
+      : err.message.includes('404')
+      ? 404
+      : 500;
+    res.status(status).json({ error: err.message });
+  }
+});
+
+// 6. Real-Time Stream Polling (Readiness Abstraction)
+app.get('/api/map/stream/poll', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const { cursor, sinceTimestamp } = req.query;
+
+    const updates = await liveLocationService.pollLocationUpdates(user, {
+      cursor: cursor ? String(cursor) : undefined,
+      sinceTimestamp: sinceTimestamp ? String(sinceTimestamp) : undefined
+    });
+    res.json({ success: true, data: updates });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 7. Live Location & Map Data Acceptance Test Suite (Run)
+app.post('/api/map/test-suite/run', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const authorizedRoles = ['FOUNDER_EXECUTIVE', 'SYSTEM_ADMIN', 'TECHNICIAN', 'COMMAND_OFFICER'];
+
+    if (!authorizedRoles.includes(user.role)) {
+      return res.status(403).json({
+        error: 'ACCESS DENIED: Insufficient permissions to execute live location test suite.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const testResults = await liveLocationTestSuite.runAllTests();
+    res.json(testResults);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 8. Live Location & Map Data Acceptance Test Suite (Get Latest)
+app.get('/api/map/test-suite', requireAuth, async (req, res) => {
+  try {
+    const testResults = await liveLocationTestSuite.runAllTests();
+    res.json(testResults);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

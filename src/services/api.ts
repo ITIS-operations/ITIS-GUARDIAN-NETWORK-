@@ -33,7 +33,17 @@ import {
   FounderValidationResult,
   TelemetrySimulationRequest,
   TelemetrySimulationResult,
-  TelemetrySimulatorTestSuiteResult
+  TelemetrySimulatorTestSuiteResult,
+  TelemetryGatewayStatus,
+  TelemetryGatewayTestSuiteResult,
+  TelemetryPersistenceTestSuiteResult,
+  MapDeviceLatestLocation,
+  MapLearnerCurrentLocation,
+  MapLocationHistoryResponse,
+  IncidentTacticalLocationContext,
+  DeviceHealthStatus,
+  MapPollUpdateResponse,
+  LiveLocationTestSuiteResult
 } from '../types.js';
 
 const API_BASE = '/api';
@@ -1154,5 +1164,116 @@ export const api = {
       headers: this.getAuthHeaders()
     });
     return safeFetchJson<TelemetrySimulatorTestSuiteResult>(res, 'Failed to run telemetry simulator test suite');
+  },
+
+  async getTelemetryGatewayStatus(): Promise<TelemetryGatewayStatus> {
+    const res = await fetch(`${API_BASE}/telemetry/gateway/status`, {
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<TelemetryGatewayStatus>(res, 'Failed to fetch telemetry gateway status');
+  },
+
+  async runTelemetryGatewaySuite(): Promise<TelemetryGatewayTestSuiteResult> {
+    const res = await fetch(`${API_BASE}/system/test-suites/telemetry-gateway`, {
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<TelemetryGatewayTestSuiteResult>(res, 'Failed to run telemetry gateway acceptance suite');
+  },
+
+  async runTelemetryPersistenceSuite(): Promise<TelemetryPersistenceTestSuiteResult> {
+    const res = await fetch(`${API_BASE}/telemetry/persistence/test-suite/run`, {
+      method: 'POST',
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<TelemetryPersistenceTestSuiteResult>(res, 'Failed to run telemetry persistence acceptance suite');
+  },
+
+  async getTelemetryPersistenceSuite(): Promise<TelemetryPersistenceTestSuiteResult> {
+    const res = await fetch(`${API_BASE}/telemetry/persistence/test-suite`, {
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<TelemetryPersistenceTestSuiteResult>(res, 'Failed to fetch telemetry persistence acceptance suite');
+  },
+
+  // Map Data APIs
+  async getMapDeviceLatestLocation(deviceId: string): Promise<MapDeviceLatestLocation> {
+    const res = await fetch(`${API_BASE}/map/device/${encodeURIComponent(deviceId)}/latest`, {
+      headers: this.getAuthHeaders()
+    });
+    const data = await safeFetchJson<{ success: boolean; data: MapDeviceLatestLocation }>(res, 'Failed to fetch latest device location');
+    return data.data;
+  },
+
+  async getMapLearnerCurrentLocation(learnerId: string): Promise<MapLearnerCurrentLocation> {
+    const res = await fetch(`${API_BASE}/map/learner/${encodeURIComponent(learnerId)}/latest`, {
+      headers: this.getAuthHeaders()
+    });
+    const data = await safeFetchJson<{ success: boolean; data: MapLearnerCurrentLocation }>(res, 'Failed to fetch learner location');
+    return data.data;
+  },
+
+  async getMapLocationHistory(params: {
+    subjectType: 'LEARNER' | 'DEVICE';
+    subjectId: string;
+    startTime?: string;
+    endTime?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<MapLocationHistoryResponse> {
+    const query = new URLSearchParams();
+    query.set('subjectType', params.subjectType);
+    query.set('subjectId', params.subjectId);
+    if (params.startTime) query.set('startTime', params.startTime);
+    if (params.endTime) query.set('endTime', params.endTime);
+    if (params.page) query.set('page', String(params.page));
+    if (params.limit) query.set('limit', String(params.limit));
+
+    const res = await fetch(`${API_BASE}/map/history?${query.toString()}`, {
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<MapLocationHistoryResponse>(res, 'Failed to fetch map location history');
+  },
+
+  async getIncidentTacticalContext(incidentId: string): Promise<IncidentTacticalLocationContext> {
+    const res = await fetch(`${API_BASE}/map/incidents/${encodeURIComponent(incidentId)}/tactical-context`, {
+      headers: this.getAuthHeaders()
+    });
+    const data = await safeFetchJson<{ success: boolean; data: IncidentTacticalLocationContext }>(res, 'Failed to fetch incident tactical context');
+    return data.data;
+  },
+
+  async getDeviceHealthStatus(deviceId: string): Promise<DeviceHealthStatus> {
+    const res = await fetch(`${API_BASE}/map/device/${encodeURIComponent(deviceId)}/health`, {
+      headers: this.getAuthHeaders()
+    });
+    const data = await safeFetchJson<{ success: boolean; data: DeviceHealthStatus }>(res, 'Failed to fetch device health status');
+    return data.data;
+  },
+
+  async pollMapLocationUpdates(cursor?: string, sinceTimestamp?: string): Promise<MapPollUpdateResponse> {
+    const query = new URLSearchParams();
+    if (cursor) query.set('cursor', cursor);
+    if (sinceTimestamp) query.set('sinceTimestamp', sinceTimestamp);
+
+    const res = await fetch(`${API_BASE}/map/stream/poll?${query.toString()}`, {
+      headers: this.getAuthHeaders()
+    });
+    const data = await safeFetchJson<{ success: boolean; data: MapPollUpdateResponse }>(res, 'Failed to poll map location updates');
+    return data.data;
+  },
+
+  async runLiveLocationTestSuite(): Promise<LiveLocationTestSuiteResult> {
+    const res = await fetch(`${API_BASE}/map/test-suite/run`, {
+      method: 'POST',
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<LiveLocationTestSuiteResult>(res, 'Failed to run live location test suite');
+  },
+
+  async getLiveLocationTestSuite(): Promise<LiveLocationTestSuiteResult> {
+    const res = await fetch(`${API_BASE}/map/test-suite`, {
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<LiveLocationTestSuiteResult>(res, 'Failed to fetch live location test suite');
   }
 };

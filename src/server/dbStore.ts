@@ -36,7 +36,10 @@ import {
   SchoolQueryOptions,
   IncidentQueryOptions,
   AuditLogQueryOptions,
-  RegisterUserPayload
+  RegisterUserPayload,
+  AuthoritativeTelemetryRecord,
+  AuthoritativeLatestLocationRecord,
+  TelemetryHistoryQueryOptions
 } from '../types.js';
 
 const DATA_DIR = path.resolve(process.cwd(), 'data');
@@ -220,8 +223,12 @@ export class AuthoritativeStore {
   public sessions: Map<string, ActiveSessionRecord> = new Map();
   public responderUnits: Map<string, ResponderUnit> = new Map();
   public devices: Map<string, any> = new Map();
+  public telemetryRecords: Map<string, AuthoritativeTelemetryRecord> = new Map();
+  public latestLocations: Map<string, AuthoritativeLatestLocationRecord> = new Map();
 
   // High-Scale Inverted Indexes (O(1) lookups for 3M+ records)
+  public trackerToDeviceIdMap: Map<string, string> = new Map();
+  public learnerToLatestLocationIndex: Map<string, string> = new Map();
   public schoolLearnersIndex: Map<string, Set<string>> = new Map();
   public guardianLearnersIndex: Map<string, Set<string>> = new Map();
   public emisLearnerIndex: Map<string, string> = new Map();
@@ -291,6 +298,18 @@ export class AuthoritativeStore {
         this.guardianLearnersIndex.get(r.guardianId)!.add(r.learnerId);
       }
     }
+
+    // Index Latest Location Lookups
+    this.trackerToDeviceIdMap.clear();
+    this.learnerToLatestLocationIndex.clear();
+    for (const [deviceId, loc] of this.latestLocations.entries()) {
+      if (loc.trackerDeviceId) {
+        this.trackerToDeviceIdMap.set(loc.trackerDeviceId, deviceId);
+      }
+      if (loc.learnerId) {
+        this.learnerToLatestLocationIndex.set(loc.learnerId, deviceId);
+      }
+    }
   }
 
   private ensureDataDirectory() {
@@ -320,7 +339,9 @@ export class AuthoritativeStore {
         auditLogs: this.auditLogs,
         incidents: Array.from(this.incidents.entries()),
         users: Array.from(this.users.entries()),
-        responderUnits: Array.from(this.responderUnits.entries())
+        responderUnits: Array.from(this.responderUnits.entries()),
+        telemetryRecords: Array.from(this.telemetryRecords.entries()),
+        latestLocations: Array.from(this.latestLocations.entries())
       };
       // Write safely to avoid file corruption
       const tempPath = `${DB_FILE_PATH}.tmp`;
@@ -351,6 +372,8 @@ export class AuthoritativeStore {
       this.incidents.clear();
       this.responderUnits.clear();
       this.users.clear();
+      this.telemetryRecords.clear();
+      this.latestLocations.clear();
 
       if (Array.isArray(data.persons)) {
         for (const [k, v] of data.persons) {
@@ -411,6 +434,16 @@ export class AuthoritativeStore {
             v.normalizedEmail = normalizeEmail(v.email);
           }
           this.users.set(k, v);
+        }
+      }
+      if (Array.isArray(data.telemetryRecords)) {
+        for (const [k, v] of data.telemetryRecords) {
+          this.telemetryRecords.set(k, v);
+        }
+      }
+      if (Array.isArray(data.latestLocations)) {
+        for (const [k, v] of data.latestLocations) {
+          this.latestLocations.set(k, v);
         }
       }
 
@@ -3147,6 +3180,208 @@ export class AuthoritativeStore {
       default:
         return [];
     }
+  }
+
+  // =========================================================================
+  // AUTHORITATIVE TELEMETRY PERSISTENCE & LATEST LOCATION (O(1))
+  // =========================================================================
+
+  public recordTelemetry(record: Omit<AuthoritativeTelemetryRecord, 'id' | 'ingestedAt'>): AuthoritativeTelemetryRecord {
+    const id = `TEL-${Date.now().toString(36).toUpperCase()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+    const ingestedAt = new Date().toISOString();
+
+    // Authoritative 1:1 Learner & School Resolution
+    let learnerId = record.learnerId;
+    let schoolId = record.schoolId;
+
+    if (!learnerId) {
+      const dev = this.devices.get(record.deviceId);
+      if (dev && dev.assignedLearnerId) {
+        learnerId = dev.assignedLearnerId;
+      }
+    }
+
+    if (learnerId && !schoolId) {
+      for (const enr of this.enrolments.values()) {
+        if (enr.learnerId === learnerId && enr.enrolmentStatus === 'ACTIVE') {
+          schoolId = enr.schoolId;
+          break;
+        }
+      }
+    }
+
+    const fullRecord: AuthoritativeTelemetryRecord = {
+      ...record,
+      id,
+      learnerId: learnerId || null,
+      schoolId: schoolId || null,
+      ingestedAt
+    };
+
+    this.telemetryRecords.set(id, fullRecord);
+
+    // Maintain Authoritative Latest Location Table (O(1) lookup per device)
+    const latestLoc: AuthoritativeLatestLocationRecord = {
+      deviceId: fullRecord.deviceId,
+      trackerDeviceId: fullRecord.trackerDeviceId,
+      learnerId: fullRecord.learnerId || null,
+      schoolId: fullRecord.schoolId || null,
+      latitude: fullRecord.latitude,
+      longitude: fullRecord.longitude,
+      accuracyMeters: fullRecord.accuracyMeters ?? 5.0,
+      speedKmh: fullRecord.speedKmh ?? 0,
+      heading: fullRecord.heading ?? 0,
+      altitudeMeters: fullRecord.altitudeMeters,
+      batteryLevel: fullRecord.batteryLevel ?? 100,
+      batteryVoltage: fullRecord.batteryVoltage,
+      timestamp: fullRecord.timestamp,
+      ingestedAt: fullRecord.ingestedAt,
+      protocol: fullRecord.protocol,
+      packetType: fullRecord.packetType,
+      connectionStatus: 'ONLINE',
+      healthState: (fullRecord.batteryLevel ?? 100) <= 20 ? 'DEGRADED' : 'ONLINE',
+      isSos: Boolean(fullRecord.isSos),
+      alarmType: fullRecord.alarmType || null
+    };
+
+    this.latestLocations.set(fullRecord.deviceId, latestLoc);
+    if (fullRecord.trackerDeviceId) {
+      this.trackerToDeviceIdMap.set(fullRecord.trackerDeviceId, fullRecord.deviceId);
+    }
+    if (fullRecord.learnerId) {
+      this.learnerToLatestLocationIndex.set(fullRecord.learnerId, fullRecord.deviceId);
+    }
+
+    return fullRecord;
+  }
+
+  public getLatestLocation(deviceIdOrTrackerId: string): AuthoritativeLatestLocationRecord | null {
+    if (!deviceIdOrTrackerId) return null;
+    const clean = deviceIdOrTrackerId.trim();
+
+    // 1. Direct deviceId lookup
+    if (this.latestLocations.has(clean)) {
+      return this.latestLocations.get(clean)!;
+    }
+
+    // 2. Lookup via trackerDeviceId mapping
+    const mappedDeviceId = this.trackerToDeviceIdMap.get(clean);
+    if (mappedDeviceId && this.latestLocations.has(mappedDeviceId)) {
+      return this.latestLocations.get(mappedDeviceId)!;
+    }
+
+    // 3. Fallback scan by trackerDeviceId
+    for (const loc of this.latestLocations.values()) {
+      if (loc.trackerDeviceId === clean) return loc;
+    }
+
+    return null;
+  }
+
+  public getLatestLocationByLearner(learnerId: string): AuthoritativeLatestLocationRecord | null {
+    if (!learnerId) return null;
+    const clean = learnerId.trim();
+
+    // 1. Direct index lookup
+    const deviceId = this.learnerToLatestLocationIndex.get(clean);
+    if (deviceId && this.latestLocations.has(deviceId)) {
+      return this.latestLocations.get(deviceId)!;
+    }
+
+    // 2. Scan fallback
+    for (const loc of this.latestLocations.values()) {
+      if (loc.learnerId === clean) return loc;
+    }
+
+    return null;
+  }
+
+  public updateLatestLocation(location: AuthoritativeLatestLocationRecord): void {
+    this.latestLocations.set(location.deviceId, location);
+    if (location.trackerDeviceId) {
+      this.trackerToDeviceIdMap.set(location.trackerDeviceId, location.deviceId);
+    }
+    if (location.learnerId) {
+      this.learnerToLatestLocationIndex.set(location.learnerId, location.deviceId);
+    }
+  }
+
+  public queryTelemetryHistory(options?: TelemetryHistoryQueryOptions): PaginatedResponse<AuthoritativeTelemetryRecord> {
+    const limit = options?.limit || options?.pageSize || 50;
+    const page = options?.page || (options?.offset ? Math.floor(options.offset / limit) + 1 : 1);
+    const offset = options?.offset !== undefined ? options.offset : (page - 1) * limit;
+    const order = options?.order || 'DESC';
+
+    let all = Array.from(this.telemetryRecords.values());
+
+    // Scoped filtering
+    if (options?.deviceId) {
+      const devId = options.deviceId.trim();
+      all = all.filter(r => r.deviceId === devId || r.trackerDeviceId === devId);
+    }
+    if (options?.trackerDeviceId) {
+      const trkId = options.trackerDeviceId.trim();
+      all = all.filter(r => r.trackerDeviceId === trkId);
+    }
+    if (options?.learnerId) {
+      const lrnId = options.learnerId.trim();
+      all = all.filter(r => r.learnerId === lrnId);
+    }
+    if (options?.schoolId) {
+      const schId = options.schoolId.trim();
+      all = all.filter(r => r.schoolId === schId);
+    }
+    if (options?.startTime) {
+      const startMs = new Date(options.startTime).getTime();
+      all = all.filter(r => new Date(r.timestamp).getTime() >= startMs);
+    }
+    if (options?.endTime) {
+      const endMs = new Date(options.endTime).getTime();
+      all = all.filter(r => new Date(r.timestamp).getTime() <= endMs);
+    }
+
+    // Chronological ordering
+    all.sort((a, b) => {
+      const timeA = new Date(a.timestamp).getTime();
+      const timeB = new Date(b.timestamp).getTime();
+      return order === 'ASC' ? timeA - timeB : timeB - timeA;
+    });
+
+    const totalCount = all.length;
+    const paginated = all.slice(offset, offset + limit);
+
+    return {
+      data: paginated,
+      pagination: {
+        total: totalCount,
+        limit,
+        offset,
+        page,
+        totalPages: Math.ceil(totalCount / limit) || 1,
+        hasMore: offset + limit < totalCount
+      }
+    };
+  }
+
+  public purgeTelemetryRecords(retentionDays: number, actorUserId: string): { purgedCount: number; remainingCount: number } {
+    const cutoffTime = Date.now() - (retentionDays * 24 * 60 * 60 * 1000);
+    let purgedCount = 0;
+    for (const [id, record] of this.telemetryRecords.entries()) {
+      if (new Date(record.timestamp).getTime() < cutoffTime) {
+        this.telemetryRecords.delete(id);
+        purgedCount++;
+      }
+    }
+    this.logAuditEvent({
+      actionType: 'SECURITY_POLICY_MODIFIED',
+      actorUserId,
+      actorName: 'System Administrator',
+      actorRole: 'SYSTEM_ADMIN',
+      targetEntity: 'SYSTEM',
+      targetId: 'BULK',
+      details: { retentionDays, purgedCount, remaining: this.telemetryRecords.size }
+    });
+    return { purgedCount, remainingCount: this.telemetryRecords.size };
   }
 }
 

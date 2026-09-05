@@ -17,13 +17,19 @@ import {
   ItisDeviceRecord,
   ItisDeviceState,
   ItisDeviceProtocolType,
+  ItisDeviceCalculatedHealthState,
+  DeviceHealthThresholdConfig,
+  DEFAULT_DEVICE_HEALTH_CONFIG,
   DeviceAssignmentHistoryRecord,
   GuardianAuthorizedDeviceView,
   ProvisionDevicePayload,
   RegisterDevicePayload,
+  ProcureDevicePayload,
+  ReplaceDevicePayload,
   AssignDeviceToLearnerPayload,
   ReassignDevicePayload,
   UnassignReason,
+  DeviceHealthSummary,
   ActiveUserSession,
   ImmutableAuditEvent
 } from '../types.js';
@@ -247,12 +253,34 @@ export class DeviceRegistryEngine {
           }
         });
         existing.connectionStatus = 'STANDBY';
+        existing.calculatedHealthState = 'SUSPENDED';
+        return existing;
+      }
+
+      // If device is retired, lost, or replaced, block telemetry and keep offline
+      if (existing.deviceStatus === 'RETIRED' || existing.deviceStatus === 'LOST' || existing.deviceStatus === 'REPLACED') {
+        db.logAuditEvent({
+          actionType: 'SUSPENDED_DEVICE_TELEMETRY_BLOCKED',
+          actorUserId: 'SYSTEM_TELEMETRY_INGEST',
+          actorName: 'ITIS Ingestion Pipeline',
+          actorRole: 'TECHNICIAN',
+          targetEntity: 'DEVICE',
+          targetId: existing.itisDeviceId,
+          details: {
+            trackerIdentifier,
+            reason: `Device status is ${existing.deviceStatus}. Ingestion blocked.`
+          }
+        });
+        existing.connectionStatus = 'OFFLINE';
+        existing.calculatedHealthState = 'RETIRED';
         return existing;
       }
 
       existing.connectionStatus = 'ONLINE';
       existing.lastTelemetryTimestamp = new Date().toISOString();
+      existing.lastHeartbeatTimestamp = new Date().toISOString();
       existing.lastCommunicationTimestamp = new Date().toISOString();
+      existing.networkStatus = 'CONNECTED';
       existing.updatedAt = new Date().toISOString();
 
       if (telemetry?.latitude !== undefined && telemetry?.longitude !== undefined) {
@@ -270,6 +298,7 @@ export class DeviceRegistryEngine {
       if (telemetry?.voltage !== undefined) {
         existing.batteryStatus.voltage = telemetry.voltage;
       }
+      this.calculateDeviceHealthState(existing);
       return existing;
     }
 
@@ -317,6 +346,122 @@ export class DeviceRegistryEngine {
   // ====================================================
 
   /**
+   * Ingest physical hardware shipments into authoritative INVENTORY state.
+   * Records procurement batch, supplier, warranty, and initial hardware attributes.
+   */
+  public procureDevice(
+    payload: ProcureDevicePayload,
+    actorUser: ActiveUserSession
+  ): ItisDeviceRecord {
+    this.assertTechnicianOrAdminClearance(actorUser, 'DEVICE_PROCUREMENT');
+
+    const trackerId = (payload.trackerDeviceId || payload.serialNumber || payload.hardwareSerialNumber)?.trim();
+    if (!trackerId || trackerId.length < 3) {
+      throw new Error('Valid physical tracker device identifier or serial number is required.');
+    }
+
+    const cleanTrackerId = trackerId;
+    const cleanImei = payload.imei?.trim();
+    const cleanProtocol: ItisDeviceProtocolType = (payload.protocolType || payload.protocol || 'GT012') as ItisDeviceProtocolType;
+    const cleanModel = payload.deviceModel || payload.model || `GPS-TRACKER-${cleanProtocol}`;
+
+    if (cleanImei && !/^\d{14,16}$/.test(cleanImei)) {
+      throw new Error(`Invalid IMEI '${cleanImei}'. IMEI must be 14 to 16 digits.`);
+    }
+
+    // Duplicate detection against existing non-retired devices
+    for (const dev of this.devices.values()) {
+      if (dev.deviceStatus === 'RETIRED') continue;
+
+      if (dev.trackerDeviceId.toLowerCase() === cleanTrackerId.toLowerCase()) {
+        db.logAuditEvent({
+          actionType: 'DUPLICATE_DEVICE_REGISTRATION_BLOCKED',
+          actorUserId: actorUser.id,
+          actorName: actorUser.name,
+          actorRole: actorUser.role,
+          targetEntity: 'DEVICE',
+          targetId: dev.itisDeviceId,
+          details: {
+            attemptedTrackerId: cleanTrackerId,
+            existingDeviceId: dev.itisDeviceId,
+            existingStatus: dev.deviceStatus,
+            reason: 'DUPLICATE_SERIAL_IDENTIFIER_AT_PROCUREMENT'
+          }
+        });
+        const err: any = new Error(`Duplicate device identifier detected: Tracker '${cleanTrackerId}' is already present in inventory or registry with ID '${dev.itisDeviceId}' (Status: ${dev.deviceStatus}).`);
+        err.statusCode = 409;
+        err.code = 'DUPLICATE_DEVICE';
+        throw err;
+      }
+
+      if (cleanImei && dev.imei && dev.imei.toLowerCase() === cleanImei.toLowerCase()) {
+        const err: any = new Error(`Duplicate IMEI detected: IMEI '${cleanImei}' is already present with ID '${dev.itisDeviceId}'.`);
+        err.statusCode = 409;
+        err.code = 'DUPLICATE_DEVICE';
+        throw err;
+      }
+    }
+
+    const initialStatus: ItisDeviceState = payload.initialStatus === 'REGISTERED' ? 'REGISTERED' : 'INVENTORY';
+    const deviceId = `DEV-ITIS-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const device: ItisDeviceRecord = {
+      itisDeviceId: deviceId,
+      trackerDeviceId: cleanTrackerId,
+      hardwareSerialNumber: payload.hardwareSerialNumber || payload.serialNumber || cleanTrackerId,
+      imei: cleanImei,
+      simIdentifier: payload.simIdentifier || payload.iccid,
+      phoneNumber: payload.phoneNumber,
+      protocolType: cleanProtocol,
+      manufacturer: payload.manufacturer || 'Topin/Generic',
+      deviceModel: cleanModel,
+      deviceStatus: initialStatus,
+      activationStatus: 'PENDING_ACTIVATION',
+      assignedLearnerId: null,
+      assignedSchoolId: payload.assignedSchoolId || null,
+      batteryStatus: {
+        percentage: payload.initialBatteryPercentage ?? 100,
+        healthStatus: 'NORMAL',
+        chargingState: false
+      },
+      connectionStatus: 'STANDBY',
+      healthClassification: 'UNPROVISIONED',
+      calculatedHealthState: 'OFFLINE',
+      firmwareVersion: payload.firmwareVersion || 'v1.0.0-PROVISIONED',
+      hardwareRevision: payload.hardwareRevision || payload.hardwareVersion || 'REV-A',
+      procurementDate: payload.procurementDate || new Date().toISOString(),
+      procurementBatch: payload.procurementBatch || `BATCH-${new Date().toISOString().slice(0, 10)}`,
+      supplier: payload.supplier || 'ITIS Authoritative Hardware Supply',
+      registeredAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    };
+
+    this.devices.set(deviceId, device);
+    this.trackerIdentifierIndex.set(cleanTrackerId, deviceId);
+    if (cleanImei) {
+      this.imeiIndex.set(cleanImei, deviceId);
+    }
+
+    db.logAuditEvent({
+      actionType: 'DEVICE_PROCURED',
+      actorUserId: actorUser.id,
+      actorName: actorUser.name,
+      actorRole: actorUser.role,
+      targetEntity: 'DEVICE',
+      targetId: deviceId,
+      details: {
+        trackerDeviceId: cleanTrackerId,
+        imei: cleanImei,
+        batch: device.procurementBatch,
+        supplier: device.supplier,
+        protocol: cleanProtocol,
+        status: initialStatus
+      }
+    });
+
+    return device;
+  }
+
+  /**
    * Register a physical GPS device in the authoritative Device Registry.
    * Enforces duplicate serial / IMEI detection and logs audit events.
    */
@@ -336,12 +481,16 @@ export class DeviceRegistryEngine {
     const cleanProtocol: ItisDeviceProtocolType = (payload.protocolType || payload.protocol || 'GT012') as ItisDeviceProtocolType;
     const cleanModel = payload.deviceModel || payload.model || `GPS-TRACKER-${cleanProtocol}`;
 
-    // Duplicate detection against existing non-retired, non-unregistered devices
+    if (cleanImei && !/^\d{14,16}$/.test(cleanImei)) {
+      throw new Error(`Invalid IMEI '${cleanImei}'. IMEI must be 14 to 16 digits.`);
+    }
+
+    // Duplicate detection against existing non-retired, non-unregistered, non-inventory devices
     for (const dev of this.devices.values()) {
       if (dev.deviceStatus === 'RETIRED') continue;
 
       if (dev.trackerDeviceId.toLowerCase() === cleanTrackerId.toLowerCase()) {
-        if (dev.deviceStatus !== 'UNREGISTERED') {
+        if (dev.deviceStatus !== 'UNREGISTERED' && dev.deviceStatus !== 'INVENTORY') {
           db.logAuditEvent({
             actionType: 'DUPLICATE_DEVICE_REGISTRATION_BLOCKED',
             actorUserId: actorUser.id,
@@ -364,7 +513,7 @@ export class DeviceRegistryEngine {
       }
 
       if (cleanImei && dev.imei && dev.imei.toLowerCase() === cleanImei.toLowerCase()) {
-        if (dev.deviceStatus !== 'UNREGISTERED') {
+        if (dev.deviceStatus !== 'UNREGISTERED' && dev.deviceStatus !== 'INVENTORY') {
           db.logAuditEvent({
             actionType: 'DUPLICATE_DEVICE_REGISTRATION_BLOCKED',
             actorUserId: actorUser.id,
@@ -608,8 +757,8 @@ export class DeviceRegistryEngine {
       throw new Error(`Device '${payload.deviceId}' not found in registry.`);
     }
 
-    if (device.deviceStatus === 'SUSPENDED' || device.deviceStatus === 'RETIRED' || device.deviceStatus === 'UNREGISTERED') {
-      throw new Error(`Cannot assign device '${device.itisDeviceId}': Device status is '${device.deviceStatus}'. Suspended, retired, or unregistered devices cannot be assigned to learners.`);
+    if (device.deviceStatus === 'SUSPENDED' || device.deviceStatus === 'RETIRED' || device.deviceStatus === 'UNREGISTERED' || device.deviceStatus === 'LOST' || device.deviceStatus === 'REPLACED' || device.deviceStatus === 'INVENTORY') {
+      throw new Error(`Cannot assign device '${device.itisDeviceId}': Device status is '${device.deviceStatus}'. Suspended, retired, lost, replaced, inventory, or unregistered devices cannot be assigned to learners.`);
     }
 
     // Verify Learner exists in Authoritative Store
@@ -627,7 +776,7 @@ export class DeviceRegistryEngine {
     // 1. Check if device is currently assigned to someone else
     if (device.assignedLearnerId && device.assignedLearnerId !== payload.learnerId) {
       if (!payload.forceReassignIfOccupied) {
-        throw new Error(`Device '${device.itisDeviceId}' is currently assigned to learner '${device.assignedLearnerName || device.assignedLearnerId}'. Set forceReassignIfOccupied=true or unassign first.`);
+        throw new Error(`Device '${device.itisDeviceId}' is currently assigned to learner '${device.assignedLearnerName || device.assignedLearnerId}'. Duplicate active assignment prevented. Set forceReassignIfOccupied=true or unassign first.`);
       }
       // Unassign existing learner
       this.unassignDevice(device.itisDeviceId, actorUser, 'ADMIN_REASSIGNMENT', 'Reassigned to new learner.');
@@ -636,6 +785,9 @@ export class DeviceRegistryEngine {
     // 2. Check if learner currently has another active device assigned (Enforce 1:1 active constraint)
     for (const otherDev of this.devices.values()) {
       if (otherDev.itisDeviceId !== device.itisDeviceId && otherDev.assignedLearnerId === payload.learnerId) {
+        if (!payload.forceReassignIfOccupied) {
+          throw new Error(`Learner '${learnerName}' (${learnerEmis}) already has an active tracker assigned ('${otherDev.itisDeviceId}'). Duplicate active assignment prevented. Set forceReassignIfOccupied=true or use replacement flow.`);
+        }
         // Unassign learner's previous device with immutable history preservation
         this.unassignDevice(otherDev.itisDeviceId, actorUser, 'DEVICE_REPLACEMENT', `Replaced by device ${device.itisDeviceId}.`);
       }
@@ -673,13 +825,14 @@ export class DeviceRegistryEngine {
     device.assignedSchoolId = schoolId || null;
     device.assignedSchoolName = schoolName;
     device.updatedAt = assignedTimestamp;
+    this.calculateDeviceHealthState(device);
 
     // 5. Update Learner trackingBeaconId
     learner.trackingBeaconId = device.trackerDeviceId;
     learner.updatedAt = assignedTimestamp;
     db.hydratedLearnerCache.delete(learner.id);
 
-    // 6. Log Audit Event
+    // 6. Log Audit Events
     const audit = db.logAuditEvent({
       actionType: 'DEVICE_ASSIGNED_TO_LEARNER',
       actorUserId: actorUser.id,
@@ -693,6 +846,22 @@ export class DeviceRegistryEngine {
         learnerName,
         schoolId,
         schoolName,
+        trackerDeviceId: device.trackerDeviceId,
+        assignmentHistoryId: historyId
+      }
+    });
+
+    db.logAuditEvent({
+      actionType: 'DEVICE_ASSIGNED',
+      actorUserId: actorUser.id,
+      actorName: actorUser.name,
+      actorRole: actorUser.role,
+      targetEntity: 'DEVICE',
+      targetId: device.itisDeviceId,
+      details: {
+        learnerId: learner.id,
+        learnerEmis,
+        learnerName,
         trackerDeviceId: device.trackerDeviceId,
         assignmentHistoryId: historyId
       }
@@ -825,8 +994,52 @@ export class DeviceRegistryEngine {
   }
 
   // ====================================================
-  // 4. DEVICE LIFECYCLE MANAGEMENT (SUSPEND / RETIRE)
+  // 4. DEVICE LIFECYCLE MANAGEMENT (SUSPEND / RETIRE / REPLACE / HEALTH)
   // ====================================================
+
+  /**
+   * Validate if a physical device is ready for operational activation.
+   * Operational readiness rules:
+   * - Device must exist in registry
+   * - Cannot activate RETIRED devices
+   * - Device cannot be in UNREGISTERED state without registration
+   * - Protocol must be supported
+   * - Valid learner assignment if requested
+   */
+  public validateDeviceActivationReadiness(
+    deviceId: string,
+    options?: { requireLearnerAssignment?: boolean }
+  ): { ready: boolean; issues: string[]; device: ItisDeviceRecord } {
+    const device = this.devices.get(deviceId) || this.findByTrackerIdentifier(deviceId);
+    if (!device) {
+      throw new Error(`Device '${deviceId}' not found in registry.`);
+    }
+
+    const issues: string[] = [];
+
+    if (device.deviceStatus === 'RETIRED') {
+      issues.push('Device is permanently RETIRED/decommissioned and cannot be reactivated.');
+    }
+
+    if (device.deviceStatus === 'UNREGISTERED') {
+      issues.push('Device is UNREGISTERED. Hardware provisioning and registration required before activation.');
+    }
+
+    const supportedProtocols: ItisDeviceProtocolType[] = ['GT012', 'CONCOX', 'TOPIN', 'SIMULATED_JSON', 'SIMULATED', 'LORAWAN', 'BLE_BEACON'];
+    if (!supportedProtocols.includes(device.protocolType)) {
+      issues.push(`Unsupported protocol '${device.protocolType}'.`);
+    }
+
+    if (options?.requireLearnerAssignment && !device.assignedLearnerId) {
+      issues.push('Device requires an authoritative learner assignment before operational activation.');
+    }
+
+    return {
+      ready: issues.length === 0,
+      issues,
+      device
+    };
+  }
 
   /**
    * Suspend an active device (e.g. administrative lock or security hold).
@@ -842,6 +1055,7 @@ export class DeviceRegistryEngine {
 
     device.deviceStatus = 'SUSPENDED';
     device.activationStatus = 'DEACTIVATED';
+    device.calculatedHealthState = 'SUSPENDED';
     device.updatedAt = new Date().toISOString();
 
     db.logAuditEvent({
@@ -859,32 +1073,244 @@ export class DeviceRegistryEngine {
 
   /**
    * Activate or reactivate a physical tracker device.
+   * Enforces readiness validation and prevents activation of decommissioned devices.
    */
   public activateDevice(
     deviceId: string,
     actorUser: ActiveUserSession,
-    reason?: string
+    reason?: string,
+    options?: { requireLearnerAssignment?: boolean }
   ): ItisDeviceRecord {
     this.assertTechnicianOrAdminClearance(actorUser, 'DEVICE_ACTIVATE');
-    const device = this.devices.get(deviceId) || this.findByTrackerIdentifier(deviceId);
-    if (!device) throw new Error(`Device '${deviceId}' not found.`);
+    const { ready, issues, device } = this.validateDeviceActivationReadiness(deviceId, options);
 
+    if (!ready) {
+      throw new Error(`Device '${device.itisDeviceId}' failed activation readiness: ${issues.join('; ')}`);
+    }
+
+    const previousStatus = device.deviceStatus;
     device.deviceStatus = device.assignedLearnerId ? 'ASSIGNED' : 'ACTIVE';
     device.activationStatus = 'ACTIVATED';
     device.activatedAt = new Date().toISOString();
     device.updatedAt = new Date().toISOString();
 
+    const isReactivation = previousStatus === 'SUSPENDED' || previousStatus === 'REPLACED';
+    this.calculateDeviceHealthState(device);
+
     db.logAuditEvent({
-      actionType: 'DEVICE_ACTIVATED',
+      actionType: isReactivation ? 'DEVICE_REACTIVATED' : 'DEVICE_ACTIVATED',
       actorUserId: actorUser.id,
       actorName: actorUser.name,
       actorRole: actorUser.role,
       targetEntity: 'DEVICE',
       targetId: device.itisDeviceId,
       details: {
-        reason: reason || 'Reactivated by authorized technician/admin',
+        reason: reason || (isReactivation ? 'Reactivated by authorized technician/admin' : 'Operational activation'),
+        previousStatus,
         newStatus: device.deviceStatus
       }
+    });
+
+    return device;
+  }
+
+  /**
+   * Replace a physical GPS tracker for a learner (e.g. damaged, lost, upgraded).
+   * - Old device: unassigned, marked REPLACED, replacedByDeviceId set.
+   * - Active assignment history closed with unassignReason='DEVICE_REPLACEMENT'.
+   * - New device: assigned to learner, replacementForDeviceId set, marked ASSIGNED/ACTIVATED.
+   * - New assignment history record created.
+   * - Learner's trackingBeaconId updated to new tracker.
+   * - Audit events emitted: DEVICE_REPLACED, DEVICE_ASSIGNED.
+   */
+  public replaceDevice(
+    payload: ReplaceDevicePayload,
+    actorUser: ActiveUserSession
+  ): {
+    oldDevice: ItisDeviceRecord;
+    newDevice: ItisDeviceRecord;
+    closedAssignment: DeviceAssignmentHistoryRecord | null;
+    newAssignment: DeviceAssignmentHistoryRecord;
+  } {
+    this.assertTechnicianOrAdminClearance(actorUser, 'DEVICE_REPLACEMENT');
+
+    const oldDevice = this.devices.get(payload.oldDeviceId) || this.findByTrackerIdentifier(payload.oldDeviceId);
+    if (!oldDevice) {
+      throw new Error(`Old device '${payload.oldDeviceId}' not found in registry.`);
+    }
+
+    const newDevice = this.devices.get(payload.newDeviceId) || this.findByTrackerIdentifier(payload.newDeviceId);
+    if (!newDevice) {
+      throw new Error(`New replacement device '${payload.newDeviceId}' not found in registry.`);
+    }
+
+    if (oldDevice.itisDeviceId === newDevice.itisDeviceId) {
+      throw new Error('Old device and new replacement device cannot be the same device.');
+    }
+
+    // Verify learner
+    const learner = db.learners.get(payload.learnerId);
+    if (!learner) {
+      throw new Error(`Learner '${payload.learnerId}' not found in learner registry.`);
+    }
+
+    // Validate oldDevice is assigned to the learner
+    if (oldDevice.assignedLearnerId && oldDevice.assignedLearnerId !== payload.learnerId) {
+      throw new Error(`Old device '${oldDevice.itisDeviceId}' is assigned to learner '${oldDevice.assignedLearnerId}', not '${payload.learnerId}'.`);
+    }
+
+    // Validate newDevice cannot be RETIRED, SUSPENDED, LOST, REPLACED, or UNREGISTERED
+    if (newDevice.deviceStatus === 'RETIRED' || newDevice.deviceStatus === 'SUSPENDED' || newDevice.deviceStatus === 'LOST' || newDevice.deviceStatus === 'REPLACED' || newDevice.deviceStatus === 'UNREGISTERED') {
+      throw new Error(`Cannot use device '${newDevice.itisDeviceId}' as replacement: device status is '${newDevice.deviceStatus}'. Suspended, retired, lost, or unregistered devices cannot be assigned.`);
+    }
+
+    // If newDevice is assigned to another learner, unassign it first
+    if (newDevice.assignedLearnerId && newDevice.assignedLearnerId !== payload.learnerId) {
+      this.unassignDevice(newDevice.itisDeviceId, actorUser, 'ADMIN_REASSIGNMENT', 'Reassigned as replacement device.');
+    }
+
+    const timestamp = new Date().toISOString();
+    const reasonText = payload.reason || payload.notes || 'Hardware swap / replacement';
+
+    // 1. Close old device assignment in history
+    let closedAssignment: DeviceAssignmentHistoryRecord | null = null;
+    for (const h of this.assignmentHistory) {
+      if (h.deviceId === oldDevice.itisDeviceId && h.learnerId === payload.learnerId && h.status === 'ACTIVE') {
+        h.status = 'TRANSFERRED';
+        h.unassignedAt = timestamp;
+        h.unassignReason = 'DEVICE_REPLACEMENT';
+        h.notes = payload.notes ? `${payload.notes} | Replaced by ${newDevice.itisDeviceId}` : `Replaced by ${newDevice.itisDeviceId} (${newDevice.trackerDeviceId}). Reason: ${reasonText}`;
+        closedAssignment = h;
+      }
+    }
+
+    // 2. Transition old device state
+    oldDevice.assignedLearnerId = null;
+    oldDevice.assignedLearnerName = undefined;
+    oldDevice.assignedLearnerEmis = undefined;
+    oldDevice.deviceStatus = 'REPLACED';
+    oldDevice.activationStatus = 'DEACTIVATED';
+    oldDevice.replacedByDeviceId = newDevice.itisDeviceId;
+    oldDevice.updatedAt = timestamp;
+    this.calculateDeviceHealthState(oldDevice);
+
+    // 3. Setup new device state
+    const hydrated = db.getHydratedLearner(payload.learnerId);
+    const learnerName = hydrated ? `${hydrated.person.firstName} ${hydrated.person.lastName}` : 'Enrolled Learner';
+    const learnerEmis = learner.emisId;
+    const schoolId = hydrated?.currentSchool?.id || oldDevice.assignedSchoolId || null;
+    const schoolName = hydrated?.currentSchool?.name;
+
+    newDevice.assignedLearnerId = payload.learnerId;
+    newDevice.assignedLearnerName = learnerName;
+    newDevice.assignedLearnerEmis = learnerEmis;
+    newDevice.assignedSchoolId = schoolId;
+    newDevice.assignedSchoolName = schoolName;
+    newDevice.deviceStatus = 'ASSIGNED';
+    newDevice.activationStatus = 'ACTIVATED';
+    newDevice.replacementForDeviceId = oldDevice.itisDeviceId;
+    newDevice.activatedAt = timestamp;
+    newDevice.updatedAt = timestamp;
+    this.calculateDeviceHealthState(newDevice);
+
+    // 4. Create new assignment history record
+    const historyId = `hist-repl-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const newAssignment: DeviceAssignmentHistoryRecord = {
+      id: historyId,
+      deviceId: newDevice.itisDeviceId,
+      trackerDeviceId: newDevice.trackerDeviceId,
+      learnerId: learner.id,
+      learnerEmisId: learnerEmis,
+      learnerName,
+      schoolId: schoolId || undefined,
+      schoolName: schoolName || undefined,
+      assignedAt: timestamp,
+      assignedByUserId: actorUser.id,
+      assignedByUserName: actorUser.name,
+      assignedByUserRole: actorUser.role,
+      status: 'ACTIVE',
+      notes: `Replacement for ${oldDevice.itisDeviceId} (${oldDevice.trackerDeviceId}). Reason: ${reasonText}`
+    };
+    this.assignmentHistory.push(newAssignment);
+
+    // 5. Update learner's trackingBeaconId
+    learner.trackingBeaconId = newDevice.trackerDeviceId;
+    learner.updatedAt = timestamp;
+    db.hydratedLearnerCache.delete(learner.id);
+
+    // 6. Audit logs
+    db.logAuditEvent({
+      actionType: 'DEVICE_REPLACED',
+      actorUserId: actorUser.id,
+      actorName: actorUser.name,
+      actorRole: actorUser.role,
+      targetEntity: 'DEVICE',
+      targetId: oldDevice.itisDeviceId,
+      details: {
+        oldDeviceId: oldDevice.itisDeviceId,
+        newDeviceId: newDevice.itisDeviceId,
+        newTrackerDeviceId: newDevice.trackerDeviceId,
+        learnerId: payload.learnerId,
+        learnerName,
+        reason: reasonText
+      }
+    });
+
+    db.logAuditEvent({
+      actionType: 'DEVICE_ASSIGNED',
+      actorUserId: actorUser.id,
+      actorName: actorUser.name,
+      actorRole: actorUser.role,
+      targetEntity: 'DEVICE',
+      targetId: newDevice.itisDeviceId,
+      details: {
+        action: 'ASSIGNED_VIA_REPLACEMENT',
+        replacementForDeviceId: oldDevice.itisDeviceId,
+        learnerId: payload.learnerId,
+        learnerName,
+        reason: reasonText
+      }
+    });
+
+    return {
+      oldDevice,
+      newDevice,
+      closedAssignment,
+      newAssignment
+    };
+  }
+
+  /**
+   * Mark a device as LOST.
+   * If assigned to a learner, unassigns and logs audit.
+   */
+  public markDeviceLost(
+    deviceId: string,
+    actorUser: ActiveUserSession,
+    reason?: string
+  ): ItisDeviceRecord {
+    this.assertTechnicianOrAdminClearance(actorUser, 'DEVICE_LOST');
+    const device = this.devices.get(deviceId) || this.findByTrackerIdentifier(deviceId);
+    if (!device) throw new Error(`Device '${deviceId}' not found.`);
+
+    if (device.assignedLearnerId) {
+      this.unassignDevice(device.itisDeviceId, actorUser, 'LOST_DEVICE', reason || 'Device reported lost.');
+    }
+
+    device.deviceStatus = 'LOST';
+    device.activationStatus = 'DEACTIVATED';
+    device.connectionStatus = 'OFFLINE';
+    device.calculatedHealthState = 'OFFLINE';
+    device.updatedAt = new Date().toISOString();
+
+    db.logAuditEvent({
+      actionType: 'DEVICE_LOST',
+      actorUserId: actorUser.id,
+      actorName: actorUser.name,
+      actorRole: actorUser.role,
+      targetEntity: 'DEVICE',
+      targetId: device.itisDeviceId,
+      details: { reason: reason || 'Hardware marked as lost.' }
     });
 
     return device;
@@ -909,6 +1335,7 @@ export class DeviceRegistryEngine {
     device.deviceStatus = 'RETIRED';
     device.activationStatus = 'DEACTIVATED';
     device.connectionStatus = 'OFFLINE';
+    device.calculatedHealthState = 'RETIRED';
     device.updatedAt = new Date().toISOString();
 
     db.logAuditEvent({
@@ -922,6 +1349,123 @@ export class DeviceRegistryEngine {
     });
 
     return device;
+  }
+
+  /**
+   * Authoritative Device Health State Calculation.
+   * Computes one of: ONLINE, DEGRADED, OFFLINE, STALE, SUSPENDED, RETIRED
+   * Based on:
+   * - lastTelemetryTimestamp / lastHeartbeatTimestamp
+   * - battery level
+   * - GPS accuracy
+   * - network status
+   * - administrative status (SUSPENDED, RETIRED)
+   */
+  public calculateDeviceHealthState(
+    device: ItisDeviceRecord,
+    config?: Partial<DeviceHealthThresholdConfig>
+  ): ItisDeviceCalculatedHealthState {
+    const cfg: DeviceHealthThresholdConfig = {
+      ...DEFAULT_DEVICE_HEALTH_CONFIG,
+      ...config
+    };
+
+    if (device.deviceStatus === 'RETIRED') {
+      device.calculatedHealthState = 'RETIRED';
+      return 'RETIRED';
+    }
+
+    if (device.deviceStatus === 'SUSPENDED') {
+      device.calculatedHealthState = 'SUSPENDED';
+      return 'SUSPENDED';
+    }
+
+    const lastContactTime = device.lastTelemetryTimestamp || device.lastHeartbeatTimestamp || device.lastCommunicationTimestamp;
+    if (!lastContactTime) {
+      device.calculatedHealthState = 'OFFLINE';
+      return 'OFFLINE';
+    }
+
+    const elapsedSeconds = Math.floor((Date.now() - new Date(lastContactTime).getTime()) / 1000);
+
+    if (elapsedSeconds > cfg.staleThresholdSeconds) {
+      device.calculatedHealthState = 'OFFLINE';
+      return 'OFFLINE';
+    }
+
+    if (elapsedSeconds > cfg.onlineThresholdSeconds) {
+      device.calculatedHealthState = 'STALE';
+      return 'STALE';
+    }
+
+    // Within online threshold (fresh contact)
+    const battery = device.batteryStatus?.percentage ?? 100;
+    const accuracy = device.lastKnownLocation?.accuracyMeters ?? 5.0;
+    const isDegradedNetwork = device.networkStatus === 'ROAMING' || device.networkStatus === 'SEARCHING';
+
+    if (battery <= cfg.degradedBatteryThreshold || accuracy > cfg.degradedAccuracyMetersThreshold || isDegradedNetwork) {
+      device.calculatedHealthState = 'DEGRADED';
+      return 'DEGRADED';
+    }
+
+    device.calculatedHealthState = 'ONLINE';
+    return 'ONLINE';
+  }
+
+  /**
+   * Retrieve authoritative device health summary with metric diagnostics.
+   */
+  public getDeviceHealthSummary(
+    deviceId: string,
+    config?: Partial<DeviceHealthThresholdConfig>
+  ): DeviceHealthSummary {
+    const device = this.devices.get(deviceId) || this.findByTrackerIdentifier(deviceId);
+    if (!device) throw new Error(`Device '${deviceId}' not found.`);
+
+    const state = this.calculateDeviceHealthState(device, config);
+    const lastContactTime = device.lastTelemetryTimestamp || device.lastHeartbeatTimestamp || device.lastCommunicationTimestamp;
+    const elapsedSeconds = lastContactTime ? Math.floor((Date.now() - new Date(lastContactTime).getTime()) / 1000) : 999999;
+
+    const reasons: string[] = [];
+    if (device.deviceStatus === 'RETIRED') reasons.push('Device decommissioned (RETIRED)');
+    if (device.deviceStatus === 'SUSPENDED') reasons.push('Device administratively SUSPENDED');
+    if (elapsedSeconds > 300) reasons.push(`No telemetry communication for ${elapsedSeconds} seconds`);
+    if ((device.batteryStatus?.percentage ?? 100) <= 20) reasons.push(`Battery low (${device.batteryStatus?.percentage ?? 0}%)`);
+    if ((device.lastKnownLocation?.accuracyMeters ?? 0) > 30) reasons.push(`GPS accuracy degraded (${device.lastKnownLocation?.accuracyMeters}m)`);
+    if (device.networkStatus === 'ROAMING' || device.networkStatus === 'SEARCHING') reasons.push(`Network status: ${device.networkStatus}`);
+    if (reasons.length === 0) reasons.push('All telemetry indicators within nominal operating thresholds');
+
+    return {
+      deviceId: device.itisDeviceId,
+      trackerDeviceId: device.trackerDeviceId,
+      deviceStatus: device.deviceStatus,
+      healthState: state,
+      calculatedHealthState: state,
+      connectionStatus: device.connectionStatus,
+      lastConnectionStatus: device.connectionStatus,
+      lastTelemetryTimestamp: device.lastTelemetryTimestamp,
+      lastHeartbeatTimestamp: device.lastHeartbeatTimestamp,
+      batteryPercentage: device.batteryStatus?.percentage ?? 0,
+      batteryLevel: device.batteryStatus?.percentage ?? 0,
+      batteryHealth: device.batteryStatus?.healthStatus ?? 'NORMAL',
+      batteryVoltage: device.batteryStatus?.voltage,
+      gpsCoordinates: device.lastKnownLocation ? {
+        latitude: device.lastKnownLocation.latitude,
+        longitude: device.lastKnownLocation.longitude,
+        accuracyMeters: device.lastKnownLocation.accuracyMeters,
+        timestamp: device.lastKnownLocation.timestamp
+      } : undefined,
+      lastGpsCoordinates: device.lastKnownLocation ? {
+        latitude: device.lastKnownLocation.latitude,
+        longitude: device.lastKnownLocation.longitude,
+        accuracyMeters: device.lastKnownLocation.accuracyMeters,
+        timestamp: device.lastKnownLocation.timestamp
+      } : undefined,
+      lastPacketSequence: device.lastPacketSequence,
+      networkStatus: device.networkStatus || 'ONLINE',
+      reasons,
+      evaluatedAt: new Date().toISOString()
+    };
   }
 
   // ====================================================
@@ -1060,6 +1604,19 @@ export class DeviceRegistryEngine {
 
   public getDeviceById(idOrTrackerId: string): ItisDeviceRecord | null {
     return this.devices.get(idOrTrackerId) || this.findByTrackerIdentifier(idOrTrackerId) || null;
+  }
+
+  public getDeviceForLearner(learnerId: string): ItisDeviceRecord | null {
+    for (const dev of this.devices.values()) {
+      if (dev.assignedLearnerId === learnerId && dev.deviceStatus !== 'RETIRED') {
+        return dev;
+      }
+    }
+    const learner = db.learners.get(learnerId);
+    if ((learner as any)?.currentDeviceId) {
+      return this.getDeviceById((learner as any).currentDeviceId);
+    }
+    return null;
   }
 
   public findByTrackerIdentifier(trackerId: string): ItisDeviceRecord | null {

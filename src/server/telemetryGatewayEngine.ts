@@ -35,6 +35,7 @@ import {
 } from '../types.js';
 import { db } from './dbStore.js';
 import { deviceRegistryEngine } from './deviceRegistryEngine.js';
+import { telemetryPersistenceEngine } from './telemetryPersistenceEngine.js';
 
 // Precomputed 256-entry lookup table for CRC-ITU / CRC-16-CCITT (Polynomial 0x1021)
 const CRC_ITU_TABLE: number[] = new Array(256);
@@ -742,7 +743,7 @@ export class TelemetryGatewayEngine {
       };
     }
 
-    if (registryDevice.deviceStatus === 'RETIRED') {
+    if (registryDevice.deviceStatus === 'RETIRED' || registryDevice.deviceStatus === 'LOST' || registryDevice.deviceStatus === 'REPLACED') {
       this.metrics.totalRejected++;
       return {
         accepted: false,
@@ -752,7 +753,7 @@ export class TelemetryGatewayEngine {
         packetType,
         deviceId: deviceIdentifier,
         itisDeviceId: registryDevice.itisDeviceId,
-        deviceRegistryStatus: 'RETIRED',
+        deviceRegistryStatus: registryDevice.deviceStatus,
         duplicate: false,
         quarantined: false,
         ackRequired: false,
@@ -764,10 +765,10 @@ export class TelemetryGatewayEngine {
           validSpeed: true,
           validHeading: true,
           validTimestamp: true,
-          reason: 'Device has been decommissioned / RETIRED.'
+          reason: `Device has been decommissioned or made inactive (${registryDevice.deviceStatus}).`
         },
         errorCode: 'DEVICE_RETIRED',
-        error: `DEVICE_RETIRED: Device '${registryDevice.itisDeviceId}' is retired.`,
+        error: `DEVICE_RETIRED: Device '${registryDevice.itisDeviceId}' is ${registryDevice.deviceStatus.toLowerCase()}.`,
         receivedAt,
         processedAt,
         transportType,
@@ -833,6 +834,35 @@ export class TelemetryGatewayEngine {
       batteryPercentage: extractedBattery,
       voltage: voltageLevel
     });
+
+    // Authoritative Telemetry Persistence Layer
+    if (extractedLat !== undefined && extractedLng !== undefined) {
+      telemetryPersistenceEngine.persistAuthoritativeTelemetry({
+        deviceId: registryDevice.itisDeviceId,
+        trackerDeviceId: registryDevice.trackerDeviceId,
+        learnerId: registryDevice.assignedLearnerId || null,
+        schoolId: registryDevice.assignedSchoolId || null,
+        timestamp: processedAt,
+        latitude: extractedLat,
+        longitude: extractedLng,
+        accuracyMeters: 4.5,
+        speedKmh: extractedSpeed || 0,
+        heading: extractedHeading || 0,
+        altitudeMeters: undefined,
+        batteryLevel: extractedBattery,
+        batteryVoltage: voltageLevel,
+        protocol: 'GT012',
+        packetType: packetType as any,
+        packetSerialNumber: serialNumber,
+        transportSource: transportType,
+        rawPacketFingerprint: fingerprint,
+        isSos,
+        alarmType,
+        satellites
+      }, actor).catch(err => {
+        console.error('[TelemetryGatewayEngine] GT012 persistence error:', err);
+      });
+    }
 
     if (actor) {
       db.logAuditEvent({
@@ -986,46 +1016,7 @@ export class TelemetryGatewayEngine {
       };
     }
 
-    // Duplicate detection
-    const fingerprint = crypto
-      .createHash('sha256')
-      .update(`SIM:${deviceIdentifier}:${json.latitude}:${json.longitude}:${json.timestamp || ''}`)
-      .digest('hex');
-
-    if (this.packetFingerprintCache.has(fingerprint)) {
-      this.metrics.totalDuplicates++;
-      return {
-        accepted: false,
-        status: 'REJECTED',
-        diagnosticCode: 'DUPLICATE_PACKET',
-        protocol: 'SIMULATED_TEST_PROTOCOL',
-        packetType: json.sosActive ? 'ALARM' : 'LOCATION',
-        deviceId: deviceIdentifier,
-        duplicate: true,
-        duplicateFingerprint: fingerprint,
-        quarantined: false,
-        ackRequired: false,
-        validationResult: {
-          validFraming: true,
-          validCrc: true,
-          validCoordinates: true,
-          validBattery: true,
-          validSpeed: true,
-          validHeading: true,
-          validTimestamp: true,
-          reason: 'Duplicate JSON telemetry packet detected.'
-        },
-        errorCode: 'DUPLICATE_PACKET',
-        error: 'DUPLICATE_PACKET: Repeated JSON telemetry packet suppressed.',
-        receivedAt,
-        processedAt,
-        transportType,
-        remoteAddress
-      };
-    }
-    this.packetFingerprintCache.set(fingerprint, Date.now());
-
-    // Coordinate validation
+    // Coordinate validation (must check physical bounds before duplicate cache)
     const lat = typeof json.latitude === 'number' ? json.latitude : parseFloat(json.latitude);
     const lng = typeof json.longitude === 'number' ? json.longitude : parseFloat(json.longitude);
 
@@ -1071,6 +1062,45 @@ export class TelemetryGatewayEngine {
         remoteAddress
       };
     }
+
+    // Duplicate detection
+    const fingerprint = crypto
+      .createHash('sha256')
+      .update(`SIM:${deviceIdentifier}:${lat}:${lng}:${json.timestamp || ''}`)
+      .digest('hex');
+
+    if (this.packetFingerprintCache.has(fingerprint)) {
+      this.metrics.totalDuplicates++;
+      return {
+        accepted: false,
+        status: 'REJECTED',
+        diagnosticCode: 'DUPLICATE_PACKET',
+        protocol: 'SIMULATED_TEST_PROTOCOL',
+        packetType: json.sosActive ? 'ALARM' : 'LOCATION',
+        deviceId: deviceIdentifier,
+        duplicate: true,
+        duplicateFingerprint: fingerprint,
+        quarantined: false,
+        ackRequired: false,
+        validationResult: {
+          validFraming: true,
+          validCrc: true,
+          validCoordinates: true,
+          validBattery: true,
+          validSpeed: true,
+          validHeading: true,
+          validTimestamp: true,
+          reason: 'Duplicate JSON telemetry packet detected.'
+        },
+        errorCode: 'DUPLICATE_PACKET',
+        error: 'DUPLICATE_PACKET: Repeated JSON telemetry packet suppressed.',
+        receivedAt,
+        processedAt,
+        transportType,
+        remoteAddress
+      };
+    }
+    this.packetFingerprintCache.set(fingerprint, Date.now());
 
     // Device Registry check
     const registryDevice = deviceRegistryEngine.getDeviceById(deviceIdentifier);
@@ -1163,11 +1193,66 @@ export class TelemetryGatewayEngine {
       };
     }
 
+    if (registryDevice.deviceStatus === 'RETIRED' || registryDevice.deviceStatus === 'LOST' || registryDevice.deviceStatus === 'REPLACED') {
+      this.metrics.totalRejected++;
+      return {
+        accepted: false,
+        status: 'REJECTED',
+        diagnosticCode: 'DEVICE_RETIRED',
+        protocol: 'SIMULATED_TEST_PROTOCOL',
+        packetType: json.sosActive ? 'ALARM' : 'LOCATION',
+        deviceId: deviceIdentifier,
+        itisDeviceId: registryDevice.itisDeviceId,
+        deviceRegistryStatus: registryDevice.deviceStatus,
+        duplicate: false,
+        quarantined: false,
+        ackRequired: false,
+        validationResult: {
+          validFraming: true,
+          validCrc: true,
+          validCoordinates: true,
+          validBattery: true,
+          validSpeed: true,
+          validHeading: true,
+          validTimestamp: true,
+          reason: `Device is decommissioned or inactive (${registryDevice.deviceStatus}).`
+        },
+        errorCode: 'DEVICE_RETIRED',
+        error: `DEVICE_RETIRED: Device '${registryDevice.itisDeviceId}' is ${registryDevice.deviceStatus.toLowerCase()}.`,
+        receivedAt,
+        processedAt,
+        transportType,
+        remoteAddress
+      };
+    }
+
     // Telemetry accepted
     deviceRegistryEngine.handleIncomingTrackerConnection(deviceIdentifier, 'SIMULATED', {
       latitude: lat,
       longitude: lng,
       batteryPercentage: json.batteryLevel || 90
+    });
+
+    // Authoritative Telemetry Persistence Layer
+    telemetryPersistenceEngine.persistAuthoritativeTelemetry({
+      deviceId: registryDevice.itisDeviceId,
+      trackerDeviceId: registryDevice.trackerDeviceId,
+      learnerId: registryDevice.assignedLearnerId || null,
+      schoolId: registryDevice.assignedSchoolId || null,
+      timestamp: json.timestamp || processedAt,
+      latitude: lat,
+      longitude: lng,
+      accuracyMeters: json.accuracy || 5.0,
+      speedKmh: json.speed || 0,
+      heading: json.heading || 0,
+      batteryLevel: json.batteryLevel || 90,
+      protocol: 'SIMULATED',
+      packetType: json.sosActive ? 'ALARM' : 'LOCATION',
+      transportSource: transportType,
+      rawPacketFingerprint: fingerprint,
+      isSos: Boolean(json.sosActive)
+    }, actor).catch(err => {
+      console.error('[TelemetryGatewayEngine] Simulated packet persistence error:', err);
     });
 
     if (actor) {

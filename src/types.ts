@@ -427,12 +427,17 @@ export interface ImmutableAuditEvent {
     | 'RESPONDER_LOCATION_SHARING_DISABLED'
     | 'RESPONDER_LOCATION_UPDATED'
     | 'RESPONDER_AVAILABILITY_CHANGED'
+    | 'DEVICE_PROCURED'
     | 'DEVICE_REGISTERED'
     | 'DEVICE_PROVISIONED'
+    | 'DEVICE_ASSIGNED'
     | 'DEVICE_ASSIGNED_TO_LEARNER'
     | 'DEVICE_UNASSIGNED'
     | 'DEVICE_SUSPENDED'
     | 'DEVICE_ACTIVATED'
+    | 'DEVICE_REACTIVATED'
+    | 'DEVICE_REPLACED'
+    | 'DEVICE_LOST'
     | 'DEVICE_RETIRED'
     | 'SUSPENDED_DEVICE_TELEMETRY_BLOCKED'
     | 'DUPLICATE_DEVICE_REGISTRATION_BLOCKED'
@@ -445,11 +450,19 @@ export interface ImmutableAuditEvent {
     | 'TELEMETRY_GATEWAY_STARTED'
     | 'UNKNOWN_DEVICE_TELEMETRY_ATTEMPT'
     | 'SUSPENDED_DEVICE_TELEMETRY_ATTEMPT'
-    | 'MALFORMED_PACKET_RECEIVED';
+    | 'MALFORMED_PACKET_RECEIVED'
+    | 'LOCATION_VIEWED'
+    | 'LOCATION_HISTORY_VIEWED'
+    | 'UNAUTHORIZED_LOCATION_ACCESS_DENIED'
+    | 'TELEMETRY_ALERT_GENERATED'
+    | 'TELEMETRY_ALERT_SUPPRESSED'
+    | 'TELEMETRY_INCIDENT_CORRELATED'
+    | 'AUTOMATION_RULE_TRIGGERED'
+    | 'SAFETY_AUTOMATION_CONFIGURED';
   actorUserId: string;
   actorName: string;
   actorRole: string;
-  targetEntity: 'PERSON' | 'LEARNER' | 'GUARDIAN' | 'RELATIONSHIP' | 'ENROLMENT' | 'ACADEMIC_RECORD' | 'INCIDENT' | 'USER' | 'POLICY' | 'SYSTEM' | 'SCHOOL' | 'RESPONDER' | 'DEVICE' | 'HARDWARE' | 'GATEWAY';
+  targetEntity: 'PERSON' | 'LEARNER' | 'GUARDIAN' | 'RELATIONSHIP' | 'ENROLMENT' | 'ACADEMIC_RECORD' | 'INCIDENT' | 'USER' | 'POLICY' | 'SYSTEM' | 'SCHOOL' | 'RESPONDER' | 'DEVICE' | 'HARDWARE' | 'GATEWAY' | 'LOCATION' | 'TELEMETRY' | 'SAFETY_ALERT' | 'AUTOMATION_RULE';
   targetId: string;
   details: Record<string, any>;
   ipAddress: string;
@@ -1154,6 +1167,7 @@ export interface GT012DeviceHealthRecord {
 
 export type ItisDeviceState = 
   | 'UNREGISTERED' 
+  | 'INVENTORY'
   | 'REGISTERED'
   | 'PROVISIONING' 
   | 'ACTIVE' 
@@ -1161,6 +1175,7 @@ export type ItisDeviceState =
   | 'SUSPENDED' 
   | 'LOST' 
   | 'STOLEN'
+  | 'REPLACED'
   | 'RETIRED' 
   | 'FAULT';
 
@@ -1168,6 +1183,28 @@ export type ItisDeviceActivationStatus =
   | 'ACTIVATED' 
   | 'PENDING_ACTIVATION' 
   | 'DEACTIVATED';
+
+export type ItisDeviceCalculatedHealthState = 
+  | 'ONLINE'
+  | 'DEGRADED'
+  | 'OFFLINE'
+  | 'STALE'
+  | 'SUSPENDED'
+  | 'RETIRED';
+
+export interface DeviceHealthThresholdConfig {
+  onlineThresholdSeconds: number;
+  staleThresholdSeconds: number;
+  degradedBatteryThreshold: number;
+  degradedAccuracyMetersThreshold: number;
+}
+
+export const DEFAULT_DEVICE_HEALTH_CONFIG: DeviceHealthThresholdConfig = {
+  onlineThresholdSeconds: 180,
+  staleThresholdSeconds: 900,
+  degradedBatteryThreshold: 20,
+  degradedAccuracyMetersThreshold: 50
+};
 
 export type ItisDeviceProtocolType = 
   | 'GT012' 
@@ -1205,14 +1242,17 @@ export interface ItisDeviceRecord {
   itisDeviceId: string;
   trackerDeviceId: string; // Supported hardware identifier (Serial, MAC, or protocol ID)
   hardwareSerialNumber?: string;
-  imei?: string; // Optional: where supported by hardware/protocol (do not assume all trackers have IMEI)
-  simIdentifier?: string; // Optional: ICCID / MSISDN where appropriate
-  phoneNumber?: string;
+  serialNumber?: string;
+  imei?: string; // Authoritative IMEI where supported by hardware/protocol
+  simIdentifier?: string; // Authoritative ICCID where appropriate
+  iccid?: string;
+  phoneNumber?: string; // SIM phone number
   protocolType: ItisDeviceProtocolType;
   manufacturer?: string;
   deviceModel: string;
   deviceStatus: ItisDeviceState;
   activationStatus: ItisDeviceActivationStatus;
+  calculatedHealthState?: ItisDeviceCalculatedHealthState;
   assignedLearnerId?: string | null;
   assignedLearnerName?: string;
   assignedLearnerEmis?: string;
@@ -1227,9 +1267,15 @@ export interface ItisDeviceRecord {
     timestamp?: string;
     speed?: number;
     heading?: number;
+    altitude?: number;
   };
   lastTelemetryTimestamp?: string;
   lastCommunicationTimestamp?: string;
+  lastHeartbeatTimestamp?: string;
+  lastPacketSequence?: number;
+  networkStatus?: 'CONNECTED' | 'ROAMING' | 'SEARCHING' | 'DISCONNECTED' | 'STANDBY';
+  signalStatus?: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR' | 'NO_SIGNAL';
+  signalDbm?: number;
   batteryStatus: {
     percentage: number;
     voltage?: number;
@@ -1240,12 +1286,101 @@ export interface ItisDeviceRecord {
   healthClassification?: 'HEALTHY' | 'WARNING' | 'CRITICAL' | 'UNPROVISIONED';
   firmwareVersion: string;
   hardwareRevision?: string;
+  hardwareVersion?: string;
+  procurementDate?: string;
+  procurementBatch?: string;
+  supplier?: string;
+  replacementForDeviceId?: string;
+  replacedByDeviceId?: string;
   registeredAt: string;
   activatedAt?: string;
   updatedAt: string;
   provisionedAt?: string;
   provisionedByUserId?: string;
   provisionedByUserName?: string;
+}
+
+export interface ProcureDevicePayload {
+  trackerDeviceId: string;
+  serialNumber?: string;
+  hardwareSerialNumber?: string;
+  imei?: string;
+  protocolType?: ItisDeviceProtocolType | string;
+  protocol?: string;
+  deviceModel?: string;
+  model?: string;
+  manufacturer?: string;
+  simIdentifier?: string;
+  iccid?: string;
+  phoneNumber?: string;
+  firmwareVersion?: string;
+  hardwareRevision?: string;
+  hardwareVersion?: string;
+  supplier?: string;
+  procurementBatch?: string;
+  procurementDate?: string;
+  initialBatteryPercentage?: number;
+  assignedSchoolId?: string;
+  initialStatus?: 'INVENTORY' | 'REGISTERED';
+}
+
+export interface ReplaceDevicePayload {
+  oldDeviceId: string;
+  newDeviceId: string;
+  learnerId: string;
+  reason?: string;
+  notes?: string;
+}
+
+export interface DeviceHealthSummary {
+  deviceId: string;
+  trackerDeviceId: string;
+  deviceStatus: ItisDeviceState;
+  healthState: ItisDeviceCalculatedHealthState;
+  calculatedHealthState: ItisDeviceCalculatedHealthState;
+  connectionStatus: ItisDeviceConnectionStatus;
+  lastConnectionStatus?: ItisDeviceConnectionStatus;
+  lastTelemetryTimestamp?: string;
+  lastHeartbeatTimestamp?: string;
+  lastPacketSequence?: number;
+  batteryPercentage: number;
+  batteryLevel?: number;
+  batteryHealth: ItisDeviceBatteryHealth;
+  batteryVoltage?: number;
+  gpsCoordinates?: {
+    latitude: number;
+    longitude: number;
+    accuracyMeters?: number;
+    timestamp?: string;
+  };
+  lastGpsCoordinates?: {
+    latitude: number;
+    longitude: number;
+    accuracyMeters?: number;
+    timestamp?: string;
+  };
+  networkStatus?: string;
+  reasons: string[];
+  evaluatedAt: string;
+}
+
+export interface DeviceLifecycleTestSuiteResult {
+  suiteId: string;
+  timestamp: string;
+  totalTests: number;
+  passedTests: number;
+  failedTests: number;
+  allPassed: boolean;
+  results: {
+    id: string;
+    name: string;
+    requirement: string;
+    expected: string;
+    actual: string;
+    status: 'PASS' | 'FAIL';
+    auditEventLogged?: boolean;
+    evidence: Record<string, any>;
+  }[];
 }
 
 export interface RegisterDevicePayload {
@@ -1510,6 +1645,91 @@ export interface TelemetryIngestionResult {
   processedAt: string;
   transportType: TelemetryTransportType;
   remoteAddress?: string;
+  persistedRecordId?: string;
+  latestLocationUpdated?: boolean;
+}
+
+export interface AuthoritativeTelemetryRecord {
+  id: string; // Authoritative Telemetry ID (e.g. TEL-...)
+  deviceId: string; // Authoritative ITIS Device ID (e.g. DEV-ZA-GT012-...)
+  trackerDeviceId: string; // Physical Hardware Tracking Identifier (Serial / IMEI / Terminal ID)
+  learnerId?: string | null; // Assigned Learner ID if mapped
+  schoolId?: string | null; // School ID if learner is enrolled
+  timestamp: string; // Timestamp recorded on GPS hardware
+  latitude: number;
+  longitude: number;
+  accuracyMeters?: number;
+  speedKmh?: number;
+  heading?: number;
+  altitudeMeters?: number;
+  batteryLevel?: number;
+  batteryVoltage?: number;
+  protocol: string; // GT012, SIMULATED, etc.
+  packetType: 'LOCATION' | 'ALARM' | 'HEARTBEAT' | 'LOGIN' | 'STATUS' | 'UNKNOWN';
+  packetSerialNumber?: number;
+  ingestedAt: string; // Pipeline ingestion timestamp
+  transportSource: TelemetryTransportType;
+  validationStatus: 'VALIDATED' | 'VALID';
+  rawPacketFingerprint?: string; // SHA-256 diagnostic fingerprint for deduplication / verification
+  isSos?: boolean;
+  alarmType?: string | null;
+  satellites?: number;
+}
+
+export interface AuthoritativeLatestLocationRecord {
+  deviceId: string;
+  trackerDeviceId: string;
+  learnerId: string | null;
+  schoolId: string | null;
+  latitude: number;
+  longitude: number;
+  accuracyMeters: number;
+  speedKmh: number;
+  heading: number;
+  altitudeMeters?: number;
+  batteryLevel: number;
+  batteryVoltage?: number;
+  timestamp: string;
+  ingestedAt: string;
+  protocol: string;
+  packetType: string;
+  connectionStatus: ItisDeviceConnectionStatus;
+  healthState: ItisDeviceCalculatedHealthState;
+  isSos: boolean;
+  alarmType?: string | null;
+  satellites?: number;
+}
+
+export interface TelemetryHistoryQueryOptions {
+  deviceId?: string;
+  trackerDeviceId?: string;
+  learnerId?: string;
+  schoolId?: string;
+  startTime?: string;
+  endTime?: string;
+  page?: number;
+  pageSize?: number;
+  limit?: number;
+  offset?: number;
+  order?: 'ASC' | 'DESC';
+}
+
+export interface TelemetryPersistenceTestSuiteResult {
+  suiteId: string;
+  timestamp: string;
+  totalTests: number;
+  passedTests: number;
+  failedTests: number;
+  allPassed: boolean;
+  results: {
+    id: string;
+    name: string;
+    requirement: string;
+    expected: string;
+    actual: string;
+    status: 'PASS' | 'FAIL';
+    evidence?: Record<string, any>;
+  }[];
 }
 
 export interface TelemetryGatewayStatus {
@@ -1557,6 +1777,372 @@ export interface TelemetryGatewayTestSuiteResult {
     evidence?: Record<string, any>;
   }[];
 }
+
+// ----------------------------------------------------
+// LIVE GPS LOCATION SERVICE & MAP DATA API
+// ----------------------------------------------------
+
+export interface MapLocationPoint {
+  latitude: number;
+  longitude: number;
+  accuracyMeters: number;
+  timestamp: string;
+  speedKmh?: number;
+  heading?: number;
+  altitudeMeters?: number;
+}
+
+export interface MapDeviceLatestLocation {
+  deviceId: string;
+  trackerDeviceId: string;
+  latitude: number;
+  longitude: number;
+  accuracyMeters: number;
+  speedKmh: number;
+  heading: number;
+  batteryLevel: number;
+  batteryVoltage?: number;
+  timestamp: string;
+  isSos: boolean;
+  alarmType?: string;
+  satellites?: number;
+  status: 'ONLINE' | 'STANDBY' | 'OFFLINE' | 'SUSPENDED';
+  isStale: boolean;
+  staleMinutes: number;
+  geoJson: {
+    type: 'Feature';
+    geometry: {
+      type: 'Point';
+      coordinates: [number, number]; // [lng, lat]
+    };
+    properties: Record<string, any>;
+  };
+}
+
+export interface MapLearnerCurrentLocation {
+  learnerId: string;
+  officialIdentifierMasked: string;
+  firstName: string;
+  lastNameInitial: string;
+  schoolId: string;
+  schoolName: string;
+  deviceId?: string;
+  trackerDeviceId?: string;
+  location: MapLocationPoint | null;
+  batteryLevel?: number;
+  isSos: boolean;
+  geofenceStatus: 'INSIDE_SAFE_ZONE' | 'OUTSIDE_SAFE_ZONE' | 'UNKNOWN';
+  distanceToSchoolMeters?: number;
+  lastSeenAt?: string;
+  isLive: boolean;
+  accessAuthorized: boolean;
+  geoJson?: {
+    type: 'Feature';
+    geometry: {
+      type: 'Point';
+      coordinates: [number, number];
+    };
+    properties: Record<string, any>;
+  };
+}
+
+export interface MapLocationHistoryResponse {
+  subjectType: 'LEARNER' | 'DEVICE';
+  subjectId: string;
+  dateRange: {
+    startTime: string;
+    endTime: string;
+  };
+  totalPoints: number;
+  points: Array<MapLocationPoint & {
+    id: string;
+    isSos: boolean;
+    batteryLevel?: number;
+  }>;
+  pathGeoJson: {
+    type: 'Feature';
+    geometry: {
+      type: 'LineString';
+      coordinates: [number, number][]; // [lng, lat]
+    };
+    properties: {
+      pointCount: number;
+      startTime: string;
+      endTime: string;
+      maxSpeedKmh: number;
+    };
+  };
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+    hasMore: boolean;
+  };
+}
+
+export interface IncidentTacticalLocationContext {
+  incidentId: string;
+  status: string;
+  severity: string;
+  incidentLocation: {
+    lat: number;
+    lng: number;
+    address?: string;
+    timestamp: string;
+  };
+  learner: {
+    id: string;
+    firstName: string;
+    lastNameInitial: string;
+    schoolId: string;
+    currentLocation: MapLocationPoint | null;
+    distanceToIncidentMeters?: number;
+  } | null;
+  tacticalVectors: {
+    distanceMeters: number;
+    bearingDegrees: number;
+    estimatedInterceptEtaMinutes: number;
+    targetSpeedKmh: number;
+    targetHeadingDegrees: number;
+  } | null;
+  assignedResponder: {
+    id: string;
+    name: string;
+    callsign: string;
+    unitType: string;
+    vehicleId?: string;
+    currentLocation: {
+      lat: number;
+      lng: number;
+      lastUpdated: string;
+    } | null;
+    distanceToIncidentMeters?: number;
+    etaMinutes?: number;
+  } | null;
+  nearbyResponders: Array<{
+    id: string;
+    callsign: string;
+    unitType: string;
+    lat: number;
+    lng: number;
+    distanceMeters: number;
+    status: string;
+  }>;
+  geofences: {
+    schoolGeofence: {
+      schoolId: string;
+      name: string;
+      centerLat: number;
+      centerLng: number;
+      radiusMeters: number;
+      learnerInside: boolean;
+    } | null;
+  };
+  deviceTelemetry: {
+    deviceId: string;
+    batteryLevel: number;
+    signalRssi?: number;
+    lastPing: string;
+    isOnline: boolean;
+  } | null;
+}
+
+export interface DeviceHealthStatus {
+  deviceId: string;
+  trackerDeviceId: string;
+  serialNumber: string;
+  status: 'ACTIVE' | 'ASSIGNED' | 'STANDBY' | 'SUSPENDED' | 'MAINTENANCE' | 'OFFLINE';
+  batteryPercentage: number;
+  voltage: number;
+  batteryStatus: 'NORMAL' | 'LOW' | 'CRITICAL';
+  satellites: number;
+  gpsFixStatus: 'STRONG_3D' | 'WEAK_2D' | 'NO_FIX';
+  signalStrengthDbm: number;
+  signalQuality: 'EXCELLENT' | 'GOOD' | 'FAIR' | 'POOR';
+  lastPingAt: string;
+  isOnline: boolean;
+  packetRatePerMinute: number;
+  assignedLearnerId: string | null;
+  firmwareVersion: string;
+  hardwareModel: string;
+}
+
+export interface MapPollUpdateResponse {
+  serverTimestamp: string;
+  cursor: string;
+  deviceUpdates: MapDeviceLatestLocation[];
+  responderUpdates: Array<{
+    id: string;
+    callsign: string;
+    lat: number;
+    lng: number;
+    updatedAt: string;
+    status: string;
+  }>;
+  hasMore: boolean;
+}
+
+export interface LiveLocationTestSuiteResult {
+  suiteId: string;
+  timestamp: string;
+  totalTests: number;
+  passedTests: number;
+  failedTests: number;
+  allPassed: boolean;
+  results: {
+    id: string;
+    name: string;
+    requirement: string;
+    expected: string;
+    actual: string;
+    status: 'PASS' | 'FAIL';
+    evidence?: Record<string, any>;
+  }[];
+}
+
+// ----------------------------------------------------
+// GPS TELEMETRY INCIDENT DETECTION & SAFETY AUTOMATION
+// ----------------------------------------------------
+export type SafetyAutomationEventType = 
+  | 'DEVICE_OFFLINE'
+  | 'PROLONGED_SILENCE'
+  | 'UNEXPECTED_ROUTE_DEVIATION'
+  | 'GEOFENCE_EXIT'
+  | 'GEOFENCE_ENTRY'
+  | 'UNUSUAL_STATIONARY'
+  | 'TRACKER_TAMPER'
+  | 'LOW_BATTERY'
+  | 'EMERGENCY_SOS';
+
+export type SafetyRuleSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL_SOS';
+
+export interface SafetyRuleThresholds {
+  offlineSilenceSeconds?: number;
+  prolongedSilenceSeconds?: number;
+  routeDeviationMeters?: number;
+  geofenceBufferMeters?: number;
+  stationaryMinutes?: number;
+  lowBatteryPercentage?: number;
+  tamperFlagsSupported?: boolean;
+  requireSosConfirmation?: boolean;
+  [key: string]: any;
+}
+
+export interface SafetyRuleConfig {
+  ruleId: string;
+  eventType: SafetyAutomationEventType;
+  name: string;
+  description: string;
+  enabled: boolean;
+  severity: SafetyRuleSeverity;
+  cooldownSeconds: number;
+  thresholds: SafetyRuleThresholds;
+  autoEscalateToIncident: boolean;
+  autoEscalateSeverity?: SafetyRuleSeverity;
+  suppressionWindowSeconds?: number;
+  applicableSchoolIds?: string[];
+}
+
+export interface SafetyAlertRecord {
+  id: string;
+  ruleId: string;
+  eventType: SafetyAutomationEventType;
+  title: string;
+  description: string;
+  severity: SafetyRuleSeverity;
+  status: 'PENDING_REVIEW' | 'CORRELATED_TO_INCIDENT' | 'ESCALATED' | 'DISMISSED' | 'RESOLVED';
+  deviceId: string;
+  trackerDeviceId: string;
+  learnerId?: string | null;
+  learnerName?: string;
+  schoolId?: string | null;
+  schoolName?: string;
+  guardianName?: string;
+  guardianMobile?: string;
+  location?: {
+    lat: number;
+    lng: number;
+    accuracyMeters?: number;
+    addressDescription?: string;
+    speedKmh?: number;
+  };
+  telemetrySnapshot: {
+    timestamp: string;
+    batteryLevel?: number;
+    speedKmh?: number;
+    heading?: number;
+    satellites?: number;
+    isSos?: boolean;
+    alarmType?: string | null;
+    tamperAlert?: boolean;
+    rawPacketFingerprint?: string;
+  };
+  correlatedIncidentId?: string | null;
+  escalatedIncidentId?: string | null;
+  reviewedByUserId?: string | null;
+  reviewedAt?: string | null;
+  dismissReason?: string | null;
+  suppressedDuplicatesCount: number;
+  lastTriggeredAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SafetyAutomationEngineConfig {
+  globalEnabled: boolean;
+  rules: SafetyRuleConfig[];
+  suppressionPolicy: {
+    defaultCooldownSeconds: number;
+    maxSuppressionWindowSeconds: number;
+  };
+  incidentCorrelationWindowMinutes: number;
+  dispatchPolicy: {
+    autoDispatchRealServices: false;
+    humanAuthorizationRequired: true;
+  };
+}
+
+export interface SafetyAutomationEvaluationResult {
+  evaluated: boolean;
+  alertsTriggered: SafetyAlertRecord[];
+  alertsSuppressed: Array<{
+    ruleId: string;
+    eventType: SafetyAutomationEventType;
+    deviceId: string;
+    reason: string;
+  }>;
+  correlatedIncidents: Array<{
+    alertId: string;
+    incidentId: string;
+    learnerId: string;
+    notesAppended: string;
+  }>;
+  escalatedIncidents: Array<{
+    alertId: string;
+    incidentId: string;
+    severity: IncidentSeverity;
+  }>;
+}
+
+export interface SafetyAutomationTestSuiteResult {
+  suiteId: string;
+  timestamp: string;
+  totalTests: number;
+  passedTests: number;
+  failedTests: number;
+  allPassed: boolean;
+  results: {
+    id: string;
+    name: string;
+    requirement: string;
+    expected: string;
+    actual: string;
+    status: 'PASS' | 'FAIL';
+    evidence?: Record<string, any>;
+  }[];
+}
+
 
 
 

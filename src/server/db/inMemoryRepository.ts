@@ -17,6 +17,7 @@ import {
   IIncidentRepository,
   IResponderRepository,
   IAuditRepository,
+  ITelemetryRepository,
   DatabaseTransaction
 } from './repository.js';
 import { db, ServerUserRecord, hashPassword } from '../dbStore.js';
@@ -45,7 +46,10 @@ import {
   AuditLogQueryOptions,
   ActiveUserSession,
   RegisterUserPayload,
-  EligibleResponderRanking
+  EligibleResponderRanking,
+  AuthoritativeTelemetryRecord,
+  AuthoritativeLatestLocationRecord,
+  TelemetryHistoryQueryOptions
 } from '../../types.js';
 
 const SYSTEM_ACTOR: ActiveUserSession = {
@@ -574,6 +578,49 @@ class InMemoryAuditRepository implements IAuditRepository {
   }
 }
 
+class InMemoryTelemetryRepository implements ITelemetryRepository {
+  async recordTelemetry(record: Omit<AuthoritativeTelemetryRecord, 'id' | 'ingestedAt'>): Promise<AuthoritativeTelemetryRecord> {
+    return db.recordTelemetry(record);
+  }
+
+  async getLatestLocation(deviceIdOrTrackerId: string): Promise<AuthoritativeLatestLocationRecord | null> {
+    return db.getLatestLocation(deviceIdOrTrackerId);
+  }
+
+  async getLatestLocationByLearner(learnerId: string): Promise<AuthoritativeLatestLocationRecord | null> {
+    return db.getLatestLocationByLearner(learnerId);
+  }
+
+  async updateLatestLocation(location: AuthoritativeLatestLocationRecord): Promise<void> {
+    db.updateLatestLocation(location);
+  }
+
+  async queryHistory(options?: TelemetryHistoryQueryOptions): Promise<PaginatedResponse<AuthoritativeTelemetryRecord>> {
+    return db.queryTelemetryHistory(options);
+  }
+
+  async purgeOldTelemetry(retentionDays: number, actorUserId: string): Promise<{ purgedCount: number; remainingCount: number }> {
+    return db.purgeTelemetryRecords(retentionDays, actorUserId);
+  }
+
+  async count(filter?: { deviceId?: string; learnerId?: string }): Promise<number> {
+    if (!filter || (!filter.deviceId && !filter.learnerId)) {
+      return db.telemetryRecords.size;
+    }
+    let count = 0;
+    for (const record of db.telemetryRecords.values()) {
+      if (filter.deviceId && record.deviceId !== filter.deviceId && record.trackerDeviceId !== filter.deviceId) {
+        continue;
+      }
+      if (filter.learnerId && record.learnerId !== filter.learnerId) {
+        continue;
+      }
+      count++;
+    }
+    return count;
+  }
+}
+
 export class InMemoryDataRepository implements IDataRepository {
   public users = new InMemoryUserRepository();
   public sessions = {
@@ -611,6 +658,7 @@ export class InMemoryDataRepository implements IDataRepository {
   public incidents = new InMemoryIncidentRepository();
   public responders = new InMemoryResponderRepository();
   public auditLogs = new InMemoryAuditRepository();
+  public telemetry = new InMemoryTelemetryRepository();
 
   async beginTransaction(): Promise<DatabaseTransaction> {
     return {
