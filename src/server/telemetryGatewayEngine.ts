@@ -36,6 +36,9 @@ import {
 import { db } from './dbStore.js';
 import { deviceRegistryEngine } from './deviceRegistryEngine.js';
 import { telemetryPersistenceEngine } from './telemetryPersistenceEngine.js';
+import { protocolProfileRegistry } from './protocols/protocolRegistry.js';
+import { AsciiProtocolProfile } from './protocols/asciiProfile.js';
+import { JsonProtocolProfile } from './protocols/jsonProfile.js';
 
 // Precomputed 256-entry lookup table for CRC-ITU / CRC-16-CCITT (Polynomial 0x1021)
 const CRC_ITU_TABLE: number[] = new Array(256);
@@ -311,27 +314,21 @@ export class TelemetryGatewayEngine {
       };
     }
 
-    // Protocol identification
-    const isJson = rawInput.startsWith('{') || rawInput.startsWith('SIM_TELEMETRY:');
-    const isHex = !isJson && /^[0-9a-fA-F\s]+$/.test(rawInput);
+    // Look up device if identifier provided in envelope
+    const preCheckDevice = envelope.deviceIdentifier 
+      ? deviceRegistryEngine.getDeviceById(envelope.deviceIdentifier) 
+      : undefined;
 
-    if (isHex) {
-      return this.processGt012HexEnvelope(
-        rawInput.replace(/\s+/g, ''),
-        envelope,
-        actor
-      );
-    } else if (isJson) {
-      return this.processSimulatedJsonEnvelope(
-        rawInput,
-        envelope,
-        actor
-      );
-    } else {
-      // Unrecognized protocol format
+    // Protocol identification via Authoritative Protocol Profile Architecture
+    const detected = protocolProfileRegistry.detectProtocol(
+      rawInput,
+      preCheckDevice?.protocolType
+    );
+
+    if (!detected) {
       if (actor) {
         db.logAuditEvent({
-          actionType: 'MALFORMED_PACKET_RECEIVED',
+          actionType: 'UNKNOWN_PROTOCOL_REJECTED',
           actorUserId: actor.id,
           actorName: actor.name,
           actorRole: actor.role,
@@ -339,7 +336,7 @@ export class TelemetryGatewayEngine {
           targetId: envelope.deviceIdentifier || 'UNKNOWN',
           details: {
             snippet: rawInput.slice(0, 40),
-            reason: 'Unrecognized framing'
+            reason: 'Framing not recognized by any registered protocol profile.'
           }
         });
       }
@@ -348,7 +345,7 @@ export class TelemetryGatewayEngine {
       return {
         accepted: false,
         status: 'REJECTED',
-        diagnosticCode: 'UNSUPPORTED_PACKET',
+        diagnosticCode: 'UNKNOWN_PROTOCOL',
         protocol: 'UNKNOWN',
         packetType: 'UNKNOWN',
         ackRequired: false,
@@ -362,10 +359,121 @@ export class TelemetryGatewayEngine {
           validSpeed: false,
           validHeading: false,
           validTimestamp: false,
-          reason: 'Packet framing unrecognized by any registered protocol adapter.'
+          reason: 'Packet framing unrecognized by any registered protocol profile (GT012, ASCII, JSON).'
+        },
+        errorCode: 'UNKNOWN_PROTOCOL',
+        error: 'UNKNOWN_PROTOCOL: Packet framing unrecognized by any registered protocol profile.',
+        receivedAt,
+        processedAt,
+        transportType,
+        remoteAddress
+      };
+    }
+
+    const { profile } = detected;
+
+    // Pre-flight Device / Protocol Compatibility Guard
+    if (preCheckDevice && preCheckDevice.protocolType) {
+      const devProto = preCheckDevice.protocolType.toUpperCase();
+      const detectedProto = profile.protocolId.toUpperCase();
+      const isCompatible = 
+        (devProto === 'GT012' || devProto === 'CONCOX') ? (detectedProto === 'GT012') :
+        (devProto === 'ASCII') ? (detectedProto === 'ASCII') :
+        (devProto === 'JSON' || devProto === 'SIMULATED_JSON' || devProto === 'SIMULATED') ? (detectedProto === 'JSON') :
+        (devProto === detectedProto);
+
+      if (!isCompatible) {
+        if (actor) {
+          db.logAuditEvent({
+            actionType: 'INVALID_PROTOCOL_DEVICE_COMBINATION',
+            actorUserId: actor.id,
+            actorName: actor.name,
+            actorRole: actor.role,
+            targetEntity: 'HARDWARE',
+            targetId: preCheckDevice.trackerDeviceId,
+            details: {
+              registeredProtocol: preCheckDevice.protocolType,
+              detectedProtocol: profile.protocolId,
+              reason: `Device '${preCheckDevice.trackerDeviceId}' is provisioned for protocol '${preCheckDevice.protocolType}' but received packet with protocol '${profile.protocolId}'.`
+            }
+          });
+        }
+
+        this.metrics.totalRejected++;
+        return {
+          accepted: false,
+          status: 'REJECTED',
+          diagnosticCode: 'INVALID_DEVICE_PROTOCOL_COMBINATION',
+          protocol: profile.protocolId,
+          packetType: 'UNKNOWN',
+          deviceId: preCheckDevice.trackerDeviceId,
+          itisDeviceId: preCheckDevice.itisDeviceId,
+          deviceRegistryStatus: preCheckDevice.deviceStatus,
+          ackRequired: false,
+          duplicate: false,
+          quarantined: false,
+          validationResult: {
+            validFraming: true,
+            validCrc: true,
+            validCoordinates: false,
+            validBattery: false,
+            validSpeed: false,
+            validHeading: false,
+            validTimestamp: false,
+            reason: `Protocol mismatch: Device is provisioned for ${preCheckDevice.protocolType} but received packet in ${profile.protocolId}.`
+          },
+          errorCode: 'INVALID_DEVICE_PROTOCOL_COMBINATION',
+          error: `INVALID_DEVICE_PROTOCOL_COMBINATION: Device '${preCheckDevice.trackerDeviceId}' cannot accept ${profile.protocolId} telemetry.`,
+          receivedAt,
+          processedAt,
+          transportType,
+          remoteAddress
+        };
+      }
+    }
+
+    // Delegate to the specific protocol processor
+    if (profile.protocolId === 'GT012') {
+      return this.processGt012HexEnvelope(
+        rawInput.replace(/\s+/g, ''),
+        envelope,
+        actor
+      );
+    } else if (profile.protocolId === 'ASCII') {
+      return this.processAsciiEnvelope(
+        rawInput,
+        envelope,
+        actor
+      );
+    } else if (profile.protocolId === 'JSON') {
+      return this.processSimulatedJsonEnvelope(
+        rawInput,
+        envelope,
+        actor
+      );
+    } else {
+      this.metrics.totalRejected++;
+      return {
+        accepted: false,
+        status: 'REJECTED',
+        diagnosticCode: 'UNSUPPORTED_PACKET',
+        protocol: profile.protocolId,
+        packetType: 'UNKNOWN',
+        ackRequired: false,
+        duplicate: false,
+        quarantined: false,
+        validationResult: {
+          validFraming: false,
+          validCrc: false,
+          validCoordinates: false,
+          validBattery: false,
+          validSpeed: false,
+          validHeading: false,
+          validTimestamp: false,
+          reason: `No execution engine available for protocol ${profile.protocolId}.`
         },
         errorCode: 'UNSUPPORTED_PACKET',
-        error: 'UNSUPPORTED_PACKET: Framing not recognized by any registered protocol adapter.',
+        error: `UNSUPPORTED_PACKET: No execution engine for protocol ${profile.protocolId}.`,
         receivedAt,
         processedAt,
         transportType,
@@ -650,6 +758,57 @@ export class TelemetryGatewayEngine {
     // ========================================================================
     const registryDevice = deviceRegistryEngine.getDeviceById(deviceIdentifier);
 
+    if (registryDevice && registryDevice.protocolType) {
+      const devProto = registryDevice.protocolType.toUpperCase();
+      if (devProto !== 'GT012' && devProto !== 'CONCOX') {
+        if (actor) {
+          db.logAuditEvent({
+            actionType: 'INVALID_PROTOCOL_DEVICE_COMBINATION',
+            actorUserId: actor.id,
+            actorName: actor.name,
+            actorRole: actor.role,
+            targetEntity: 'HARDWARE',
+            targetId: registryDevice.trackerDeviceId,
+            details: {
+              registeredProtocol: registryDevice.protocolType,
+              receivedProtocol: 'GT012',
+              reason: `Device '${registryDevice.trackerDeviceId}' is provisioned for '${registryDevice.protocolType}' but received GT012 binary packet.`
+            }
+          });
+        }
+        this.metrics.totalRejected++;
+        return {
+          accepted: false,
+          status: 'REJECTED',
+          diagnosticCode: 'INVALID_DEVICE_PROTOCOL_COMBINATION',
+          protocol: 'GT012',
+          packetType,
+          deviceId: deviceIdentifier,
+          itisDeviceId: registryDevice.itisDeviceId,
+          deviceRegistryStatus: registryDevice.deviceStatus,
+          duplicate: false,
+          quarantined: false,
+          ackRequired: false,
+          validationResult: {
+            validFraming: true,
+            validCrc: true,
+            validCoordinates: false,
+            validBattery: false,
+            validSpeed: false,
+            validHeading: false,
+            validTimestamp: false,
+            reason: `Protocol mismatch: Device is provisioned for '${registryDevice.protocolType}' but received GT012 packet.`
+          },
+          errorCode: 'INVALID_DEVICE_PROTOCOL_COMBINATION',
+          error: `INVALID_DEVICE_PROTOCOL_COMBINATION: Device '${registryDevice.trackerDeviceId}' cannot accept GT012 telemetry.`,
+          receivedAt,
+          processedAt,
+          transportType,
+          remoteAddress
+        };
+      }
+    }
+
     if (!registryDevice) {
       if (actor) {
         db.logAuditEvent({
@@ -927,6 +1086,391 @@ export class TelemetryGatewayEngine {
   }
 
   /**
+   * Process ASCII protocol packet envelope
+   */
+  private processAsciiEnvelope(
+    rawText: string,
+    envelope: TelemetryEnvelope,
+    actor?: ActiveUserSession
+  ): TelemetryIngestionResult {
+    const receivedAt = envelope.receivedAt || new Date().toISOString();
+    const processedAt = new Date().toISOString();
+    const transportType = envelope.transportType;
+    const remoteAddress = envelope.remoteAddress;
+
+    const asciiProfile = protocolProfileRegistry.getProfile('ASCII') || new AsciiProtocolProfile();
+    const decoded = asciiProfile.decode(rawText, { fallbackDeviceId: envelope.deviceIdentifier });
+    const validation = asciiProfile.validate(decoded, rawText);
+
+    if (!validation.validFraming || !validation.validChecksum) {
+      this.metrics.totalRejected++;
+      return {
+        accepted: false,
+        status: 'REJECTED',
+        diagnosticCode: !validation.validChecksum ? 'CRC_INVALID' : 'MALFORMED_PACKET',
+        protocol: 'ASCII',
+        packetType: decoded.packetType as any,
+        ackRequired: false,
+        duplicate: false,
+        quarantined: false,
+        validationResult: {
+          validFraming: validation.validFraming,
+          validCrc: validation.validChecksum,
+          validCoordinates: validation.validCoordinates,
+          validBattery: validation.validBattery,
+          validSpeed: true,
+          validHeading: true,
+          validTimestamp: validation.validTimestamp,
+          reason: validation.errors.join('; ')
+        },
+        errorCode: !validation.validChecksum ? 'CRC_INVALID' : 'MALFORMED_PACKET',
+        error: `ASCII Validation Failed: ${validation.errors.join('; ')}`,
+        receivedAt,
+        processedAt,
+        transportType,
+        remoteAddress
+      };
+    }
+
+    const deviceIdentifier = decoded.deviceIdentifier || envelope.deviceIdentifier || 'DEV-ASCII-001';
+    const ackResult = asciiProfile.encodeAck(decoded, rawText);
+
+    // Duplicate Check (10-minute sliding window)
+    const fingerprint = crypto
+      .createHash('sha256')
+      .update(`${deviceIdentifier}:ASCII:${decoded.timestamp}:${decoded.extractedLocation?.latitude || 0}:${decoded.extractedLocation?.longitude || 0}`)
+      .digest('hex');
+
+    if (this.packetFingerprintCache.has(fingerprint)) {
+      this.metrics.totalDuplicates++;
+      return {
+        accepted: false,
+        status: 'REJECTED',
+        diagnosticCode: 'DUPLICATE_PACKET',
+        protocol: 'ASCII',
+        packetType: decoded.packetType as any,
+        deviceId: deviceIdentifier,
+        duplicate: true,
+        duplicateFingerprint: fingerprint,
+        quarantined: false,
+        ackRequired: ackResult.requiresAck,
+        ackPayload: ackResult.ackPayload,
+        validationResult: {
+          validFraming: true,
+          validCrc: true,
+          validCoordinates: true,
+          validBattery: true,
+          validSpeed: true,
+          validHeading: true,
+          validTimestamp: true,
+          reason: 'Duplicate ASCII packet detected within 10-minute window.'
+        },
+        errorCode: 'DUPLICATE_PACKET',
+        error: 'DUPLICATE_PACKET: Repeated ASCII telemetry sequence suppressed.',
+        receivedAt,
+        processedAt,
+        transportType,
+        remoteAddress
+      };
+    }
+    this.packetFingerprintCache.set(fingerprint, Date.now());
+
+    // Device Registry check
+    const registryDevice = deviceRegistryEngine.getDeviceById(deviceIdentifier);
+    if (!registryDevice) {
+      if (actor) {
+        db.logAuditEvent({
+          actionType: 'UNKNOWN_DEVICE_TELEMETRY_ATTEMPT',
+          actorUserId: actor.id,
+          actorName: actor.name,
+          actorRole: actor.role,
+          targetEntity: 'HARDWARE',
+          targetId: deviceIdentifier,
+          details: { reason: 'Device not provisioned in Authoritative Device Registry', protocol: 'ASCII', transportType }
+        });
+      }
+
+      this.metrics.totalRejected++;
+      return {
+        accepted: false,
+        status: 'REJECTED',
+        diagnosticCode: 'DEVICE_NOT_REGISTERED',
+        protocol: 'ASCII',
+        packetType: decoded.packetType as any,
+        deviceId: deviceIdentifier,
+        deviceRegistryStatus: 'NOT_FOUND',
+        duplicate: false,
+        quarantined: false,
+        ackRequired: false,
+        validationResult: {
+          validFraming: true,
+          validCrc: true,
+          validCoordinates: true,
+          validBattery: true,
+          validSpeed: true,
+          validHeading: true,
+          validTimestamp: true,
+          reason: `Physical device identifier '${deviceIdentifier}' is not provisioned in Authoritative ITIS Device Registry.`
+        },
+        errorCode: 'DEVICE_NOT_REGISTERED',
+        error: `DEVICE_NOT_REGISTERED: Identifier '${deviceIdentifier}' rejected.`,
+        receivedAt,
+        processedAt,
+        transportType,
+        remoteAddress
+      };
+    }
+
+    // Protocol compatibility check
+    if (registryDevice.protocolType && registryDevice.protocolType.toUpperCase() !== 'ASCII') {
+      if (actor) {
+        db.logAuditEvent({
+          actionType: 'INVALID_PROTOCOL_DEVICE_COMBINATION',
+          actorUserId: actor.id,
+          actorName: actor.name,
+          actorRole: actor.role,
+          targetEntity: 'HARDWARE',
+          targetId: registryDevice.trackerDeviceId,
+          details: {
+            registeredProtocol: registryDevice.protocolType,
+            receivedProtocol: 'ASCII',
+            reason: `Device '${registryDevice.trackerDeviceId}' is provisioned for '${registryDevice.protocolType}' but received ASCII packet.`
+          }
+        });
+      }
+      this.metrics.totalRejected++;
+      return {
+        accepted: false,
+        status: 'REJECTED',
+        diagnosticCode: 'INVALID_DEVICE_PROTOCOL_COMBINATION',
+        protocol: 'ASCII',
+        packetType: decoded.packetType as any,
+        deviceId: deviceIdentifier,
+        itisDeviceId: registryDevice.itisDeviceId,
+        deviceRegistryStatus: registryDevice.deviceStatus,
+        duplicate: false,
+        quarantined: false,
+        ackRequired: false,
+        validationResult: {
+          validFraming: true,
+          validCrc: true,
+          validCoordinates: false,
+          validBattery: false,
+          validSpeed: false,
+          validHeading: false,
+          validTimestamp: false,
+          reason: `Protocol mismatch: Device is provisioned for '${registryDevice.protocolType}' but received ASCII packet.`
+        },
+        errorCode: 'INVALID_DEVICE_PROTOCOL_COMBINATION',
+        error: `INVALID_DEVICE_PROTOCOL_COMBINATION: Device '${registryDevice.trackerDeviceId}' cannot accept ASCII telemetry.`,
+        receivedAt,
+        processedAt,
+        transportType,
+        remoteAddress
+      };
+    }
+
+    // Device lifecycle status enforcement
+    if (registryDevice.deviceStatus === 'SUSPENDED') {
+      this.metrics.totalQuarantined++;
+      return {
+        accepted: false,
+        status: 'QUARANTINED',
+        diagnosticCode: 'DEVICE_SUSPENDED',
+        protocol: 'ASCII',
+        packetType: decoded.packetType as any,
+        deviceId: deviceIdentifier,
+        itisDeviceId: registryDevice.itisDeviceId,
+        deviceRegistryStatus: 'SUSPENDED',
+        duplicate: false,
+        quarantined: true,
+        ackRequired: false,
+        validationResult: {
+          validFraming: true,
+          validCrc: true,
+          validCoordinates: true,
+          validBattery: true,
+          validSpeed: true,
+          validHeading: true,
+          validTimestamp: true,
+          reason: 'Device status is SUSPENDED. Telemetry quarantined.'
+        },
+        errorCode: 'DEVICE_SUSPENDED',
+        error: `DEVICE_SUSPENDED: Telemetry from suspended device '${registryDevice.itisDeviceId}' rejected.`,
+        receivedAt,
+        processedAt,
+        transportType,
+        remoteAddress
+      };
+    }
+
+    if (registryDevice.deviceStatus === 'RETIRED' || registryDevice.deviceStatus === 'LOST' || registryDevice.deviceStatus === 'REPLACED') {
+      this.metrics.totalRejected++;
+      return {
+        accepted: false,
+        status: 'REJECTED',
+        diagnosticCode: 'DEVICE_RETIRED',
+        protocol: 'ASCII',
+        packetType: decoded.packetType as any,
+        deviceId: deviceIdentifier,
+        itisDeviceId: registryDevice.itisDeviceId,
+        deviceRegistryStatus: registryDevice.deviceStatus,
+        duplicate: false,
+        quarantined: false,
+        ackRequired: false,
+        validationResult: {
+          validFraming: true,
+          validCrc: true,
+          validCoordinates: true,
+          validBattery: true,
+          validSpeed: true,
+          validHeading: true,
+          validTimestamp: true,
+          reason: `Device is in terminal '${registryDevice.deviceStatus}' lifecycle state.`
+        },
+        errorCode: 'DEVICE_RETIRED',
+        error: `DEVICE_RETIRED: Device '${registryDevice.itisDeviceId}' is retired.`,
+        receivedAt,
+        processedAt,
+        transportType,
+        remoteAddress
+      };
+    }
+
+    // Coordinates physical bounds check
+    const lat = decoded.extractedLocation?.latitude;
+    const lng = decoded.extractedLocation?.longitude;
+    if (lat !== undefined && lng !== undefined) {
+      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+        this.metrics.totalRejected++;
+        return {
+          accepted: false,
+          status: 'REJECTED',
+          diagnosticCode: 'INVALID_COORDINATES',
+          protocol: 'ASCII',
+          packetType: decoded.packetType as any,
+          deviceId: deviceIdentifier,
+          itisDeviceId: registryDevice.itisDeviceId,
+          deviceRegistryStatus: registryDevice.deviceStatus,
+          duplicate: false,
+          quarantined: false,
+          ackRequired: false,
+          validationResult: {
+            validFraming: true,
+            validCrc: true,
+            validCoordinates: false,
+            validBattery: true,
+            validSpeed: true,
+            validHeading: true,
+            validTimestamp: true,
+            reason: `Coordinates (${lat}, ${lng}) exceed physical boundaries (-90..90, -180..180).`
+          },
+          errorCode: 'INVALID_COORDINATES',
+          error: 'INVALID_COORDINATES: Coordinates must be valid numbers (Lat: -90..90, Lng: -180..180).',
+          receivedAt,
+          processedAt,
+          transportType,
+          remoteAddress
+        };
+      }
+    }
+
+    // Update authoritative device registry state
+    deviceRegistryEngine.handleIncomingTrackerConnection(deviceIdentifier, 'ASCII', {
+      latitude: lat,
+      longitude: lng,
+      batteryPercentage: decoded.extractedBattery?.percentage
+    });
+
+    // Authoritative Telemetry Persistence Layer
+    if (lat !== undefined && lng !== undefined) {
+      telemetryPersistenceEngine.persistAuthoritativeTelemetry({
+        deviceId: registryDevice.itisDeviceId,
+        trackerDeviceId: registryDevice.trackerDeviceId,
+        learnerId: registryDevice.assignedLearnerId || null,
+        schoolId: registryDevice.assignedSchoolId || null,
+        timestamp: processedAt,
+        latitude: lat,
+        longitude: lng,
+        accuracyMeters: decoded.extractedLocation?.accuracyMeters || 5.0,
+        speedKmh: decoded.extractedLocation?.speed || 0,
+        heading: decoded.extractedLocation?.heading || 0,
+        altitudeMeters: decoded.extractedLocation?.altitude,
+        batteryLevel: decoded.extractedBattery?.percentage,
+        protocol: 'ASCII' as any,
+        packetType: decoded.packetType as any,
+        transportSource: transportType,
+        rawPacketFingerprint: fingerprint,
+        isSos: Boolean(decoded.extractedEvent?.isSos),
+        alarmType: decoded.extractedEvent?.alarmType || null,
+        satellites: decoded.extractedLocation?.satellites || 8
+      }, actor).catch(err => {
+        console.error('[TelemetryGatewayEngine] ASCII persistence error:', err);
+      });
+    }
+
+    if (actor) {
+      db.logAuditEvent({
+        actionType: 'TELEMETRY_PACKET_ACCEPTED',
+        actorUserId: actor.id,
+        actorName: actor.name,
+        actorRole: actor.role,
+        targetEntity: 'DEVICE',
+        targetId: registryDevice.itisDeviceId,
+        details: {
+          protocol: 'ASCII',
+          packetType: decoded.packetType,
+          isSos: Boolean(decoded.extractedEvent?.isSos),
+          transportType,
+          coordinates: lat !== undefined ? `${lat}, ${lng}` : 'N/A'
+        }
+      });
+    }
+
+    this.metrics.totalAccepted++;
+    return {
+      accepted: true,
+      status: 'INGESTED',
+      diagnosticCode: 'SIMULATION_SUCCESS',
+      protocol: 'ASCII',
+      packetType: decoded.packetType as any,
+      deviceId: deviceIdentifier,
+      itisDeviceId: registryDevice.itisDeviceId,
+      deviceRegistryStatus: registryDevice.deviceStatus,
+      duplicate: false,
+      quarantined: false,
+      ackRequired: ackResult.requiresAck,
+      ackPayload: ackResult.ackPayload,
+      validationResult: {
+        validFraming: true,
+        validCrc: true,
+        validCoordinates: true,
+        validBattery: true,
+        validSpeed: true,
+        validHeading: true,
+        validTimestamp: true
+      },
+      telemetry: {
+        latitude: lat,
+        longitude: lng,
+        speed: decoded.extractedLocation?.speed || 0,
+        heading: decoded.extractedLocation?.heading || 0,
+        accuracy: decoded.extractedLocation?.accuracyMeters || 5.0,
+        satellites: decoded.extractedLocation?.satellites || 8,
+        isRealTime: true,
+        batteryPercentage: decoded.extractedBattery?.percentage,
+        voltageLevel: 4,
+        sosActive: Boolean(decoded.extractedEvent?.isSos),
+        alarmType: decoded.extractedEvent?.alarmType || null
+      },
+      receivedAt,
+      processedAt,
+      transportType,
+      remoteAddress
+    };
+  }
+
+  /**
    * Process simulated JSON telemetry packet envelope
    */
   private processSimulatedJsonEnvelope(
@@ -1104,6 +1648,58 @@ export class TelemetryGatewayEngine {
 
     // Device Registry check
     const registryDevice = deviceRegistryEngine.getDeviceById(deviceIdentifier);
+
+    if (registryDevice && registryDevice.protocolType) {
+      const devProto = registryDevice.protocolType.toUpperCase();
+      if (devProto !== 'JSON' && devProto !== 'SIMULATED_JSON' && devProto !== 'SIMULATED') {
+        if (actor) {
+          db.logAuditEvent({
+            actionType: 'INVALID_PROTOCOL_DEVICE_COMBINATION',
+            actorUserId: actor.id,
+            actorName: actor.name,
+            actorRole: actor.role,
+            targetEntity: 'HARDWARE',
+            targetId: registryDevice.trackerDeviceId,
+            details: {
+              registeredProtocol: registryDevice.protocolType,
+              receivedProtocol: 'JSON',
+              reason: `Device '${registryDevice.trackerDeviceId}' is provisioned for '${registryDevice.protocolType}' but received JSON packet.`
+            }
+          });
+        }
+        this.metrics.totalRejected++;
+        return {
+          accepted: false,
+          status: 'REJECTED',
+          diagnosticCode: 'INVALID_DEVICE_PROTOCOL_COMBINATION',
+          protocol: 'JSON',
+          packetType: json.sosActive ? 'ALARM' : 'LOCATION',
+          deviceId: deviceIdentifier,
+          itisDeviceId: registryDevice.itisDeviceId,
+          deviceRegistryStatus: registryDevice.deviceStatus,
+          duplicate: false,
+          quarantined: false,
+          ackRequired: false,
+          validationResult: {
+            validFraming: true,
+            validCrc: true,
+            validCoordinates: false,
+            validBattery: false,
+            validSpeed: false,
+            validHeading: false,
+            validTimestamp: false,
+            reason: `Protocol mismatch: Device is provisioned for '${registryDevice.protocolType}' but received JSON packet.`
+          },
+          errorCode: 'INVALID_DEVICE_PROTOCOL_COMBINATION',
+          error: `INVALID_DEVICE_PROTOCOL_COMBINATION: Device '${registryDevice.trackerDeviceId}' cannot accept JSON telemetry.`,
+          receivedAt,
+          processedAt,
+          transportType,
+          remoteAddress
+        };
+      }
+    }
+
     if (!registryDevice) {
       if (actor) {
         db.logAuditEvent({
@@ -1268,18 +1864,26 @@ export class TelemetryGatewayEngine {
     }
 
     this.metrics.totalAccepted++;
+    const jsonAckPayload = JSON.stringify({
+      status: 'ACK',
+      protocol: 'JSON',
+      deviceId: deviceIdentifier,
+      receivedAt: processedAt
+    });
+
     return {
       accepted: true,
       status: 'INGESTED',
       diagnosticCode: 'SIMULATION_SUCCESS',
-      protocol: 'SIMULATED_TEST_PROTOCOL',
+      protocol: 'JSON',
       packetType: json.sosActive ? 'ALARM' : 'LOCATION',
       deviceId: deviceIdentifier,
       itisDeviceId: registryDevice.itisDeviceId,
       deviceRegistryStatus: registryDevice.deviceStatus,
       duplicate: false,
       quarantined: false,
-      ackRequired: false,
+      ackRequired: true,
+      ackPayload: jsonAckPayload,
       validationResult: {
         validFraming: true,
         validCrc: true,
@@ -1350,7 +1954,7 @@ export class TelemetryGatewayEngine {
       tcpStatus: isServerEnabled ? 'ACTIVE' : 'READY_DISABLED',
       udpStatus: isServerEnabled ? 'ACTIVE' : 'READY_DISABLED',
       processingPipelineStatus: 'HEALTHY',
-      activeProtocols: ['GT012_CONCOX_BINARY', 'SIMULATED_TEST_PROTOCOL'],
+      activeProtocols: ['GT012', 'ASCII', 'JSON'],
       metrics: {
         totalIngested: this.metrics.totalIngested,
         totalAccepted: this.metrics.totalAccepted,

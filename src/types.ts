@@ -454,8 +454,13 @@ export interface ImmutableAuditEvent {
     | 'LOCATION_VIEWED'
     | 'LOCATION_HISTORY_VIEWED'
     | 'UNAUTHORIZED_LOCATION_ACCESS_DENIED'
+    | 'SECURITY_VIOLATION_RECORDED'
+    | 'EMERGENCY_INCIDENT_UPDATED'
     | 'TELEMETRY_ALERT_GENERATED'
     | 'TELEMETRY_ALERT_SUPPRESSED'
+    | 'PROTOCOL_DETECTED'
+    | 'UNKNOWN_PROTOCOL_REJECTED'
+    | 'INVALID_PROTOCOL_DEVICE_COMBINATION'
     | 'TELEMETRY_INCIDENT_CORRELATED'
     | 'AUTOMATION_RULE_TRIGGERED'
     | 'SAFETY_AUTOMATION_CONFIGURED';
@@ -1210,6 +1215,8 @@ export type ItisDeviceProtocolType =
   | 'GT012' 
   | 'CONCOX' 
   | 'TOPIN' 
+  | 'ASCII'
+  | 'JSON'
   | 'SIMULATED_JSON' 
   | 'SIMULATED'
   | 'CUSTOM_BINARY' 
@@ -1510,6 +1517,8 @@ export type TelemetrySimulationDiagnosticCode =
   | 'MALFORMED_PACKET'
   | 'CRC_INVALID'
   | 'UNSUPPORTED_PACKET'
+  | 'UNKNOWN_PROTOCOL'
+  | 'INVALID_DEVICE_PROTOCOL_COMBINATION'
   | 'DUPLICATE_PACKET'
   | 'ACCESS_DENIED'
   | 'TELEMETRY_PROCESSING_ERROR';
@@ -2051,7 +2060,7 @@ export interface SafetyAlertRecord {
   title: string;
   description: string;
   severity: SafetyRuleSeverity;
-  status: 'PENDING_REVIEW' | 'CORRELATED_TO_INCIDENT' | 'ESCALATED' | 'DISMISSED' | 'RESOLVED';
+  status: 'PENDING_REVIEW' | 'ACKNOWLEDGED' | 'CORRELATED_TO_INCIDENT' | 'ESCALATED' | 'DISMISSED' | 'RESOLVED';
   deviceId: string;
   trackerDeviceId: string;
   learnerId?: string | null;
@@ -2103,6 +2112,8 @@ export interface SafetyAutomationEngineConfig {
   };
 }
 
+export type SafetyAutomationConfig = SafetyAutomationEngineConfig;
+
 export interface SafetyAutomationEvaluationResult {
   evaluated: boolean;
   alertsTriggered: SafetyAlertRecord[];
@@ -2126,6 +2137,129 @@ export interface SafetyAutomationEvaluationResult {
 }
 
 export interface SafetyAutomationTestSuiteResult {
+  suiteId: string;
+  timestamp: string;
+  totalTests: number;
+  passedTests: number;
+  failedTests: number;
+  allPassed: boolean;
+  results: {
+    id: string;
+    name: string;
+    requirement: string;
+    expected: string;
+    actual: string;
+    status: 'PASS' | 'FAIL';
+    evidence?: Record<string, any>;
+  }[];
+}
+
+// ----------------------------------------------------
+// MULTI-TRACKER PROTOCOL PROFILE ARCHITECTURE
+// ----------------------------------------------------
+
+export interface ProtocolDetectionResult {
+  matched: boolean;
+  confidence: number; // 0..1
+  protocolId: string;
+  protocolName: string;
+  reason?: string;
+}
+
+export interface DecodedPacketEnvelope {
+  rawPacket: string;
+  protocolId: string;
+  protocolName: string;
+  packetType: 'LOGIN' | 'LOCATION' | 'HEARTBEAT' | 'ALARM' | 'STATUS' | 'COMMAND' | 'UNKNOWN';
+  deviceIdentifier?: string;
+  sequenceNumber?: number;
+  timestamp?: string;
+  extractedLocation?: {
+    latitude: number;
+    longitude: number;
+    speed?: number;
+    heading?: number;
+    altitude?: number;
+    accuracyMeters?: number;
+    satellites?: number;
+    isRealTime?: boolean;
+  };
+  extractedBattery?: {
+    percentage: number;
+    voltageLevel?: number;
+    voltage?: number;
+    charging?: boolean;
+  };
+  extractedEvent?: {
+    isSos?: boolean;
+    alarmType?: string | null;
+    tamperAlert?: boolean;
+  };
+  payloadData?: Record<string, any>;
+}
+
+export interface ProtocolValidationResult {
+  validFraming: boolean;
+  validChecksum: boolean;
+  validCoordinates: boolean;
+  validBattery: boolean;
+  validTimestamp: boolean;
+  errors: string[];
+}
+
+export interface ProtocolAckResult {
+  requiresAck: boolean;
+  ackFormat: 'BINARY_HEX' | 'ASCII' | 'JSON' | 'NONE';
+  ackPayload?: string;
+  ackBuffer?: Buffer;
+}
+
+export interface ProtocolProfileSummary {
+  protocolId: string;
+  protocolName: string;
+  manufacturer: string;
+  version: string;
+  framingDescription: string;
+  supportedPacketTypes: string[];
+  ackSupport: boolean;
+  ackFormat: 'BINARY_HEX' | 'ASCII' | 'JSON' | 'NONE';
+  registeredAt: string;
+  status: 'ACTIVE' | 'EXPERIMENTAL' | 'DEPRECATED';
+}
+
+export interface ProtocolInspectionResult {
+  detectedProtocol: string;
+  protocolName: string;
+  isRegistered: boolean;
+  parserStatus: 'SUCCESS' | 'PARSE_ERROR' | 'UNRECOGNIZED_PROTOCOL';
+  packetValidity: {
+    validFraming: boolean;
+    validChecksum: boolean;
+    validCoordinates: boolean;
+    validBattery: boolean;
+    validTimestamp: boolean;
+    errors: string[];
+  };
+  ackAvailability: {
+    ackRequired: boolean;
+    ackFormat: 'BINARY_HEX' | 'ASCII' | 'JSON' | 'NONE';
+    ackPayload?: string;
+  };
+  decodedSummary?: {
+    packetType: string;
+    deviceIdentifier?: string;
+    hasCoordinates: boolean;
+    latitude?: number;
+    longitude?: number;
+    speed?: number;
+    batteryPercentage?: number;
+    isSos?: boolean;
+    alarmType?: string | null;
+  };
+  diagnostics: string[];
+}
+
+export interface ProtocolTestSuiteResult {
   suiteId: string;
   timestamp: string;
   totalTests: number;

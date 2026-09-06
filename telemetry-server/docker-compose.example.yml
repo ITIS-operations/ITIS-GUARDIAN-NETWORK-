@@ -1,0 +1,59 @@
+# =====================================================================
+# ITIS DEDICATED GPS TELEMETRY SERVER - DOCKER COMPOSE EXAMPLE
+# Reference deployment for VPS, Dedicated VM, or Container Cluster
+# =====================================================================
+
+services:
+  telemetry-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: itis/telemetry-server:1.0.0
+    container_name: itis-telemetry-server
+    restart: unless-stopped
+    
+    ports:
+      # Inbound Tracker TCP telemetry stream (non-privileged)
+      - "5023:5023/tcp"
+      # Inbound Tracker UDP datagram stream (non-privileged)
+      - "5024:5024/udp"
+      # Internal safe health check diagnostics interface
+      - "127.0.0.1:8092:8092/tcp"
+
+    environment:
+      - HOST=0.0.0.0
+      - TCP_PORT=5023
+      - UDP_PORT=5024
+      - HEALTH_PORT=8092
+      - NODE_ENV=production
+      - MAX_CONNECTIONS=500
+      - MAX_PACKET_SIZE_BYTES=2048
+      - RATE_LIMIT_PACKETS_PER_SEC=10
+      - CONNECTION_TIMEOUT_MS=60000
+      - IDLE_TIMEOUT_MS=180000
+      - GRACEFUL_SHUTDOWN_TIMEOUT_MS=10000
+      - INTEGRATION_MODE=IN_PROCESS
+
+    # Resource constraints for robust container lifecycle
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 128M
+
+    # Standard production log rotation
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8092/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

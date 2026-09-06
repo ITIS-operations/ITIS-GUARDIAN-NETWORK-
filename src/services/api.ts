@@ -43,7 +43,11 @@ import {
   IncidentTacticalLocationContext,
   DeviceHealthStatus,
   MapPollUpdateResponse,
-  LiveLocationTestSuiteResult
+  LiveLocationTestSuiteResult,
+  SafetyAutomationConfig,
+  SafetyAlertRecord,
+  SafetyAutomationTestSuiteResult,
+  SafetyRuleConfig
 } from '../types.js';
 
 const API_BASE = '/api';
@@ -1275,5 +1279,153 @@ export const api = {
       headers: this.getAuthHeaders()
     });
     return safeFetchJson<LiveLocationTestSuiteResult>(res, 'Failed to fetch live location test suite');
+  },
+
+  // ----------------------------------------------------
+  // SAFETY AUTOMATION & TELEMETRY INCIDENT DETECTION
+  // ----------------------------------------------------
+
+  async getSafetyAutomationConfig(): Promise<SafetyAutomationConfig> {
+    const res = await fetch(`${API_BASE}/safety-automation/config`, {
+      headers: this.getAuthHeaders()
+    });
+    const data = await safeFetchJson<{ success: boolean; config: SafetyAutomationConfig }>(res, 'Failed to fetch safety automation configuration');
+    return data.config;
+  },
+
+  async updateSafetyAutomationRule(ruleId: string, updates: Partial<SafetyRuleConfig>): Promise<SafetyRuleConfig> {
+    const res = await fetch(`${API_BASE}/safety-automation/rules/${encodeURIComponent(ruleId)}`, {
+      method: 'PUT',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(updates)
+    });
+    const data = await safeFetchJson<{ success: boolean; rule: SafetyRuleConfig }>(res, 'Failed to update safety automation rule');
+    return data.rule;
+  },
+
+  async getSafetyAlerts(options?: { status?: string; severity?: string; limit?: number }): Promise<SafetyAlertRecord[]> {
+    const query = new URLSearchParams();
+    if (options?.status) query.set('status', options.status);
+    if (options?.severity) query.set('severity', options.severity);
+    if (options?.limit) query.set('limit', String(options.limit));
+
+    const res = await fetch(`${API_BASE}/safety-automation/alerts?${query.toString()}`, {
+      headers: this.getAuthHeaders()
+    });
+    const data = await safeFetchJson<{ success: boolean; count: number; alerts: SafetyAlertRecord[] }>(res, 'Failed to fetch safety alerts');
+    return data.alerts;
+  },
+
+  async reviewSafetyAlert(alertId: string, status: 'ACKNOWLEDGED' | 'DISMISSED' | 'RESOLVED', notes?: string): Promise<SafetyAlertRecord> {
+    const res = await fetch(`${API_BASE}/safety-automation/alerts/${encodeURIComponent(alertId)}/review`, {
+      method: 'POST',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ status, notes })
+    });
+    const data = await safeFetchJson<{ success: boolean; alert: SafetyAlertRecord }>(res, 'Failed to review safety alert');
+    return data.alert;
+  },
+
+  async evaluateDeviceOffline(deviceId: string, lastSeenTimestamp?: string): Promise<any> {
+    const res = await fetch(`${API_BASE}/safety-automation/evaluate-offline`, {
+      method: 'POST',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ deviceId, lastSeenTimestamp })
+    });
+    return safeFetchJson<any>(res, 'Failed to evaluate device offline condition');
+  },
+
+  async runSafetyAutomationTestSuite(): Promise<SafetyAutomationTestSuiteResult> {
+    const res = await fetch(`${API_BASE}/safety-automation/test-suite/run`, {
+      method: 'POST',
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<SafetyAutomationTestSuiteResult>(res, 'Failed to execute safety automation test suite');
+  },
+
+  async getSafetyAutomationTestSuite(): Promise<SafetyAutomationTestSuiteResult> {
+    const res = await fetch(`${API_BASE}/safety-automation/test-suite`, {
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<SafetyAutomationTestSuiteResult>(res, 'Failed to retrieve safety automation test suite results');
+  },
+
+  // ====================================================
+  // MULTI-TRACKER PROTOCOL PROFILE ARCHITECTURE
+  // ====================================================
+
+  async listProtocols(): Promise<Array<{
+    protocolId: string;
+    protocolName: string;
+    manufacturerOrStandard: string;
+    version: string;
+    description: string;
+    transportSupported: string[];
+    packetFramingSummary: string;
+    checksumAlgorithm: string;
+    downlinkAckFormat: string;
+    heartbeatSupported: boolean;
+    alarmSosSupported: boolean;
+  }>> {
+    const res = await fetch(`${API_BASE}/protocols`, {
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<any>(res, 'Failed to fetch protocol profiles');
+  },
+
+  async inspectProtocolPacket(rawPacket: string, contextDeviceProtocol?: string): Promise<{
+    rawSnippet: string;
+    length: number;
+    detectedProtocol: string | null;
+    protocolName: string | null;
+    detectionConfidence: number;
+    detectionReason: string;
+    decoded: any | null;
+    validation: any | null;
+    ack: any | null;
+  }> {
+    const res = await fetch(`${API_BASE}/protocols/inspect`, {
+      method: 'POST',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ rawPacket, contextDeviceProtocol })
+    });
+    return safeFetchJson<any>(res, 'Failed to inspect protocol packet');
+  },
+
+  async runProtocolTestSuite(): Promise<{
+    suiteId: string;
+    timestamp: string;
+    totalTests: number;
+    passedTests: number;
+    failedTests: number;
+    allPassed: boolean;
+    results: Array<{
+      id: string;
+      name: string;
+      requirement: string;
+      expected: string;
+      actual: string;
+      status: 'PASS' | 'FAIL';
+      error?: string;
+      evidence?: any;
+    }>;
+  }> {
+    const res = await fetch(`${API_BASE}/protocols/test-suite/run`, {
+      method: 'POST',
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<any>(res, 'Failed to run protocol test suite');
   }
 };

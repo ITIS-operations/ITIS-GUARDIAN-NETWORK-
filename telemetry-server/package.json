@@ -1,0 +1,32 @@
+{
+  "name": "itis-dedicated-telemetry-server",
+  "version": "1.0.0",
+  "description": "Standalone Dedicated GPS Telemetry Ingestion Server for ITIS Guardian Network",
+  "main": "dist/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "tsx src/tests/acceptanceTests.ts"
+  },
+  "keywords": [
+    "gps",
+    "telemetry",
+    "tcp",
+    "udp",
+    "gt012",
+    "iot",
+    "itis"
+  ],
+  "author": "ITIS Technical Directorate",
+  "license": "UNLICENSED",
+  "dependencies": {
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.4",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3"
+  }
+}

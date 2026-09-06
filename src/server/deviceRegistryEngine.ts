@@ -179,6 +179,72 @@ export class DeviceRegistryEngine {
         provisionedAt: '2026-02-01T10:30:00.000Z',
         provisionedByUserId: 'usr-tech-01',
         provisionedByUserName: 'Thabo Sithole (Hardware Lead)'
+      },
+      {
+        itisDeviceId: 'DEV-ITIS-005',
+        trackerDeviceId: 'DEV-ASCII-001',
+        imei: '867543029182745',
+        simIdentifier: '8927010203040506085',
+        protocolType: 'ASCII',
+        deviceModel: 'ASCII-TRACKER-GENERIC',
+        deviceStatus: 'ACTIVE',
+        activationStatus: 'ACTIVATED',
+        assignedSchoolId: 'sch-001',
+        assignedSchoolName: 'Pretoria Boys High School',
+        lastKnownLocation: {
+          latitude: -25.7589,
+          longitude: 28.2321,
+          accuracyMeters: 5.0,
+          addressDescription: 'Pretoria East Hardware Depot',
+          timestamp: '2026-09-02T08:00:00.000Z'
+        },
+        lastTelemetryTimestamp: '2026-09-02T08:00:00.000Z',
+        batteryStatus: {
+          percentage: 95,
+          voltage: 4.10,
+          healthStatus: 'NORMAL'
+        },
+        connectionStatus: 'ONLINE',
+        firmwareVersion: 'ASCII-v1.1.0',
+        hardwareRevision: 'HW-ASCII-A1',
+        registeredAt: '2026-03-01T08:00:00.000Z',
+        updatedAt: '2026-09-02T08:00:00.000Z',
+        provisionedAt: '2026-03-01T08:30:00.000Z',
+        provisionedByUserId: 'usr-tech-01',
+        provisionedByUserName: 'Thabo Sithole (Hardware Lead)'
+      },
+      {
+        itisDeviceId: 'DEV-ITIS-006',
+        trackerDeviceId: 'DEV-JSON-001',
+        imei: '867543029182746',
+        simIdentifier: '8927010203040506086',
+        protocolType: 'JSON',
+        deviceModel: 'JSON-SMART-WEARABLE',
+        deviceStatus: 'ACTIVE',
+        activationStatus: 'ACTIVATED',
+        assignedSchoolId: 'sch-001',
+        assignedSchoolName: 'Pretoria Boys High School',
+        lastKnownLocation: {
+          latitude: -25.7589,
+          longitude: 28.2321,
+          accuracyMeters: 4.0,
+          addressDescription: 'Brooklyn Transit Corridor',
+          timestamp: '2026-09-02T08:00:00.000Z'
+        },
+        lastTelemetryTimestamp: '2026-09-02T08:00:00.000Z',
+        batteryStatus: {
+          percentage: 92,
+          voltage: 4.05,
+          healthStatus: 'NORMAL'
+        },
+        connectionStatus: 'ONLINE',
+        firmwareVersion: 'JSON-v2.0.0',
+        hardwareRevision: 'HW-JSON-B2',
+        registeredAt: '2026-03-01T08:00:00.000Z',
+        updatedAt: '2026-09-02T08:00:00.000Z',
+        provisionedAt: '2026-03-01T08:30:00.000Z',
+        provisionedByUserId: 'usr-tech-01',
+        provisionedByUserName: 'Thabo Sithole (Hardware Lead)'
       }
     ];
 

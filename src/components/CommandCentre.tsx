@@ -54,9 +54,11 @@ import {
 } from '../types.js';
 import { api } from '../services/api.js';
 import { TacticalInterceptionMap } from './TacticalInterceptionMap.js';
+import { SafetyAutomationPanel } from './SafetyAutomationPanel.js';
 
 export type CommandSection = 
   | 'EMERGENCIES'
+  | 'SAFETY_AUTOMATION'
   | 'TACTICAL_MAP'
   | 'RESPONSE_FLEET'
   | 'SCHOOLS'
@@ -629,6 +631,19 @@ export const CommandCentre: React.FC<Props> = ({
         >
           <ShieldAlert className="w-4 h-4" />
           <span>Incident Queue {activeIncidents.length > 0 ? `(${activeIncidents.length})` : ''}</span>
+        </button>
+
+        <button
+          id="btn-tab-safety-automation"
+          onClick={() => setCurrentTab('SAFETY_AUTOMATION')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 ${
+            currentTab === 'SAFETY_AUTOMATION'
+              ? 'bg-amber-400 text-slate-950 shadow-md font-black'
+              : 'bg-slate-900 text-slate-300 hover:text-white hover:bg-slate-800 border border-slate-800'
+          }`}
+        >
+          <Radio className="w-4 h-4 text-amber-400" />
+          <span>Safety Automation</span>
         </button>
 
         <button
@@ -1587,6 +1602,23 @@ export const CommandCentre: React.FC<Props> = ({
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ==================================================== */}
+      {/* 3B. SAFETY AUTOMATION & TELEMETRY INCIDENT DETECTION */}
+      {/* ==================================================== */}
+      {currentTab === 'SAFETY_AUTOMATION' && (
+        <div className="space-y-4">
+          <SafetyAutomationPanel
+            currentUser={currentUser}
+            incidents={safeIncidents}
+            learners={safeLearners}
+            onSelectIncident={(incId) => {
+              setSelectedIncidentId(incId);
+              setCurrentTab('EMERGENCIES');
+            }}
+          />
         </div>
       )}
 

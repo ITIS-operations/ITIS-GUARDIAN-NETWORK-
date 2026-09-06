@@ -27,6 +27,10 @@ import { telemetryPersistenceEngine } from './src/server/telemetryPersistenceEng
 import { telemetryPersistenceTestSuite } from './src/server/telemetryPersistenceTestSuite.js';
 import { liveLocationService } from './src/server/liveLocationService.js';
 import { liveLocationTestSuite } from './src/server/liveLocationTestSuite.js';
+import { safetyAutomationEngine } from './src/server/safetyAutomationEngine.js';
+import { safetyAutomationTestSuite } from './src/server/safetyAutomationTestSuite.js';
+import { protocolProfileRegistry } from './src/server/protocols/protocolRegistry.js';
+import { protocolTestSuite } from './src/server/protocols/protocolTestSuite.js';
 import { IncidentAlert, ActiveUserSession, PermissionKey, UserRole, ExecutiveOverviewData } from './src/types.js';
 
 const app = express();
@@ -4028,6 +4032,59 @@ app.get('/api/telemetry/persistence/test-suite', requireAuth, async (req, res) =
   }
 });
 
+// ====================================================
+// MULTI-TRACKER PROTOCOL PROFILE ARCHITECTURE ROUTES
+// ====================================================
+
+// List all registered protocol profiles
+app.get('/api/protocols', requireAuth, (req, res) => {
+  try {
+    const profiles = protocolProfileRegistry.listProfiles();
+    res.json(profiles);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Technician Protocol Packet Inspector (Zero learner privacy leak)
+app.post('/api/protocols/inspect', requireAuth, (req, res) => {
+  try {
+    const user = req.user!;
+    const authorizedRoles = ['FOUNDER_EXECUTIVE', 'SYSTEM_ADMIN', 'TECHNICIAN'];
+    if (!authorizedRoles.includes(user.role)) {
+      return res.status(403).json({
+        error: 'ACCESS DENIED: Insufficient permissions to inspect hardware protocol frames.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const { rawPacket, contextDeviceProtocol } = req.body;
+    const inspection = protocolProfileRegistry.inspectPacket(rawPacket, contextDeviceProtocol);
+    res.json(inspection);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Run Protocol Architecture Acceptance Test Suite (7 Acceptance Tests)
+app.post('/api/protocols/test-suite/run', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const authorizedRoles = ['FOUNDER_EXECUTIVE', 'SYSTEM_ADMIN', 'TECHNICIAN'];
+    if (!authorizedRoles.includes(user.role)) {
+      return res.status(403).json({
+        error: 'ACCESS DENIED: Insufficient permissions to execute protocol test suite.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const results = await protocolTestSuite.runSuite(user);
+    res.json(results);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // =========================================================================
 // LIVE GPS LOCATION SERVICE & MAP DATA API (Prompt 11)
 // =========================================================================
@@ -4243,6 +4300,158 @@ app.get('/api/map/test-suite', requireAuth, async (req, res) => {
   try {
     const testResults = await liveLocationTestSuite.runAllTests();
     res.json(testResults);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =========================================================================
+// ITIS SAFETY AUTOMATION & TELEMETRY INCIDENT DETECTION API
+// =========================================================================
+
+// 1. Get Safety Automation Engine Configuration & Rules
+app.get('/api/safety-automation/config', requireAuth, (req, res) => {
+  try {
+    const user = req.user!;
+    safetyAutomationEngine.assertAuthorizedToView(user);
+    const config = safetyAutomationEngine.getConfig();
+    res.json({ success: true, config });
+  } catch (err: any) {
+    const isAccessDenied = err.message.includes('Access Denied');
+    res.status(isAccessDenied ? 403 : 500).json({
+      error: err.message,
+      code: isAccessDenied ? 'ACCESS_DENIED' : 'INTERNAL_ERROR'
+    });
+  }
+});
+
+// 2. Update Safety Automation Rule Thresholds & Settings
+app.put('/api/safety-automation/rules/:ruleId', requireAuth, (req, res) => {
+  try {
+    const user = req.user!;
+    const { ruleId } = req.params;
+    const updates = req.body;
+    const updatedRule = safetyAutomationEngine.updateRule(ruleId, updates, user);
+    res.json({ success: true, rule: updatedRule });
+  } catch (err: any) {
+    const isAccessDenied = err.message.includes('Access Denied');
+    res.status(isAccessDenied ? 403 : 500).json({
+      error: err.message,
+      code: isAccessDenied ? 'ACCESS_DENIED' : 'UPDATE_FAILED'
+    });
+  }
+});
+
+// 3. Get Safety Alerts Queue for Command Centre
+app.get('/api/safety-automation/alerts', requireAuth, (req, res) => {
+  try {
+    const user = req.user!;
+    safetyAutomationEngine.assertAuthorizedToView(user);
+    const { status, severity, limit } = req.query;
+    const alerts = safetyAutomationEngine.getAlerts({
+      status: status as any,
+      severity: severity as any,
+      limit: limit ? parseInt(limit as string, 10) : undefined
+    });
+    res.json({
+      success: true,
+      count: alerts.length,
+      alerts
+    });
+  } catch (err: any) {
+    const isAccessDenied = err.message.includes('Access Denied');
+    res.status(isAccessDenied ? 403 : 500).json({
+      error: err.message,
+      code: isAccessDenied ? 'ACCESS_DENIED' : 'QUERY_FAILED'
+    });
+  }
+});
+
+// 4. Operational Review of Safety Alert (Acknowledge / Dismiss / Resolve)
+app.post('/api/safety-automation/alerts/:alertId/review', requireAuth, (req, res) => {
+  try {
+    const user = req.user!;
+    const { alertId } = req.params;
+    const { status, notes } = req.body;
+
+    if (!['ACKNOWLEDGED', 'DISMISSED', 'RESOLVED'].includes(status)) {
+      return res.status(400).json({
+        error: 'Invalid status. Must be ACKNOWLEDGED, DISMISSED, or RESOLVED.',
+        code: 'INVALID_STATUS'
+      });
+    }
+
+    const updatedAlert = safetyAutomationEngine.updateAlertStatus(alertId, status, user, notes);
+    res.json({ success: true, alert: updatedAlert });
+  } catch (err: any) {
+    const isAccessDenied = err.message.includes('Access Denied');
+    res.status(isAccessDenied ? 403 : 500).json({
+      error: err.message,
+      code: isAccessDenied ? 'ACCESS_DENIED' : 'UPDATE_FAILED'
+    });
+  }
+});
+
+// 5. Evaluate Device Offline / Prolonged Silence Condition
+app.post('/api/safety-automation/evaluate-offline', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const { deviceId, lastSeenTimestamp } = req.body;
+
+    if (!deviceId) {
+      return res.status(400).json({ error: 'deviceId is required', code: 'MISSING_FIELD' });
+    }
+
+    const result = await safetyAutomationEngine.evaluateDeviceOfflineCondition(
+      deviceId,
+      lastSeenTimestamp,
+      user
+    );
+    res.json({ success: true, result });
+  } catch (err: any) {
+    const isAccessDenied = err.message.includes('Access Denied');
+    res.status(isAccessDenied ? 403 : 500).json({
+      error: err.message,
+      code: isAccessDenied ? 'ACCESS_DENIED' : 'EVAL_FAILED'
+    });
+  }
+});
+
+// 6. Execute Safety Automation 10 Acceptance Test Suite (Run)
+app.post('/api/safety-automation/test-suite/run', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const authorizedRoles = ['FOUNDER_EXECUTIVE', 'SYSTEM_ADMIN', 'COMMAND_OFFICER', 'COMMAND_OPERATOR', 'TECHNICIAN'];
+
+    if (!authorizedRoles.includes(user.role)) {
+      return res.status(403).json({
+        error: 'ACCESS DENIED: Insufficient permissions to execute safety automation test suite.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const results = await safetyAutomationTestSuite.runFullSuite();
+    res.json(results);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 7. Get Latest Safety Automation Test Suite Results
+app.get('/api/safety-automation/test-suite', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const authorizedRoles = ['FOUNDER_EXECUTIVE', 'SYSTEM_ADMIN', 'COMMAND_OFFICER', 'COMMAND_OPERATOR', 'TECHNICIAN'];
+
+    if (!authorizedRoles.includes(user.role)) {
+      return res.status(403).json({
+        error: 'ACCESS DENIED: Insufficient permissions to view safety automation test suite.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const results = await safetyAutomationTestSuite.runFullSuite();
+    res.json(results);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }

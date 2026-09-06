@@ -38,6 +38,7 @@ import {
 } from '../types.js';
 import { api } from '../services/api.js';
 import { GpsTelemetrySimulator } from './GpsTelemetrySimulator.js';
+import { ProtocolProfileManager } from './ProtocolProfileManager.js';
 
 export type TechSection = 
   | 'ASSIGNED_DEVICES' 
@@ -47,6 +48,7 @@ export type TechSection =
   | 'GATEWAYS'
   | 'VALIDATION_SUITE'
   | 'GPS_SIMULATOR'
+  | 'PROTOCOLS'
   | 'REPORTS';
 
 interface Props {
@@ -353,6 +355,18 @@ export const TechnicianPortal: React.FC<Props> = ({
         >
           <Radio className="w-4 h-4 text-cyan-400" />
           <span>GPS Simulator & Testing</span>
+        </button>
+
+        <button
+          onClick={() => handleTabChange('PROTOCOLS')}
+          className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 ${
+            currentTab === 'PROTOCOLS'
+              ? 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/40 shadow-sm'
+              : 'text-slate-400 hover:text-white hover:bg-slate-900 border border-transparent'
+          }`}
+        >
+          <Layers className="w-4 h-4 text-indigo-400" />
+          <span>Protocol Profiles & Inspector</span>
         </button>
 
         <button
@@ -831,6 +845,13 @@ export const TechnicianPortal: React.FC<Props> = ({
           currentUser={currentUser}
           devices={devices}
         />
+      )}
+
+      {/* ==================================================== */}
+      {/* 7. MULTI-TRACKER PROTOCOL PROFILE ARCHITECTURE       */}
+      {/* ==================================================== */}
+      {currentTab === 'PROTOCOLS' && (
+        <ProtocolProfileManager />
       )}
 
       {/* Modal: Log Maintenance */}

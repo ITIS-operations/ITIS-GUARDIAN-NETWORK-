@@ -21,6 +21,7 @@ import { repository } from './db/index.js';
 import { db } from './dbStore.js';
 import { deviceRegistryEngine } from './deviceRegistryEngine.js';
 import { liveLocationService } from './liveLocationService.js';
+import { safetyAutomationEngine } from './safetyAutomationEngine.js';
 
 export interface PersistTelemetryParams {
   deviceId: string; // Authoritative itisDeviceId (e.g. DEV-ZA-GT012-...)
@@ -234,6 +235,13 @@ export class TelemetryPersistenceEngine {
         isSos: params.isSos
       }
     });
+
+    // 6. Safety Automation Engine: evaluate telemetry rules
+    try {
+      await safetyAutomationEngine.evaluateTelemetry(telemetryRecord, actor);
+    } catch (safetyErr) {
+      console.warn('[TelemetryPersistence] Safety automation evaluation warning:', safetyErr);
+    }
 
     return { record: telemetryRecord, latestLocation: latestLoc };
   }
