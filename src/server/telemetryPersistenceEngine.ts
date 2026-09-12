@@ -28,7 +28,9 @@ export interface PersistTelemetryParams {
   trackerDeviceId: string; // Tracker hardware identifier (e.g. GT012-TRK-8812 or IMEI)
   learnerId?: string | null;
   schoolId?: string | null;
-  timestamp: string;
+  timestamp: string; // Device time
+  deviceTime?: string; // Explicit device clock time
+  serverReceivedAt?: string; // Explicit server ingress timestamp
   latitude: number;
   longitude: number;
   accuracyMeters?: number;
@@ -118,6 +120,9 @@ export class TelemetryPersistenceEngine {
       learnerId,
       schoolId,
       timestamp: params.timestamp,
+      deviceTime: params.deviceTime || params.timestamp,
+      serverReceivedAt: params.serverReceivedAt || new Date().toISOString(),
+      databasePersistedAt: new Date().toISOString(),
       latitude: params.latitude,
       longitude: params.longitude,
       accuracyMeters: params.accuracyMeters ?? (params.satellites && params.satellites > 6 ? 4.5 : 8.0),
@@ -161,45 +166,47 @@ export class TelemetryPersistenceEngine {
       alarmType: params.alarmType || null
     };
 
-    await repository.telemetry.updateLatestLocation(latestLoc);
+    const locationUpdated = await repository.telemetry.updateLatestLocation(latestLoc);
 
-    // Broadcast update to LiveLocationService real-time bus
-    try {
-      liveLocationService.broadcastLocationUpdate({
-        deviceId: latestLoc.deviceId,
-        trackerDeviceId: latestLoc.trackerDeviceId,
-        latitude: latestLoc.latitude,
-        longitude: latestLoc.longitude,
-        accuracyMeters: latestLoc.accuracyMeters,
-        speedKmh: latestLoc.speedKmh,
-        heading: latestLoc.heading,
-        batteryLevel: latestLoc.batteryLevel,
-        batteryVoltage: latestLoc.batteryVoltage,
-        timestamp: latestLoc.timestamp,
-        isSos: latestLoc.isSos,
-        alarmType: latestLoc.alarmType || undefined,
-        satellites: latestLoc.satellites ?? 12,
-        status: 'ONLINE',
-        isStale: false,
-        staleMinutes: 0,
-        geoJson: {
-          type: 'Feature',
-          geometry: {
-            type: 'Point',
-            coordinates: [latestLoc.longitude, latestLoc.latitude]
-          },
-          properties: {
-            deviceId: latestLoc.deviceId,
-            trackerDeviceId: latestLoc.trackerDeviceId,
-            batteryLevel: latestLoc.batteryLevel,
-            isSos: latestLoc.isSos,
-            status: 'ONLINE',
-            lastSeenAt: latestLoc.timestamp
+    // Broadcast update to LiveLocationService real-time bus only if not older
+    if (locationUpdated) {
+      try {
+        liveLocationService.broadcastLocationUpdate({
+          deviceId: latestLoc.deviceId,
+          trackerDeviceId: latestLoc.trackerDeviceId,
+          latitude: latestLoc.latitude,
+          longitude: latestLoc.longitude,
+          accuracyMeters: latestLoc.accuracyMeters,
+          speedKmh: latestLoc.speedKmh,
+          heading: latestLoc.heading,
+          batteryLevel: latestLoc.batteryLevel,
+          batteryVoltage: latestLoc.batteryVoltage,
+          timestamp: latestLoc.timestamp,
+          isSos: latestLoc.isSos,
+          alarmType: latestLoc.alarmType || undefined,
+          satellites: latestLoc.satellites ?? 12,
+          status: 'ONLINE',
+          isStale: false,
+          staleMinutes: 0,
+          geoJson: {
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [latestLoc.longitude, latestLoc.latitude]
+            },
+            properties: {
+              deviceId: latestLoc.deviceId,
+              trackerDeviceId: latestLoc.trackerDeviceId,
+              batteryLevel: latestLoc.batteryLevel,
+              isSos: latestLoc.isSos,
+              status: 'ONLINE',
+              lastSeenAt: latestLoc.timestamp
+            }
           }
-        }
-      });
-    } catch {
-      // Non-blocking broadcast
+        });
+      } catch {
+        // Non-blocking broadcast
+      }
     }
 
     // 4. Update Device Registry state
@@ -249,6 +256,21 @@ export class TelemetryPersistenceEngine {
   // =========================================================================
   // ACCESS CONTROLLED LATEST LOCATION RETRIEVAL (O(1))
   // =========================================================================
+
+  /**
+   * Authoritatively updates the latest location record with timestamp ordering protection.
+   * Returns { updated: true, reason: 'LATEST_LOCATION_UPDATED' } on success,
+   * or { updated: false, reason: 'OLDER_LOCATION_REJECTED' } if the packet has an older timestamp.
+   */
+  public async updateAuthoritativeLatestLocation(
+    location: AuthoritativeLatestLocationRecord
+  ): Promise<{ updated: boolean; reason: 'LATEST_LOCATION_UPDATED' | 'OLDER_LOCATION_REJECTED' }> {
+    const updated = await repository.telemetry.updateLatestLocation(location);
+    if (!updated) {
+      return { updated: false, reason: 'OLDER_LOCATION_REJECTED' };
+    }
+    return { updated: true, reason: 'LATEST_LOCATION_UPDATED' };
+  }
 
   /**
    * Authoritatively retrieve latest location for a device or learner with ABAC enforcement.

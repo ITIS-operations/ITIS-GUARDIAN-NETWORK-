@@ -7,7 +7,18 @@
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "db:migrate": "tsx src/server/db/migrations/migrationRunner.ts migrate",
+    "db:status": "tsx src/server/db/migrations/migrationRunner.ts status",
+    "gps:server": "tsx telemetry-server/src/index.ts",
+    "test": "tsx telemetry-server/src/tests/acceptanceTests.ts",
+    "test:contract": "tsx telemetry-server/src/tests/contractAcceptanceTests.ts",
+    "test:diagnostics": "tsx src/server/testDiagnosticsRunner.ts",
+    "test:readiness": "tsx src/server/testE2EReadinessRunner.ts",
+    "test:resilience": "tsx src/server/testResilienceRunner.ts",
+    "test:security": "tsx src/server/testSecurityHardeningRunner.ts",
+    "test:production": "tsx src/server/testProductionReadinessRunner.ts",
+    "test:hardware": "tsx src/server/testPhysicalHardwareRunner.ts"
   },
   "dependencies": {
     "@types/pg": "^8.23.1",

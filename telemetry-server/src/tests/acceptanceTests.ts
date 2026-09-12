@@ -39,11 +39,14 @@ export async function runAllAcceptanceTests(): Promise<{
   // TEST 1: Server package builds
   // -------------------------------------------------------------------
   try {
-    const pkgPath = path.resolve(process.cwd(), 'telemetry-server/package.json');
-    const tsconfigPath = path.resolve(process.cwd(), 'telemetry-server/tsconfig.json');
-    const dockerfilePath = path.resolve(process.cwd(), 'telemetry-server/Dockerfile');
-    const composePath = path.resolve(process.cwd(), 'telemetry-server/docker-compose.example.yml');
-    const envPath = path.resolve(process.cwd(), 'telemetry-server/.env.example');
+    const rootDir = process.cwd().endsWith('telemetry-server') ? path.resolve(process.cwd(), '..') : process.cwd();
+    const telemetryDir = path.resolve(rootDir, 'telemetry-server');
+
+    const pkgPath = path.resolve(telemetryDir, 'package.json');
+    const tsconfigPath = path.resolve(telemetryDir, 'tsconfig.json');
+    const dockerfilePath = path.resolve(telemetryDir, 'Dockerfile');
+    const composePath = path.resolve(telemetryDir, 'docker-compose.example.yml');
+    const envPath = path.resolve(telemetryDir, '.env.example');
 
     const pkgExists = fs.existsSync(pkgPath);
     const tsconfigExists = fs.existsSync(tsconfigPath);
@@ -373,9 +376,10 @@ export async function runAllAcceptanceTests(): Promise<{
   // TEST 8: Existing ITIS web application unaffected
   // -------------------------------------------------------------------
   try {
-    const rootPkg = JSON.parse(fs.readFileSync(path.resolve(process.cwd(), 'package.json'), 'utf8'));
-    const serverTs = fs.readFileSync(path.resolve(process.cwd(), 'server.ts'), 'utf8');
-    const vercelJsonExists = fs.existsSync(path.resolve(process.cwd(), 'vercel.json'));
+    const rootDir = process.cwd().endsWith('telemetry-server') ? path.resolve(process.cwd(), '..') : process.cwd();
+    const rootPkg = JSON.parse(fs.readFileSync(path.resolve(rootDir, 'package.json'), 'utf8'));
+    const serverTs = fs.readFileSync(path.resolve(rootDir, 'server.ts'), 'utf8');
+    const vercelJsonExists = fs.existsSync(path.resolve(rootDir, 'vercel.json'));
 
     // Check that port 3000 remains the web app port and scripts are untouched
     const hasViteBuild = rootPkg.scripts?.build?.includes('vite build');
@@ -405,14 +409,17 @@ export async function runAllAcceptanceTests(): Promise<{
   // TEST 9: No production deployment occurs
   // -------------------------------------------------------------------
   try {
+    const rootDir = process.cwd().endsWith('telemetry-server') ? path.resolve(process.cwd(), '..') : process.cwd();
+    const telemetryDir = path.resolve(rootDir, 'telemetry-server');
+
     // Ensure no production deployment commands were run, ports were only tested locally
     // and deployment files are configured with safe example variables
     const composeContent = fs.readFileSync(
-      path.resolve(process.cwd(), 'telemetry-server/docker-compose.example.yml'),
+      path.resolve(telemetryDir, 'docker-compose.example.yml'),
       'utf8'
     );
     const envExampleContent = fs.readFileSync(
-      path.resolve(process.cwd(), 'telemetry-server/.env.example'),
+      path.resolve(telemetryDir, '.env.example'),
       'utf8'
     );
 

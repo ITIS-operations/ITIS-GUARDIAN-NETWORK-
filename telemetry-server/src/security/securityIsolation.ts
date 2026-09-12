@@ -26,9 +26,28 @@ export class SecurityIsolationEngine {
 
   // Rate limiting map: key = IP address or connectionId -> array of timestamps
   private rateLimitMap: Map<string, number[]> = new Map();
+  // Device rate limiting map: deviceId -> array of timestamps
+  private deviceRateLimitMap: Map<string, number[]> = new Map();
+  // Malformed packet tracker: sourceKey -> count
+  private malformedCounter: Map<string, number> = new Map();
+  // Duplicate storm tracker: sourceKey -> count
+  private duplicateCounter: Map<string, number> = new Map();
 
   constructor(config: TelemetryServerConfig) {
     this.config = config;
+  }
+
+  /**
+   * Validate that the stream accumulation buffer does not exceed maximum allowable buffer size
+   */
+  public checkBufferedData(buffer: Buffer): { allowed: boolean; reason?: string } {
+    if (buffer.length > this.config.maxBufferedDataBytes) {
+      return {
+        allowed: false,
+        reason: `BUFFER_OVERFLOW: Buffered ${buffer.length} bytes exceeds maximum buffer allowance of ${this.config.maxBufferedDataBytes} bytes`
+      };
+    }
+    return { allowed: true };
   }
 
   /**
@@ -69,6 +88,57 @@ export class SecurityIsolationEngine {
     recent.push(now);
     this.rateLimitMap.set(key, recent);
     return { allowed: true, currentRps: recent.length };
+  }
+
+  /**
+   * Per-device rate limit check (e.g. 120 packets per minute limit)
+   */
+  public checkDeviceRateLimit(deviceId: string): { allowed: boolean; currentRpm: number } {
+    const now = Date.now();
+    const windowMs = 60000;
+    const history = this.deviceRateLimitMap.get(deviceId) || [];
+
+    const recent = history.filter(ts => now - ts < windowMs);
+    if (recent.length >= this.config.perDeviceRateLimitPerMin) {
+      this.deviceRateLimitMap.set(deviceId, recent);
+      return { allowed: false, currentRpm: recent.length };
+    }
+
+    recent.push(now);
+    this.deviceRateLimitMap.set(deviceId, recent);
+    return { allowed: true, currentRpm: recent.length };
+  }
+
+  /**
+   * Track consecutive malformed packets from a source to detect probe/fuzzing attacks
+   */
+  public recordMalformedPacket(sourceKey: string): { thresholdExceeded: boolean; count: number } {
+    const current = (this.malformedCounter.get(sourceKey) || 0) + 1;
+    this.malformedCounter.set(sourceKey, current);
+    return {
+      thresholdExceeded: current >= this.config.malformedPacketThreshold,
+      count: current
+    };
+  }
+
+  /**
+   * Track duplicate packets to detect duplicate packet storms
+   */
+  public recordDuplicate(sourceKey: string): { stormDetected: boolean; count: number } {
+    const current = (this.duplicateCounter.get(sourceKey) || 0) + 1;
+    this.duplicateCounter.set(sourceKey, current);
+    return {
+      stormDetected: current >= this.config.duplicateStormThreshold,
+      count: current
+    };
+  }
+
+  /**
+   * Reset consecutive violation counters on successful valid packet
+   */
+  public recordSuccessfulPacket(sourceKey: string): void {
+    this.malformedCounter.delete(sourceKey);
+    this.duplicateCounter.delete(sourceKey);
   }
 
   /**

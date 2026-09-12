@@ -39,10 +39,12 @@ import {
 import { api } from '../services/api.js';
 import { GpsTelemetrySimulator } from './GpsTelemetrySimulator.js';
 import { ProtocolProfileManager } from './ProtocolProfileManager.js';
+import { TelemetryDiagnosticsDashboard } from './TelemetryDiagnosticsDashboard.js';
 
 export type TechSection = 
   | 'ASSIGNED_DEVICES' 
   | 'DEVICE_HEALTH' 
+  | 'TELEMETRY_DIAGNOSTICS'
   | 'MAINTENANCE' 
   | 'INVENTORY' 
   | 'GATEWAYS'
@@ -307,6 +309,19 @@ export const TechnicianPortal: React.FC<Props> = ({
         >
           <Activity className="w-4 h-4" />
           <span>Device Health & Telemetry</span>
+        </button>
+
+        <button
+          id="tab-telemetry-diagnostics"
+          onClick={() => handleTabChange('TELEMETRY_DIAGNOSTICS')}
+          className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 ${
+            currentTab === 'TELEMETRY_DIAGNOSTICS'
+              ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 shadow-sm'
+              : 'text-slate-400 hover:text-white hover:bg-slate-900 border border-transparent'
+          }`}
+        >
+          <RadioTower className="w-4 h-4 text-cyan-400" />
+          <span>Telemetry Diagnostics & Observability</span>
         </button>
 
         <button
@@ -852,6 +867,13 @@ export const TechnicianPortal: React.FC<Props> = ({
       {/* ==================================================== */}
       {currentTab === 'PROTOCOLS' && (
         <ProtocolProfileManager />
+      )}
+
+      {/* ==================================================== */}
+      {/* 8. OPERATIONAL TELEMETRY DIAGNOSTICS & OBSERVABILITY */}
+      {/* ==================================================== */}
+      {currentTab === 'TELEMETRY_DIAGNOSTICS' && (
+        <TelemetryDiagnosticsDashboard currentUser={currentUser} />
       )}
 
       {/* Modal: Log Maintenance */}

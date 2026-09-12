@@ -1,12 +1,21 @@
 import { pool, query } from './client.js';
 import crypto from 'crypto';
 import { seedAuthoritativeDataToPostgres } from './seed.js';
+import { runMigrations } from './migrations/migrationRunner.js';
 
 function hashPassword(plainText: string, salt: string = 'itis_salt_sha256_sec_2026'): string {
   return crypto.createHash('sha256').update(plainText + ':' + salt).digest('hex');
 }
 
 export async function bootstrapDatabase(): Promise<void> {
+  console.log('[Bootstrap] Running authoritative PostgreSQL migrations...');
+  try {
+    const migrationResult = await runMigrations();
+    console.log(`[Bootstrap] Schema migrations complete: ${migrationResult.appliedCount} applied, ${migrationResult.skippedCount} up-to-date.`);
+  } catch (migErr) {
+    console.warn('[Bootstrap] Notice during migration runner, ensuring base tables via DDL:', migErr);
+  }
+
   console.log('[Bootstrap] Initializing PostgreSQL database tables and constraints...');
 
   // 1. Extensions
@@ -691,7 +700,11 @@ export async function bootstrapDatabase(): Promise<void> {
   }
 
   // 21. Ensure baseline reference data is seeded in PostgreSQL
-  await seedAuthoritativeDataToPostgres();
+  if (process.env.NODE_ENV === 'production' && process.env.SEED_INITIAL_DATA !== 'true') {
+    console.log('[Bootstrap] Production mode active: Automatic demo persona seeding skipped for data governance.');
+  } else {
+    await seedAuthoritativeDataToPostgres();
+  }
 
   console.log('[Bootstrap] PostgreSQL database initialized successfully.');
 }

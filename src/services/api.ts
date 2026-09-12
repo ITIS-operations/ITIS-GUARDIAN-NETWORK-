@@ -47,7 +47,9 @@ import {
   SafetyAutomationConfig,
   SafetyAlertRecord,
   SafetyAutomationTestSuiteResult,
-  SafetyRuleConfig
+  SafetyRuleConfig,
+  OperationalTelemetryDiagnostics,
+  TelemetryDiagnosticsTestSuiteResult
 } from '../types.js';
 
 const API_BASE = '/api';
@@ -1427,5 +1429,21 @@ export const api = {
       headers: this.getAuthHeaders()
     });
     return safeFetchJson<any>(res, 'Failed to run protocol test suite');
+  },
+
+  // Telemetry Operations, Diagnostics & Observability
+  async getTelemetryDiagnostics(): Promise<OperationalTelemetryDiagnostics> {
+    const res = await fetch(`${API_BASE}/telemetry/diagnostics`, {
+      headers: this.getAuthHeaders()
+    });
+    const data = await safeFetchJson<{ success: boolean; data: OperationalTelemetryDiagnostics }>(res, 'Failed to fetch operational telemetry diagnostics');
+    return data.data;
+  },
+
+  async runTelemetryDiagnosticsSuite(): Promise<TelemetryDiagnosticsTestSuiteResult> {
+    const res = await fetch(`${API_BASE}/system/test-suites/telemetry-diagnostics`, {
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<TelemetryDiagnosticsTestSuiteResult>(res, 'Failed to run telemetry diagnostics test suite');
   }
 };

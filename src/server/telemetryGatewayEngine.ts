@@ -182,7 +182,14 @@ export class TelemetryGatewayEngine {
     totalRejected: 0,
     totalDuplicates: 0,
     totalQuarantined: 0,
-    lastIngestionTimestamp: null as string | null
+    lastIngestionTimestamp: null as string | null,
+    malformedPacketsCount: 0,
+    crcFailuresCount: 0,
+    duplicateSuppressedCount: 0,
+    unauthorizedDevicesCount: 0,
+    oversizedPacketsCount: 0,
+    rateLimitExceededCount: 0,
+    connectionErrorsCount: 0
   };
 
   constructor() {
@@ -202,11 +209,39 @@ export class TelemetryGatewayEngine {
     }, 60000);
   }
 
+  private packetListeners: Array<(res: TelemetryIngestionResult, envelope: TelemetryEnvelope) => void> = [];
+
+  public registerPacketListener(listener: (res: TelemetryIngestionResult, envelope: TelemetryEnvelope) => void): () => void {
+    this.packetListeners.push(listener);
+    return () => {
+      this.packetListeners = this.packetListeners.filter(l => l !== listener);
+    };
+  }
+
+  private notifyPacketListeners(res: TelemetryIngestionResult, envelope: TelemetryEnvelope): void {
+    for (const listener of this.packetListeners) {
+      try {
+        listener(res, envelope);
+      } catch (err) {
+        console.error('[TelemetryGatewayEngine] Packet listener error:', err);
+      }
+    }
+  }
+
   /**
    * Authoritative Telemetry Ingestion Function
    * Single entry point for all incoming telemetry packets across all transports.
    */
   public async ingestTelemetryPacket(
+    envelope: TelemetryEnvelope,
+    actor?: ActiveUserSession
+  ): Promise<TelemetryIngestionResult> {
+    const result = await this.executeIngestTelemetryPacket(envelope, actor);
+    this.notifyPacketListeners(result, envelope);
+    return result;
+  }
+
+  private async executeIngestTelemetryPacket(
     envelope: TelemetryEnvelope,
     actor?: ActiveUserSession
   ): Promise<TelemetryIngestionResult> {
@@ -284,8 +319,58 @@ export class TelemetryGatewayEngine {
       }
     }
 
+    // 0. Payload Size Hardening Guard
+    const maxPacketSizeBytes = parseInt(process.env.MAX_PACKET_SIZE_BYTES || '2048', 10);
+    const isHexInput = /^[0-9a-fA-F]+$/.test(rawInput) && rawInput.length >= 4;
+    const packetByteSize = isHexInput ? Math.ceil(rawInput.length / 2) : Buffer.byteLength(rawInput, 'utf8');
+
+    if (packetByteSize > maxPacketSizeBytes) {
+      this.metrics.totalRejected++;
+      this.metrics.oversizedPacketsCount++;
+
+      if (actor) {
+        db.logAuditEvent({
+          actionType: 'TELEMETRY_PACKET_REJECTED',
+          actorUserId: actor.id,
+          actorName: actor.name,
+          actorRole: actor.role,
+          targetEntity: 'HARDWARE',
+          targetId: envelope.deviceIdentifier || 'UNKNOWN',
+          details: { reason: 'OVERSIZED_PACKET', packetByteSize, maxAllowed: maxPacketSizeBytes }
+        });
+      }
+
+      return {
+        accepted: false,
+        status: 'REJECTED',
+        diagnosticCode: 'OVERSIZED_PACKET' as any,
+        protocol: envelope.protocol || 'AUTO',
+        packetType: 'UNKNOWN',
+        ackRequired: false,
+        duplicate: false,
+        quarantined: false,
+        validationResult: {
+          validFraming: false,
+          validCrc: false,
+          validCoordinates: false,
+          validBattery: false,
+          validSpeed: false,
+          validHeading: false,
+          validTimestamp: false,
+          reason: `Packet size (${packetByteSize} bytes) exceeds maximum allowable limit of ${maxPacketSizeBytes} bytes.`
+        },
+        errorCode: 'OVERSIZED_PACKET',
+        error: `OVERSIZED_PACKET: Packet size (${packetByteSize} bytes) exceeds maximum allowable limit of ${maxPacketSizeBytes} bytes.`,
+        receivedAt,
+        processedAt,
+        transportType,
+        remoteAddress
+      };
+    }
+
     if (!rawInput) {
       this.metrics.totalRejected++;
+      this.metrics.malformedPacketsCount++;
       return {
         accepted: false,
         status: 'REJECTED',
@@ -342,6 +427,7 @@ export class TelemetryGatewayEngine {
       }
 
       this.metrics.totalRejected++;
+      this.metrics.malformedPacketsCount++;
       return {
         accepted: false,
         status: 'REJECTED',
@@ -372,8 +458,8 @@ export class TelemetryGatewayEngine {
 
     const { profile } = detected;
 
-    // Pre-flight Device / Protocol Compatibility Guard
-    if (preCheckDevice && preCheckDevice.protocolType) {
+    // Pre-flight Device / Protocol Compatibility Guard (enforced for hardware transports: TCP, UDP, SMS)
+    if (preCheckDevice && preCheckDevice.protocolType && transportType !== 'SIMULATOR') {
       const devProto = preCheckDevice.protocolType.toUpperCase();
       const detectedProto = profile.protocolId.toUpperCase();
       const isCompatible = 
@@ -400,6 +486,7 @@ export class TelemetryGatewayEngine {
         }
 
         this.metrics.totalRejected++;
+        this.metrics.unauthorizedDevicesCount++;
         return {
           accepted: false,
           status: 'REJECTED',
@@ -589,6 +676,7 @@ export class TelemetryGatewayEngine {
       }
 
       this.metrics.totalRejected++;
+      this.metrics.crcFailuresCount++;
       return {
         accepted: false,
         status: 'REJECTED',
@@ -639,6 +727,7 @@ export class TelemetryGatewayEngine {
     let isSos = false;
     let alarmType: string | null = null;
     let satellites = 9;
+    let extractedDeviceTime: string | undefined;
 
     if (protocolNumber === GT012ProtocolNumber.LOGIN_MESSAGE) {
       packetType = 'LOGIN';
@@ -655,6 +744,19 @@ export class TelemetryGatewayEngine {
       extractedBattery = voltageMap[voltageLevel] !== undefined ? voltageMap[voltageLevel] : 75;
     } else if (protocolNumber === GT012ProtocolNumber.LOCATION_DATA || protocolNumber === GT012ProtocolNumber.ALARM_DATA) {
       packetType = protocolNumber === GT012ProtocolNumber.ALARM_DATA ? 'ALARM' : 'LOCATION';
+
+      // Offset 4-9: Date/Time (6 bytes: YY MM DD HH MM SS)
+      if (buffer.length >= 10) {
+        const yr = 2000 + buffer[4];
+        const mo = buffer[5];
+        const day = buffer[6];
+        const hr = buffer[7];
+        const min = buffer[8];
+        const sec = buffer[9];
+        if (mo >= 1 && mo <= 12 && day >= 1 && day <= 31 && hr <= 23 && min <= 59 && sec <= 59) {
+          extractedDeviceTime = new Date(Date.UTC(yr, mo - 1, day, hr, min, sec)).toISOString();
+        }
+      }
 
       satellites = buffer[10] & 0x0f;
       const rawLat = buffer.readUInt32BE(11);
@@ -719,6 +821,7 @@ export class TelemetryGatewayEngine {
       }
 
       this.metrics.totalDuplicates++;
+      this.metrics.duplicateSuppressedCount++;
       return {
         accepted: false,
         status: 'REJECTED',
@@ -823,6 +926,7 @@ export class TelemetryGatewayEngine {
       }
 
       this.metrics.totalRejected++;
+      this.metrics.unauthorizedDevicesCount++;
       return {
         accepted: false,
         status: 'REJECTED',
@@ -1001,7 +1105,9 @@ export class TelemetryGatewayEngine {
         trackerDeviceId: registryDevice.trackerDeviceId,
         learnerId: registryDevice.assignedLearnerId || null,
         schoolId: registryDevice.assignedSchoolId || null,
-        timestamp: processedAt,
+        timestamp: extractedDeviceTime || processedAt,
+        deviceTime: extractedDeviceTime || processedAt,
+        serverReceivedAt: receivedAt,
         latitude: extractedLat,
         longitude: extractedLng,
         accuracyMeters: 4.5,
@@ -1389,7 +1495,9 @@ export class TelemetryGatewayEngine {
         trackerDeviceId: registryDevice.trackerDeviceId,
         learnerId: registryDevice.assignedLearnerId || null,
         schoolId: registryDevice.assignedSchoolId || null,
-        timestamp: processedAt,
+        timestamp: decoded.timestamp || processedAt,
+        deviceTime: decoded.timestamp || processedAt,
+        serverReceivedAt: receivedAt,
         latitude: lat,
         longitude: lng,
         accuracyMeters: decoded.extractedLocation?.accuracyMeters || 5.0,
@@ -1649,7 +1757,7 @@ export class TelemetryGatewayEngine {
     // Device Registry check
     const registryDevice = deviceRegistryEngine.getDeviceById(deviceIdentifier);
 
-    if (registryDevice && registryDevice.protocolType) {
+    if (registryDevice && registryDevice.protocolType && transportType !== 'SIMULATOR') {
       const devProto = registryDevice.protocolType.toUpperCase();
       if (devProto !== 'JSON' && devProto !== 'SIMULATED_JSON' && devProto !== 'SIMULATED') {
         if (actor) {
@@ -1836,6 +1944,8 @@ export class TelemetryGatewayEngine {
       learnerId: registryDevice.assignedLearnerId || null,
       schoolId: registryDevice.assignedSchoolId || null,
       timestamp: json.timestamp || processedAt,
+      deviceTime: json.timestamp || processedAt,
+      serverReceivedAt: receivedAt,
       latitude: lat,
       longitude: lng,
       accuracyMeters: json.accuracy || 5.0,
@@ -1961,7 +2071,14 @@ export class TelemetryGatewayEngine {
         totalRejected: this.metrics.totalRejected,
         totalDuplicates: this.metrics.totalDuplicates,
         totalQuarantined: this.metrics.totalQuarantined,
-        lastIngestionTimestamp: this.metrics.lastIngestionTimestamp
+        lastIngestionTimestamp: this.metrics.lastIngestionTimestamp,
+        malformedPacketsCount: this.metrics.malformedPacketsCount,
+        crcFailuresCount: this.metrics.crcFailuresCount,
+        duplicateSuppressedCount: this.metrics.duplicateSuppressedCount,
+        unauthorizedDevicesCount: this.metrics.unauthorizedDevicesCount,
+        oversizedPacketsCount: this.metrics.oversizedPacketsCount,
+        rateLimitExceededCount: this.metrics.rateLimitExceededCount,
+        connectionErrorsCount: this.metrics.connectionErrorsCount
       },
       serverEnvironment: {
         nodeEnv: process.env.NODE_ENV || 'development',

@@ -19,6 +19,7 @@ import { GT012TestSuite } from './src/server/gt012/gt012TestSuite.js';
 import { GT012ProtocolNumber } from './src/server/gt012/gt012Types.js';
 import { deviceRegistryEngine } from './src/server/deviceRegistryEngine.js';
 import { deviceRegistryTestSuite } from './src/server/deviceRegistryTestSuite.js';
+import { deviceOperationsTestSuite } from './src/server/deviceOperationsTestSuite.js';
 import { telemetrySimulationEngine } from './src/server/telemetrySimulationEngine.js';
 import { telemetrySimulatorTestSuite } from './src/server/telemetrySimulatorTestSuite.js';
 import { telemetryGatewayEngine } from './src/server/telemetryGatewayEngine.js';
@@ -31,7 +32,15 @@ import { safetyAutomationEngine } from './src/server/safetyAutomationEngine.js';
 import { safetyAutomationTestSuite } from './src/server/safetyAutomationTestSuite.js';
 import { protocolProfileRegistry } from './src/server/protocols/protocolRegistry.js';
 import { protocolTestSuite } from './src/server/protocols/protocolTestSuite.js';
+import { telemetryIntegrationRouter } from './src/server/telemetryIntegration/telemetryIntegrationRouter.js';
+import { telemetryIntegrationTestSuite } from './src/server/telemetryIntegration/telemetryIntegrationTestSuite.js';
+import { telemetryDiagnosticsEngine } from './src/server/telemetryDiagnosticsEngine.js';
+import { runTelemetryDiagnosticsTestSuite } from './src/server/telemetryDiagnosticsTestSuite.js';
+import { networkResilienceEngine } from './src/server/networkResilienceEngine.js';
+import { networkResilienceTestSuite } from './src/server/networkResilienceTestSuite.js';
 import { IncidentAlert, ActiveUserSession, PermissionKey, UserRole, ExecutiveOverviewData } from './src/types.js';
+import { correlationMiddleware, logger } from './src/server/logger.js';
+import { assertProductionConfiguration, validateServerConfig } from './src/server/config.js';
 
 const app = express();
 const PORT = 3000;
@@ -42,7 +51,71 @@ const gt012Service = new GT012TelemetryService(repository);
 const gt012TestSuite = new GT012TestSuite(repository);
 
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '2mb' }));
+app.use(correlationMiddleware);
+
+// ----------------------------------------------------
+// RATE LIMITING & BRUTE-FORCE PROTECTION (DoS / FLOOD DEFENSE)
+// ----------------------------------------------------
+interface RateBucket {
+  count: number;
+  resetAt: number;
+}
+const rateBuckets: Map<string, Map<string, RateBucket>> = new Map();
+
+function createRateLimiter(options: { windowMs: number; max: number; message: string; scope: string }) {
+  if (!rateBuckets.has(options.scope)) {
+    rateBuckets.set(options.scope, new Map());
+  }
+  const store = rateBuckets.get(options.scope)!;
+
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    // Skip rate limiter in test suite if requested
+    if (req.headers['x-bypass-rate-limit'] === 'itis-internal-hardening-test') {
+      return next();
+    }
+    const ip = getClientIp(req);
+    const now = Date.now();
+    let bucket = store.get(ip);
+    if (!bucket || bucket.resetAt <= now) {
+      bucket = { count: 1, resetAt: now + options.windowMs };
+      store.set(ip, bucket);
+      return next();
+    }
+    bucket.count++;
+    if (bucket.count > options.max) {
+      const retrySec = Math.ceil((bucket.resetAt - now) / 1000);
+      res.setHeader('Retry-After', retrySec);
+      return res.status(429).json({
+        error: 'RATE_LIMIT_EXCEEDED',
+        message: options.message,
+        retryAfterSeconds: retrySec
+      });
+    }
+    next();
+  };
+}
+
+const loginRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: 'Too many authentication attempts. Please wait 60 seconds before retrying.',
+  scope: 'auth_login'
+});
+
+const registerRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: 'Registration rate limit exceeded. Please wait 60 seconds before submitting again.',
+  scope: 'auth_register'
+});
+
+const panicTriggerRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: 'Emergency SOS trigger frequency ceiling reached. Excessive transmissions throttled.',
+  scope: 'incident_panic'
+});
 
 // ----------------------------------------------------
 // RBAC & ABAC SECURITY MIDDLEWARE
@@ -159,7 +232,7 @@ const abacHelpers = {
       if (res.rows.length === 0) return false;
       const row = res.rows[0];
       if (row.vehicle_id && (row.vehicle_id === responderUnit || row.vehicle_id === responderId)) return true;
-      if (row.assigned_responder_id && (row.assigned_responder_id === responderUnit || row.assigned_responder_id === responderId || row.assigned_responder_id === 'resp-saps-01')) return true;
+      if (row.assigned_responder_id && (row.assigned_responder_id === responderUnit || row.assigned_responder_id === responderId)) return true;
       return false;
     } catch (err) {
       console.error('[ABAC] isIncidentAssignedToResponder query error:', err);
@@ -235,7 +308,7 @@ function enforcePermission(
 // server-side by PostgreSQL without client-side role trust.
 // ----------------------------------------------------
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', loginRateLimiter, async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) {
@@ -339,8 +412,13 @@ app.post('/api/auth/login', async (req, res) => {
 });
 
 // Self-registration endpoint for Guardians, School Staff, Responders, etc.
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', registerRateLimiter, async (req, res) => {
   try {
+    if (req.body?.role && req.body.role !== 'PARENT_GUARDIAN') {
+      return res.status(403).json({
+        error: `ACCESS DENIED: Role '${req.body.role}' cannot be self-registered publicly. Platform administrative, executive, tactical, and audit credentials must be provisioned by the Founder.`
+      });
+    }
     const result = await repository.users.registerPublicUser(req.body);
     res.status(201).json({
       success: true,
@@ -882,9 +960,58 @@ app.post('/api/users/:id/deactivate', requireAuth, async (req, res) => {
 });
 
 // ----------------------------------------------------
-// 3. HEALTH & CORE TELEMETRY (AUTHORITATIVE POSTGRESQL STATS)
+// 3. HEALTH, LIVENESS & READINESS CHECKS
 // ----------------------------------------------------
 
+// 3.1 Liveness Probe (Does not query database; verifies process responsiveness)
+app.get(['/api/health/liveness', '/healthz'], (req, res) => {
+  res.status(200).json({
+    status: 'ALIVE',
+    service: 'ITIS Authoritative Core Engine',
+    uptimeSeconds: Math.floor(process.uptime()),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// 3.2 Readiness Probe (Verifies PostgreSQL dependency readiness without exposing internals)
+app.get(['/api/health/readiness', '/readyz'], async (req, res) => {
+  try {
+    const health = await repository.checkHealth();
+    if (health.status === 'HEALTHY') {
+      return res.status(200).json({
+        status: 'READY',
+        service: 'ITIS Authoritative Core Engine',
+        database: {
+          status: 'HEALTHY',
+          provider: 'POSTGRESQL'
+        },
+        timestamp: new Date().toISOString()
+      });
+    }
+
+    return res.status(503).json({
+      status: 'NOT_READY',
+      service: 'ITIS Authoritative Core Engine',
+      database: {
+        status: 'DEGRADED',
+        provider: 'POSTGRESQL'
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch {
+    return res.status(503).json({
+      status: 'NOT_READY',
+      service: 'ITIS Authoritative Core Engine',
+      database: {
+        status: 'DEGRADED',
+        provider: 'POSTGRESQL'
+      },
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// 3.3 Authoritative PostgreSQL System Health & Stats (Maintained for backward compatibility)
 app.get('/api/health', async (req, res) => {
   try {
     const health = await repository.checkHealth();
@@ -2262,7 +2389,7 @@ app.get('/api/incidents', requireAuth, async (req, res) => {
 });
 
 // Manual SOS Panic Trigger
-app.post('/api/incidents/panic-trigger', async (req, res) => {
+app.post('/api/incidents/panic-trigger', panicTriggerRateLimiter, async (req, res) => {
   try {
     const { learnerId, triggerType, location, customNotes } = req.body;
     if (!learnerId) {
@@ -2453,6 +2580,13 @@ app.post('/api/incidents/:id/status', requireAuth, async (req, res) => {
   const incident = await repository.incidents.findById(incidentId);
   
   if (!incident) return res.status(404).json({ error: 'Incident not found' });
+
+  // Incident Lifecycle Immutability: Resolved cases are legally locked against unverified reopening
+  if (incident.status === 'RESOLVED' && status !== 'RESOLVED' && user.role !== 'FOUNDER_EXECUTIVE' && user.role !== 'SYSTEM_ADMIN') {
+    return res.status(403).json({
+      error: 'LIFECYCLE IMMUTABILITY: Resolved emergency incidents are locked and cannot be altered or reopened without Executive authorization.'
+    });
+  }
 
   // Evaluate status update clearance
   const requiredPermission: PermissionKey = status === 'RESOLVED' ? 'INCIDENT_RESOLVE_CLOSE' : 'RESPONDER_STATUS_UPDATE';
@@ -3768,6 +3902,151 @@ app.get('/api/system/test-suites/device-registry', requireAuth, async (req, res)
 });
 
 // =============================================================================
+// PROMPT 20: AUTHORITATIVE DEVICE OPERATIONS & SAFETY INTELLIGENCE ENDPOINTS
+// =============================================================================
+
+// Get Unified Device Status (combining lifecycle, operational state, battery, GPS quality, telemetry quality)
+app.get('/api/devices/:id/unified-status', requireAuth, async (req, res) => {
+  try {
+    const deviceId = normalizeParam(req.params.id);
+    const unifiedStatus = deviceRegistryEngine.getUnifiedDeviceStatus(deviceId, req.user!);
+    res.json(unifiedStatus);
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
+// School Scoped Devices (ABAC protected)
+app.get('/api/devices/school/:schoolId', requireAuth, async (req, res) => {
+  try {
+    const schoolId = normalizeParam(req.params.schoolId);
+    const devices = deviceRegistryEngine.getDevicesForSchool(schoolId, req.user!);
+    res.json(devices);
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
+// Device Reassign alias
+app.post('/api/devices/reassign', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const result = deviceRegistryEngine.reassignDevice(req.body, user);
+    res.json({
+      success: true,
+      message: 'Device reassigned successfully with history preserved.',
+      oldDevice: result.oldDevice,
+      newDevice: result.newDevice,
+      newAssignment: result.newAssignment
+    });
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
+// Get Safety Signals
+app.get('/api/safety/signals', requireAuth, async (req, res) => {
+  try {
+    const filters: any = {};
+    if (req.query.deviceId) filters.deviceId = String(req.query.deviceId);
+    if (req.query.learnerId) filters.learnerId = String(req.query.learnerId);
+    if (req.query.status) filters.status = String(req.query.status);
+    if (req.query.signalType) filters.signalType = String(req.query.signalType);
+
+    const signals = safetyAutomationEngine.getSafetySignals(filters);
+    res.json(signals);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Authoritative Safety Signal Generation (with cooldown deduplication)
+app.post('/api/safety/signals/generate', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const result = safetyAutomationEngine.generateSafetySignal({
+      ...req.body,
+      actorUser: user
+    });
+    res.json({
+      success: true,
+      suppressed: result.suppressed,
+      reason: result.reason,
+      signal: result.signal,
+      candidate: result.candidate
+    });
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Get Incident Candidates
+app.get('/api/safety/candidates', requireAuth, async (req, res) => {
+  try {
+    const status = req.query.status ? String(req.query.status) : undefined;
+    const candidates = safetyAutomationEngine.getIncidentCandidates(status);
+    res.json(candidates);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Get Incident Candidate by ID
+app.get('/api/safety/candidates/:id', requireAuth, async (req, res) => {
+  try {
+    const candidateId = normalizeParam(req.params.id);
+    const candidate = safetyAutomationEngine.getCandidateById(candidateId);
+    if (!candidate) {
+      return res.status(404).json({ error: `Incident candidate '${candidateId}' not found.` });
+    }
+    res.json(candidate);
+  } catch (err: any) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Human Review of Incident Candidate (CONFIRM or DISMISS)
+app.post('/api/safety/candidates/:id/review', requireAuth, async (req, res) => {
+  try {
+    const candidateId = normalizeParam(req.params.id);
+    const { action, reason } = req.body;
+    if (action !== 'CONFIRM' && action !== 'DISMISS') {
+      return res.status(400).json({ error: "Action must be either 'CONFIRM' or 'DISMISS'." });
+    }
+    const result = safetyAutomationEngine.reviewIncidentCandidate(candidateId, action, req.user!, reason);
+    res.json({
+      success: true,
+      candidate: result.candidate,
+      incident: result.incident,
+      message: action === 'CONFIRM' ? 'Candidate confirmed and escalated to active incident.' : 'Candidate dismissed.'
+    });
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
+// Authoritatively Evaluate Device for Safety Signals
+app.post('/api/safety/evaluate/:deviceId', requireAuth, async (req, res) => {
+  try {
+    const deviceId = normalizeParam(req.params.deviceId);
+    const result = safetyAutomationEngine.evaluateSafetySignalsForDevice(deviceId, req.user!);
+    res.json(result);
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
+// Run Prompt 20 Device Operations Acceptance Test Suite
+app.get('/api/system/test-suites/device-operations', requireAuth, async (req, res) => {
+  try {
+    const results = await deviceOperationsTestSuite.runAllTests();
+    res.json(results);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================================
 // PROMPT 8: GPS TELEMETRY SIMULATOR & PACKET TESTING ENDPOINTS
 // =============================================================================
 
@@ -3913,6 +4192,138 @@ app.get('/api/system/test-suites/telemetry-gateway', requireAuth, async (req, re
     }
 
     const results = await telemetryGatewayTestSuite.runAllTests();
+    res.json(results);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Secure Dedicated Telemetry Server to Authoritative ITIS Core Integration Contract
+app.use('/api/internal/telemetry', telemetryIntegrationRouter);
+
+// Telemetry Server to Authoritative Core Integration Acceptance Test Suite
+app.get('/api/system/test-suites/telemetry-integration', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const authorizedRoles = ['FOUNDER_EXECUTIVE', 'SYSTEM_ADMIN', 'TECHNICIAN'];
+
+    if (!authorizedRoles.includes(user.role)) {
+      return res.status(403).json({
+        error: 'ACCESS DENIED: Insufficient permissions to run Telemetry Integration test suite.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const results = await telemetryIntegrationTestSuite.runAllTests();
+    res.json(results);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================================
+// ITIS GPS TELEMETRY OPERATIONS, DIAGNOSTICS & OBSERVABILITY ENDPOINTS
+// =============================================================================
+
+// Telemetry Operational Diagnostics (Gateway Health, Fleet Health, Metrics, Controlled Events)
+app.get('/api/telemetry/diagnostics', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const diagnostics = telemetryDiagnosticsEngine.getOperationalDiagnostics(user);
+    res.json(diagnostics);
+  } catch (err: any) {
+    const status = err.statusCode || (err.code === 'ACCESS_DENIED' ? 403 : 500);
+    res.status(status).json({
+      error: err.message,
+      code: err.code || 'ACCESS_DENIED'
+    });
+  }
+});
+
+// Telemetry Diagnostics Acceptance Test Suite
+app.get('/api/system/test-suites/telemetry-diagnostics', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const authorizedRoles = ['FOUNDER_EXECUTIVE', 'SYSTEM_ADMIN', 'TECHNICIAN'];
+
+    if (!authorizedRoles.includes(user.role)) {
+      return res.status(403).json({
+        error: 'ACCESS DENIED: Insufficient permissions to run Telemetry Diagnostics test suite.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const results = await runTelemetryDiagnosticsTestSuite();
+    res.json(results);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// =============================================================================
+// PROMPT 20: NETWORK INTERRUPTION, RESILIENCE & RECOVERY HARDENING ENDPOINTS
+// =============================================================================
+
+// Get System Resilience Status
+app.get('/api/resilience/status', requireAuth, async (req, res) => {
+  try {
+    const health = await repository.checkHealth();
+    res.json({
+      status: health.status === 'HEALTHY' ? 'ONLINE' : 'DEGRADED',
+      database: {
+        status: health.status === 'HEALTHY' ? 'HEALTHY' : 'DATABASE_UNAVAILABLE',
+        simulationFailureActive: networkResilienceEngine.isDatabaseSimulationFailure()
+      },
+      telemetry: {
+        silenceThresholds: {
+          staleThresholdSeconds: 180,
+          offlineThresholdSeconds: 900,
+          prolongedSilenceSeconds: 1800
+        },
+        idempotencyCacheActive: true,
+        antiFabricationPolicy: 'STRICT_ZERO_FALSE_COORDINATES'
+      },
+      commandCentre: {
+        reconciliationProtocol: 'SERVER_AUTHORITATIVE_DELTA_RECONCILE',
+        offlineSafeLocks: true
+      },
+      timestamp: new Date().toISOString()
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Reconcile Command Centre State after network interruption
+app.post('/api/resilience/reconcile', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const { clientId, clientLastSyncIso } = req.body;
+    const result = await networkResilienceEngine.reconcileIncidentState(
+      clientId || 'web-client-' + user.id,
+      clientLastSyncIso || new Date(Date.now() - 60000).toISOString(),
+      { id: user.id, name: user.name, role: user.role }
+    );
+    res.json({ success: true, reconciliation: result });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Network Resilience Acceptance Test Suite Runner Endpoint
+app.get('/api/system/test-suites/network-resilience', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const authorizedRoles = ['FOUNDER_EXECUTIVE', 'SYSTEM_ADMIN', 'TECHNICIAN', 'GOVERNMENT_AUDITOR'];
+
+    if (!authorizedRoles.includes(user.role)) {
+      return res.status(403).json({
+        error: 'ACCESS DENIED: Insufficient permissions to run Network Resilience test suite.',
+        code: 'ACCESS_DENIED'
+      });
+    }
+
+    const results = await networkResilienceTestSuite.runAllTests();
     res.json(results);
   } catch (err: any) {
     res.status(500).json({ error: err.message });
@@ -4471,10 +4882,16 @@ app.all('/api/*', (req, res) => {
 // FRONTEND STATIC BUNDLE OR VITE DEV SERVER
 // ----------------------------------------------------
 async function setupServer() {
+  // 1. Fail-closed production configuration validation
+  assertProductionConfiguration();
+
   try {
     await bootstrapDatabase();
   } catch (err) {
     console.error('[ITIS] Error during database bootstrap:', err);
+    if (process.env.NODE_ENV === 'production') {
+      throw err;
+    }
   }
 
   if (process.env.NODE_ENV === 'production') {

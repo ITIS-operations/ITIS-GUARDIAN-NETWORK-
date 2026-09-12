@@ -38,6 +38,11 @@ export class DedicatedTelemetryServer {
       quarantinedPackets: 0,
       rateLimitExceededCount: 0,
       oversizedPacketsCount: 0,
+      malformedPacketsCount: 0,
+      crcFailuresCount: 0,
+      duplicateSuppressedCount: 0,
+      unauthorizedDevicesCount: 0,
+      connectionErrorsCount: 0,
       activeConnectionsCount: 0,
       peakConnectionsCount: 0,
       startTime: new Date()

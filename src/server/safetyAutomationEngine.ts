@@ -20,7 +20,12 @@ import {
   ActiveUserSession,
   AuthoritativeTelemetryRecord,
   IncidentAlert,
-  IncidentSeverity
+  IncidentSeverity,
+  SafetySignal,
+  SafetySignalType,
+  SafetySignalSource,
+  IncidentCandidate,
+  SafetyIntelligenceEvaluationResult
 } from '../types.js';
 import { db } from './dbStore.js';
 import { repository } from './db/index.js';
@@ -50,6 +55,11 @@ export class SafetyAutomationEngine {
   private alerts: Map<string, SafetyAlertRecord> = new Map();
   // Cooldown tracker: key is `${ruleId}:${deviceId}`
   private cooldowns: Map<string, { lastTriggeredAt: number; suppressedCount: number }> = new Map();
+
+  // Prompt 20 Safety Intelligence Signal & Incident Candidate Stores
+  private safetySignals: Map<string, SafetySignal> = new Map();
+  private incidentCandidates: Map<string, IncidentCandidate> = new Map();
+  private signalCooldowns: Map<string, { lastGeneratedAt: number; count: number }> = new Map();
 
   // Active listener for incident delta events (provided by server.ts if registered)
   private deltaNotifier: ((eventType: string, data: any) => void) | null = null;
@@ -872,7 +882,7 @@ export class SafetyAutomationEngine {
       if (rule.autoEscalateToIncident && learnerId) {
         const escalatedIncident = await this.escalateAlertToInternalIncident(
           alertRecord,
-          rule.autoEscalateSeverity || 'CRITICAL_SOS',
+          (rule.autoEscalateSeverity as any) || 'CRITICAL_SOS',
           actor
         );
         result.escalatedIncidents.push({
@@ -1092,10 +1102,485 @@ export class SafetyAutomationEngine {
     return null;
   }
 
+  // ====================================================
+  // PROMPT 20: SAFETY INTELLIGENCE SIGNALS & CANDIDATES
+  // ====================================================
+
+  /**
+   * Authoritatively generate a Safety Signal with cooldown deduplication.
+   * If severity is CRITICAL, automatically creates an IncidentCandidate for human operator review.
+   * NOTE: Responders are NEVER automatically dispatched.
+   */
+  public generateSafetySignal(params: {
+    signalType: SafetySignalType;
+    severity: SafetyRuleSeverity;
+    deviceId: string;
+    trackerDeviceId?: string;
+    learnerId?: string | null;
+    schoolId?: string | null;
+    confidence?: number;
+    source?: SafetySignalSource;
+    details?: Record<string, any>;
+    actorUser?: ActiveUserSession;
+    cooldownSeconds?: number;
+  }): { signal: SafetySignal; candidate?: IncidentCandidate; suppressed: boolean; reason?: string } {
+    const now = Date.now();
+    const cooldownPeriodMs = (params.cooldownSeconds ?? 300) * 1000;
+    const cooldownKey = `${params.deviceId}:${params.signalType}`;
+
+    const existingCooldown = this.signalCooldowns.get(cooldownKey);
+    if (existingCooldown && (now - existingCooldown.lastGeneratedAt) < cooldownPeriodMs) {
+      existingCooldown.count++;
+      let activeSignal: SafetySignal | undefined;
+      for (const sig of this.safetySignals.values()) {
+        if (sig.deviceId === params.deviceId && sig.signalType === params.signalType && sig.status !== 'RESOLVED' && sig.status !== 'DISMISSED') {
+          activeSignal = sig;
+          break;
+        }
+      }
+
+      if (activeSignal) {
+        activeSignal.suppressedDuplicateCount++;
+        activeSignal.updatedAt = new Date().toISOString();
+      }
+
+      db.logAuditEvent({
+        actionType: 'SAFETY_SIGNAL_SUPPRESSED',
+        actorUserId: params.actorUser?.id || 'SYSTEM_SAFETY_ENGINE',
+        actorName: params.actorUser?.name || 'Safety Intelligence Automation',
+        actorRole: params.actorUser?.role || 'SYSTEM_ADMIN',
+        targetEntity: 'SYSTEM' as any,
+        targetId: activeSignal?.id || `SIG-SUPPRESSED-${params.deviceId}`,
+        details: {
+          signalType: params.signalType,
+          deviceId: params.deviceId,
+          cooldownWindowSeconds: params.cooldownSeconds ?? 300,
+          elapsedSecondsSinceLast: Math.floor((now - existingCooldown.lastGeneratedAt) / 1000),
+          suppressionCount: existingCooldown.count
+        }
+      });
+
+      return {
+        signal: activeSignal || {
+          id: `SIG-SUPPRESSED-${Date.now()}`,
+          signalType: params.signalType,
+          severity: params.severity,
+          deviceId: params.deviceId,
+          trackerDeviceId: params.trackerDeviceId || params.deviceId,
+          timestamp: new Date().toISOString(),
+          confidence: params.confidence ?? 0.85,
+          source: params.source || 'SYSTEM_MONITOR',
+          status: 'NEW',
+          suppressedDuplicateCount: existingCooldown.count,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
+        },
+        suppressed: true,
+        reason: `Signal suppressed: Cooldown of ${params.cooldownSeconds ?? 300}s active (${Math.floor((now - existingCooldown.lastGeneratedAt) / 1000)}s elapsed).`
+      };
+    }
+
+    const device = db.devices.get(params.deviceId);
+    const trackerDeviceId = params.trackerDeviceId || device?.trackerDeviceId || params.deviceId;
+    const learnerId = params.learnerId !== undefined ? params.learnerId : (device?.assignedLearnerId || null);
+    let learnerName: string | undefined;
+    let schoolId = params.schoolId !== undefined ? params.schoolId : (device?.assignedSchoolId || null);
+    let schoolName: string | undefined;
+
+    if (learnerId) {
+      const lrn = db.learners.get(learnerId);
+      const hyd = db.getHydratedLearner(learnerId);
+      if (hyd) {
+        learnerName = `${hyd.person.firstName} ${hyd.person.lastName}`;
+        if (!schoolId && hyd.currentSchool) {
+          schoolId = hyd.currentSchool.id;
+          schoolName = hyd.currentSchool.name;
+        }
+      } else if (lrn) {
+        learnerName = lrn.emisId;
+        if (!schoolId) schoolId = (lrn as any).schoolId;
+      }
+    }
+
+    if (schoolId && !schoolName) {
+      schoolName = db.schools.get(schoolId)?.name;
+    }
+
+    const signalId = `SIG-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+    const timestamp = new Date().toISOString();
+
+    const signal: SafetySignal = {
+      id: signalId,
+      signalType: params.signalType,
+      severity: params.severity,
+      learnerId,
+      learnerName,
+      deviceId: params.deviceId,
+      trackerDeviceId,
+      schoolId,
+      schoolName,
+      timestamp,
+      confidence: params.confidence ?? 0.90,
+      source: params.source || 'SYSTEM_MONITOR',
+      details: params.details,
+      status: 'NEW',
+      suppressedDuplicateCount: 0,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    };
+
+    this.safetySignals.set(signalId, signal);
+    this.signalCooldowns.set(cooldownKey, { lastGeneratedAt: now, count: 0 });
+
+    db.logAuditEvent({
+      actionType: 'SAFETY_SIGNAL_GENERATED',
+      actorUserId: params.actorUser?.id || 'SYSTEM_SAFETY_ENGINE',
+      actorName: params.actorUser?.name || 'Safety Intelligence Automation',
+      actorRole: params.actorUser?.role || 'SYSTEM_ADMIN',
+      targetEntity: 'SYSTEM' as any,
+      targetId: signal.id,
+      details: {
+        signalType: signal.signalType,
+        severity: signal.severity,
+        deviceId: signal.deviceId,
+        trackerDeviceId: signal.trackerDeviceId,
+        confidence: signal.confidence,
+        learnerId: signal.learnerId
+      }
+    });
+
+    let candidate: IncidentCandidate | undefined;
+    if (params.severity === 'CRITICAL') {
+      const candidateId = `CAND-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+      const candidateNumber = `CAND-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+
+      let lastTelemetrySecs = 0;
+      const lastContact = device?.lastTelemetryTimestamp || device?.lastHeartbeatTimestamp || device?.lastCommunicationTimestamp || device?.lastKnownLocation?.timestamp;
+      if (lastContact) {
+        lastTelemetrySecs = Math.max(0, Math.floor((Date.now() - new Date(lastContact).getTime()) / 1000));
+      }
+
+      let gpsQual: 'GOOD' | 'MODERATE' | 'WEAK' | 'UNAVAILABLE' = 'UNAVAILABLE';
+      if (device?.lastKnownLocation?.accuracyMeters) {
+        if (device.lastKnownLocation.accuracyMeters < 10) gpsQual = 'GOOD';
+        else if (device.lastKnownLocation.accuracyMeters <= 30) gpsQual = 'MODERATE';
+        else gpsQual = 'WEAK';
+      }
+
+      candidate = {
+        id: candidateId,
+        candidateNumber,
+        signalId: signal.id,
+        signalType: signal.signalType,
+        severity: signal.severity,
+        deviceId: signal.deviceId,
+        trackerDeviceId: signal.trackerDeviceId,
+        learnerId: signal.learnerId,
+        learnerName: signal.learnerName,
+        schoolId: signal.schoolId,
+        schoolName: signal.schoolName,
+        deviceStatus: device?.deviceStatus || 'ASSIGNED',
+        lastKnownLocation: device?.lastKnownLocation ? {
+          lat: device.lastKnownLocation.latitude,
+          lng: device.lastKnownLocation.longitude,
+          accuracyMeters: device.lastKnownLocation.accuracyMeters,
+          addressDescription: device.lastKnownLocation.addressDescription
+        } : undefined,
+        timeSinceLastTelemetrySeconds: lastTelemetrySecs,
+        batteryPercentage: device?.batteryStatus?.percentage ?? 100,
+        gpsQuality: gpsQual,
+        relatedIncidents: [],
+        createdAt: timestamp,
+        reviewStatus: 'PENDING_REVIEW',
+        autoDispatchedResponders: false
+      };
+
+      this.incidentCandidates.set(candidateId, candidate);
+
+      signal.escalatedToIncidentCandidate = true;
+      signal.incidentCandidateId = candidateId;
+      signal.status = 'ESCALATED';
+
+      db.logAuditEvent({
+        actionType: 'SAFETY_SIGNAL_ESCALATED',
+        actorUserId: params.actorUser?.id || 'SYSTEM_SAFETY_ENGINE',
+        actorName: params.actorUser?.name || 'Safety Intelligence Automation',
+        actorRole: params.actorUser?.role || 'SYSTEM_ADMIN',
+        targetEntity: 'SYSTEM' as any,
+        targetId: candidate.id,
+        details: {
+          candidateNumber: candidate.candidateNumber,
+          signalId: signal.id,
+          signalType: signal.signalType,
+          severity: signal.severity,
+          autoDispatchedResponders: false
+        }
+      });
+    }
+
+    return { signal, candidate, suppressed: false };
+  }
+
+  /**
+   * Evaluate a device for Safety Intelligence Signals (e.g., OFFLINE, LOW_BATTERY, GPS_SIGNAL_LOST)
+   */
+  public evaluateSafetySignalsForDevice(
+    deviceId: string,
+    actorUser?: ActiveUserSession
+  ): SafetyIntelligenceEvaluationResult {
+    const device = db.devices.get(deviceId);
+    const result: SafetyIntelligenceEvaluationResult = {
+      evaluated: true,
+      deviceId,
+      signalsGenerated: [],
+      signalsSuppressed: [],
+      candidatesCreated: [],
+      incidentCandidatesCreated: []
+    };
+
+    if (!device) return result;
+
+    const lastContact = device.lastTelemetryTimestamp || device.lastHeartbeatTimestamp || device.lastCommunicationTimestamp || device.lastKnownLocation?.timestamp;
+    if (lastContact) {
+      const elapsedSeconds = Math.max(0, Math.floor((Date.now() - new Date(lastContact).getTime()) / 1000));
+      if (elapsedSeconds >= 600) {
+        const isProlonged = elapsedSeconds >= 1800;
+        const res = this.generateSafetySignal({
+          signalType: isProlonged ? 'PROLONGED_SILENCE' : 'DEVICE_OFFLINE',
+          severity: isProlonged ? 'CRITICAL' : 'HIGH',
+          deviceId: device.itisDeviceId,
+          trackerDeviceId: device.trackerDeviceId,
+          confidence: 0.95,
+          actorUser,
+          details: { elapsedSeconds, thresholdSeconds: 600 }
+        });
+        if (res.suppressed) {
+          result.signalsSuppressed.push({
+            signalType: res.signal.signalType,
+            deviceId: res.signal.deviceId,
+            reason: 'Signal suppressed within active cooldown window'
+          });
+        } else {
+          result.signalsGenerated.push(res.signal);
+          if (res.candidate) {
+            result.candidatesCreated.push(res.candidate);
+            result.incidentCandidatesCreated!.push(res.candidate);
+          }
+        }
+      }
+    }
+
+    const batteryPct = device.batteryStatus?.percentage;
+    if (batteryPct !== undefined) {
+      if (batteryPct < 10) {
+        const res = this.generateSafetySignal({
+          signalType: 'CRITICAL_BATTERY',
+          severity: 'CRITICAL',
+          deviceId: device.itisDeviceId,
+          trackerDeviceId: device.trackerDeviceId,
+          confidence: 0.98,
+          actorUser,
+          details: { batteryPercentage: batteryPct, threshold: 10 }
+        });
+        if (res.suppressed) {
+          result.signalsSuppressed.push({
+            signalType: res.signal.signalType,
+            deviceId: res.signal.deviceId,
+            reason: 'Signal suppressed within active cooldown window'
+          });
+        } else {
+          result.signalsGenerated.push(res.signal);
+          if (res.candidate) {
+            result.candidatesCreated.push(res.candidate);
+            result.incidentCandidatesCreated!.push(res.candidate);
+          }
+        }
+      } else if (batteryPct < 20) {
+        const res = this.generateSafetySignal({
+          signalType: 'LOW_BATTERY',
+          severity: 'MEDIUM',
+          deviceId: device.itisDeviceId,
+          trackerDeviceId: device.trackerDeviceId,
+          confidence: 0.95,
+          actorUser,
+          details: { batteryPercentage: batteryPct, threshold: 20 }
+        });
+        if (res.suppressed) {
+          result.signalsSuppressed.push({
+            signalType: res.signal.signalType,
+            deviceId: res.signal.deviceId,
+            reason: 'Signal suppressed within active cooldown window'
+          });
+        } else {
+          result.signalsGenerated.push(res.signal);
+          if (res.candidate) {
+            result.candidatesCreated.push(res.candidate);
+            result.incidentCandidatesCreated!.push(res.candidate);
+          }
+        }
+      }
+    }
+
+    if (device.lastKnownLocation?.accuracyMeters && device.lastKnownLocation.accuracyMeters > 50) {
+      const res = this.generateSafetySignal({
+        signalType: 'GPS_SIGNAL_LOST',
+        severity: 'MEDIUM',
+        deviceId: device.itisDeviceId,
+        trackerDeviceId: device.trackerDeviceId,
+        confidence: 0.85,
+        actorUser,
+        details: { accuracyMeters: device.lastKnownLocation.accuracyMeters }
+      });
+      if (res.suppressed) {
+        result.signalsSuppressed.push({
+          signalType: res.signal.signalType,
+          deviceId: res.signal.deviceId,
+          reason: 'Signal suppressed within active cooldown window'
+        });
+      } else {
+        result.signalsGenerated.push(res.signal);
+        if (res.candidate) {
+          result.candidatesCreated.push(res.candidate);
+          result.incidentCandidatesCreated!.push(res.candidate);
+        }
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Authoritatively review an Incident Candidate (CONFIRM -> Active Incident, DISMISS -> Dismissed Candidate)
+   */
+  public reviewIncidentCandidate(
+    candidateId: string,
+    action: 'CONFIRM' | 'DISMISS',
+    actorUser: ActiveUserSession,
+    reason?: string
+  ): { candidate: IncidentCandidate; incident?: any } {
+    const candidate = this.incidentCandidates.get(candidateId);
+    if (!candidate) {
+      const err: any = new Error(`Incident candidate '${candidateId}' not found.`);
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (candidate.reviewStatus !== 'PENDING_REVIEW') {
+      const err: any = new Error(`Incident candidate '${candidateId}' has already been reviewed (Status: ${candidate.reviewStatus}).`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const reviewedAt = new Date().toISOString();
+
+    if (action === 'CONFIRM') {
+      candidate.reviewStatus = 'CONFIRMED_INCIDENT';
+      candidate.reviewedByUserId = actorUser.id;
+      candidate.reviewedAt = reviewedAt;
+
+      const incidentId = `INC-${Date.now().toString(36).toUpperCase()}`;
+      const incident = {
+        id: incidentId,
+        incidentNumber: `INC-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+        learnerId: candidate.learnerId || '',
+        deviceId: candidate.deviceId,
+        trackerDeviceId: candidate.trackerDeviceId,
+        schoolId: candidate.schoolId || null,
+        type: 'SAFETY_INTELLIGENCE_ESCALATION',
+        status: 'ACTIVE_ALARM',
+        severity: candidate.severity === 'CRITICAL' ? 'CRITICAL_SOS' : 'HIGH_PRIORITY',
+        description: `Confirmed incident from candidate ${candidate.candidateNumber} (${candidate.signalType}).`,
+        createdAt: reviewedAt,
+        updatedAt: reviewedAt,
+        location: candidate.lastKnownLocation ? {
+          latitude: candidate.lastKnownLocation.lat,
+          longitude: candidate.lastKnownLocation.lng,
+          addressDescription: candidate.lastKnownLocation.addressDescription || 'Last known GPS fix',
+          timestamp: reviewedAt
+        } : undefined
+      };
+
+      db.incidents.set(incidentId, incident as any);
+      candidate.escalatedIncidentId = incidentId;
+
+      const signal = this.safetySignals.get(candidate.signalId);
+      if (signal) {
+        signal.status = 'ESCALATED';
+        signal.updatedAt = reviewedAt;
+      }
+
+      db.logAuditEvent({
+        actionType: 'INCIDENT_REPORT_SUBMITTED',
+        actorUserId: actorUser.id,
+        actorName: actorUser.name,
+        actorRole: actorUser.role,
+        targetEntity: 'INCIDENT',
+        targetId: incidentId,
+        details: {
+          candidateId: candidate.id,
+          candidateNumber: candidate.candidateNumber,
+          signalType: candidate.signalType,
+          reason
+        }
+      });
+
+      return { candidate, incident };
+    } else {
+      candidate.reviewStatus = 'DISMISSED';
+      candidate.reviewedByUserId = actorUser.id;
+      candidate.reviewedAt = reviewedAt;
+      candidate.dismissReason = reason || 'Dismissed after operational evaluation';
+
+      const signal = this.safetySignals.get(candidate.signalId);
+      if (signal) {
+        signal.status = 'DISMISSED';
+        signal.updatedAt = reviewedAt;
+      }
+
+      db.logAuditEvent({
+        actionType: 'SAFETY_SIGNAL_DISMISSED',
+        actorUserId: actorUser.id,
+        actorName: actorUser.name,
+        actorRole: actorUser.role,
+        targetEntity: 'SYSTEM' as any,
+        targetId: candidate.id,
+        details: {
+          candidateNumber: candidate.candidateNumber,
+          signalId: candidate.signalId,
+          reason: candidate.dismissReason
+        }
+      });
+
+      return { candidate };
+    }
+  }
+
+  public getSafetySignals(filter?: { deviceId?: string; learnerId?: string; status?: string; signalType?: SafetySignalType }): SafetySignal[] {
+    let list = Array.from(this.safetySignals.values());
+    if (filter?.deviceId) list = list.filter(s => s.deviceId === filter.deviceId);
+    if (filter?.learnerId) list = list.filter(s => s.learnerId === filter.learnerId);
+    if (filter?.status) list = list.filter(s => s.status === filter.status);
+    if (filter?.signalType) list = list.filter(s => s.signalType === filter.signalType);
+    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  public getIncidentCandidates(status?: string): IncidentCandidate[] {
+    let list = Array.from(this.incidentCandidates.values());
+    if (status) list = list.filter(c => c.reviewStatus === status);
+    return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }
+
+  public getCandidateById(candidateId: string): IncidentCandidate | null {
+    return this.incidentCandidates.get(candidateId) || null;
+  }
+
   // Clear test data for clean unit test runs
   public clearTestData(): void {
     this.alerts.clear();
     this.cooldowns.clear();
+    this.safetySignals.clear();
+    this.incidentCandidates.clear();
+    this.signalCooldowns.clear();
   }
 }
 

@@ -463,11 +463,39 @@ export interface ImmutableAuditEvent {
     | 'INVALID_PROTOCOL_DEVICE_COMBINATION'
     | 'TELEMETRY_INCIDENT_CORRELATED'
     | 'AUTOMATION_RULE_TRIGGERED'
-    | 'SAFETY_AUTOMATION_CONFIGURED';
+    | 'SAFETY_AUTOMATION_CONFIGURED'
+    | 'TELEMETRY_SERVICE_INGEST_AUTHORIZED'
+    | 'TELEMETRY_SERVICE_ACCESS_DENIED'
+    | 'DEVICE_HEALTH_RECORDED'
+    | 'DEVICE_CONNECTION_STATE_RECORDED'
+    | 'HEARTBEAT_RECEIVED'
+    | 'ACK_STATUS_RECORDED'
+    | 'TELEMETRY_DIAGNOSTICS_VIEWED'
+    | 'OLDER_LOCATION_REJECTED'
+    | 'DEVICE_REASSIGNED'
+    | 'DEVICE_OFFLINE_DETECTED'
+    | 'LOW_BATTERY_DETECTED'
+    | 'SAFETY_SIGNAL_GENERATED'
+    | 'SAFETY_SIGNAL_ESCALATED'
+    | 'SAFETY_SIGNAL_SUPPRESSED'
+    | 'SAFETY_SIGNAL_DISMISSED'
+    | 'INCIDENT_CREATED'
+    | 'INCIDENT_PRIORITIZED'
+    | 'INCIDENT_ACKNOWLEDGED'
+    | 'RESPONDER_ASSIGNED'
+    | 'INCIDENT_ESCALATED'
+    | 'COMMAND_HANDOVER'
+    | 'COMMAND_RELEASED'
+    | 'COMMAND_NOTE_ADDED'
+    | 'SUPERVISORY_REVIEW_COMPLETED'
+    | 'INCIDENT_CLOSED'
+    | 'INCIDENT_CANCELLED'
+    | 'DISPATCH_CANCELLED'
+    | 'RESPONDER_REASSIGNED';
   actorUserId: string;
   actorName: string;
   actorRole: string;
-  targetEntity: 'PERSON' | 'LEARNER' | 'GUARDIAN' | 'RELATIONSHIP' | 'ENROLMENT' | 'ACADEMIC_RECORD' | 'INCIDENT' | 'USER' | 'POLICY' | 'SYSTEM' | 'SCHOOL' | 'RESPONDER' | 'DEVICE' | 'HARDWARE' | 'GATEWAY' | 'LOCATION' | 'TELEMETRY' | 'SAFETY_ALERT' | 'AUTOMATION_RULE';
+  targetEntity: 'PERSON' | 'LEARNER' | 'GUARDIAN' | 'RELATIONSHIP' | 'ENROLMENT' | 'ACADEMIC_RECORD' | 'INCIDENT' | 'USER' | 'POLICY' | 'SYSTEM' | 'SCHOOL' | 'RESPONDER' | 'DEVICE' | 'HARDWARE' | 'GATEWAY' | 'LOCATION' | 'TELEMETRY' | 'SAFETY_ALERT' | 'AUTOMATION_RULE' | 'SERVICE' | 'TELEMETRY_SERVICE' | 'TELEMETRY_GATEWAY';
   targetId: string;
   details: Record<string, any>;
   ipAddress: string;
@@ -475,8 +503,96 @@ export interface ImmutableAuditEvent {
 }
 
 // Safety Telemetry & Incidents
-export type IncidentSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL_SOS';
-export type IncidentStatus = 'ACTIVE_ALARM' | 'DISPATCHED' | 'ON_SCENE' | 'CONTAINED' | 'RESOLVED';
+export type IncidentSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | 'CRITICAL_SOS';
+export type IncidentStatus = 
+  | 'NEW'
+  | 'QUEUED'
+  | 'ACKNOWLEDGED'
+  | 'CLAIMED'
+  | 'DISPATCHED'
+  | 'EN_ROUTE'
+  | 'ON_SCENE'
+  | 'ACTIVE'
+  | 'ACTIVE_ALARM'
+  | 'CONTAINED'
+  | 'RESOLVED'
+  | 'CLOSED'
+  | 'CANCELLED';
+
+export interface IncidentTimelineEvent {
+  id: string;
+  incidentId: string;
+  eventType: 
+    | 'INCIDENT_CREATED'
+    | 'INCIDENT_PRIORITIZED'
+    | 'INCIDENT_ACKNOWLEDGED'
+    | 'INCIDENT_CLAIMED'
+    | 'RESPONDER_ASSIGNED'
+    | 'DISPATCH_ACTIVATED'
+    | 'RESPONDER_ACCEPTED'
+    | 'RESPONDER_EN_ROUTE'
+    | 'RESPONDER_ARRIVED'
+    | 'SCENE_SECURED'
+    | 'ASSISTANCE_REQUESTED'
+    | 'INCIDENT_ESCALATED'
+    | 'COMMAND_HANDOVER'
+    | 'COMMAND_RELEASED'
+    | 'COMMAND_NOTE_ADDED'
+    | 'INCIDENT_RESOLVED'
+    | 'SUPERVISORY_REVIEW_COMPLETED'
+    | 'INCIDENT_CLOSED'
+    | 'INCIDENT_CANCELLED'
+    | 'DISPATCH_CANCELLED';
+  actorUserId?: string;
+  actorName: string;
+  actorRole: string;
+  timestamp: string;
+  notes?: string;
+  latitude?: number;
+  longitude?: number;
+  payload?: Record<string, any>;
+}
+
+export interface IncidentResolutionDetails {
+  status: 'RESOLVED' | 'CLOSED' | 'CANCELLED';
+  category: 
+    | 'LEARNER_SAFE_RECOVERY'
+    | 'FALSE_ALARM'
+    | 'MEDICAL_ASSISTANCE_RENDERED'
+    | 'POLICE_INTERVENTION'
+    | 'COMMUNITY_ESCORT'
+    | 'PARENT_COLLECTED'
+    | 'OTHER';
+  summary: string;
+  emergencyServicesInvolved: boolean;
+  followUpRequired: boolean;
+  resolvedByUserId: string;
+  resolvedByUserName: string;
+  resolvedByUserRole: string;
+  timestamp: string;
+}
+
+export interface IncidentSupervisoryReview {
+  decision: 'APPROVE_CLOSURE' | 'RETURN_FOR_REVIEW' | 'REQUEST_ADDITIONAL_INFO';
+  reviewedByUserId: string;
+  reviewedByUserName: string;
+  reviewedByUserRole: string;
+  reviewedAt: string;
+  notes?: string;
+}
+
+export interface IncidentSlaMetrics {
+  slaTargetSeconds: number;
+  elapsedSeconds: number;
+  slaBreached: boolean;
+  slaBreachedAt?: string;
+  timeToAcknowledgeSeconds?: number;
+  timeToClaimSeconds?: number;
+  timeToDispatchSeconds?: number;
+  timeToAcceptSeconds?: number;
+  timeToArriveSeconds?: number;
+  timeToResolveSeconds?: number;
+}
 
 // ----------------------------------------------------
 // PHASE RESPONDER-04: "UBER FOR EMERGENCY RESPONSE"
@@ -524,9 +640,14 @@ export interface ResponderUnit {
     addressDescription: string;
     isVerified?: boolean;
     lastReportedAt?: string;
+    heading?: number;
+    speed?: number;
+    accuracy?: number;
   };
   status: ResponderOperationalState;
+  operationalState?: ResponderOperationalState;
   currentIncidentId?: string;
+  activeIncidentId?: string;
   assignedUserId?: string;
   capabilities: string[];
   ratingScore?: number;
@@ -659,6 +780,7 @@ export interface TacticalMapLayerSettings {
 
 export interface IncidentAlert {
   id: string;
+  incidentNumber?: string;
   learnerId: string;
   learnerName: string;
   learnerGrade: string;
@@ -667,10 +789,18 @@ export interface IncidentAlert {
   guardianName: string;
   guardianMobile: string;
   timestamp: string;
+  acknowledgedAt?: string;
+  acknowledgedByUserId?: string;
+  acknowledgedByUserName?: string;
+  dispatchedAt?: string;
+  responderAcceptedAt?: string;
+  responderArrivedAt?: string;
+  resolvedAt?: string;
+  closedAt?: string;
   severity: IncidentSeverity;
   status: IncidentStatus;
   operationalState?: ResponderOperationalState;
-  triggerType: 'MANUAL_SOS_BEACON' | 'APP_PANIC' | 'GEOFENCE_BREACH' | 'ROUTE_DEVIATION' | 'UNAUTHORIZED_PICKUP_ATTEMPT';
+  triggerType: 'MANUAL_SOS_BEACON' | 'APP_PANIC' | 'GEOFENCE_BREACH' | 'ROUTE_DEVIATION' | 'UNAUTHORIZED_PICKUP_ATTEMPT' | 'EMERGENCY_SOS' | 'PANIC' | 'DEVICE_TAMPER' | 'GEOFENCE_VIOLATION' | 'UNAUTHORIZED_PICKUP' | 'OFFLINE_DEVICE' | 'GUARDIAN_REPORT' | 'SCHOOL_REPORT' | 'CONFIDENTIAL_SAFETY_REPORT' | 'MANUAL_EMERGENCY' | string;
   location: {
     lat: number;
     lng: number;
@@ -699,11 +829,23 @@ export interface IncidentAlert {
     speed?: number;
     lastLocationUpdate?: string;
   };
+  dispatchInstructions?: string;
   isSimulation?: boolean;
   slaTargetSeconds: number; // e.g. 180 (3 min)
   elapsedSeconds: number;
+  slaBreached?: boolean;
+  slaBreachedAt?: string;
+  slaMetrics?: IncidentSlaMetrics;
   notes: string[];
   outcomeReport?: IncidentOutcomeReport;
+  resolutionDetails?: IncidentResolutionDetails;
+  supervisoryReview?: IncidentSupervisoryReview;
+  timeline?: IncidentTimelineEvent[];
+  idempotencyKey?: string;
+  sourceSignalId?: string;
+  sourceCandidateId?: string;
+  escalationCount?: number;
+  lastEscalatedAt?: string;
 }
 
 // User RBAC roles
@@ -1174,7 +1316,9 @@ export type ItisDeviceState =
   | 'UNREGISTERED' 
   | 'INVENTORY'
   | 'REGISTERED'
+  | 'PROVISIONED'
   | 'PROVISIONING' 
+  | 'AVAILABLE'
   | 'ACTIVE' 
   | 'ASSIGNED'
   | 'SUSPENDED' 
@@ -1183,6 +1327,64 @@ export type ItisDeviceState =
   | 'REPLACED'
   | 'RETIRED' 
   | 'FAULT';
+
+export type UnifiedDeviceOperationalState =
+  | 'ONLINE'
+  | 'OFFLINE'
+  | 'STALE'
+  | 'LOW_BATTERY'
+  | 'CRITICAL_BATTERY'
+  | 'GPS_WEAK'
+  | 'SUSPENDED'
+  | 'RETIRED'
+  | 'NO_TELEMETRY_RECEIVED';
+
+export interface UnifiedDeviceStatus {
+  deviceId: string;
+  trackerDeviceId: string;
+  lifecycleState: ItisDeviceState;
+  operationalState: UnifiedDeviceOperationalState;
+  connectionStatus: ItisDeviceConnectionStatus;
+  battery: {
+    percentage: number;
+    voltage?: number;
+    health: 'NORMAL' | 'LOW' | 'CRITICAL';
+  };
+  lastSeen?: {
+    timestamp: string;
+    elapsedSeconds: number;
+    formatted: string;
+  };
+  lastKnownLocation?: {
+    latitude: number;
+    longitude: number;
+    accuracyMeters: number;
+    accuracyFormatted: string;
+    timestamp: string;
+    speedKmh?: number;
+    heading?: number;
+  };
+  gpsQuality: 'GOOD' | 'MODERATE' | 'WEAK' | 'UNAVAILABLE';
+  telemetryQuality: {
+    validPacketsCount: number;
+    rejectedPacketsCount: number;
+    duplicatePacketsCount: number;
+    crcFailuresCount: number;
+    malformedPacketsCount: number;
+  };
+  assignment?: {
+    isAssigned: boolean;
+    learnerId?: string;
+    learnerName?: string;
+    schoolId?: string;
+    schoolName?: string;
+    assignedAt?: string;
+  };
+  safetyStatus: {
+    activeSignalsCount: number;
+    highestSignalSeverity?: SafetyRuleSeverity;
+  };
+}
 
 export type ItisDeviceActivationStatus = 
   | 'ACTIVATED' 
@@ -1240,6 +1442,7 @@ export type UnassignReason =
   | 'LEARNER_LEFT_SCHOOL' 
   | 'DEVICE_REPLACEMENT' 
   | 'MAINTENANCE_REQUIRED' 
+  | 'MAINTENANCE_REPAIR'
   | 'DEVICE_RETIRED' 
   | 'LOST_DEVICE' 
   | 'UPGRADE' 
@@ -1305,6 +1508,7 @@ export interface ItisDeviceRecord {
   provisionedAt?: string;
   provisionedByUserId?: string;
   provisionedByUserName?: string;
+  suspensionReasons?: string[];
 }
 
 export interface ProcureDevicePayload {
@@ -1328,6 +1532,7 @@ export interface ProcureDevicePayload {
   procurementDate?: string;
   initialBatteryPercentage?: number;
   assignedSchoolId?: string;
+  assignedSchoolName?: string;
   initialStatus?: 'INVENTORY' | 'REGISTERED';
 }
 
@@ -1336,6 +1541,7 @@ export interface ReplaceDevicePayload {
   newDeviceId: string;
   learnerId: string;
   reason?: string;
+  oldDeviceStatus?: ItisDeviceState;
   notes?: string;
 }
 
@@ -1450,31 +1656,46 @@ export interface GuardianAuthorizedDeviceView {
   lastTelemetryAt?: string;
   activeAlertCount: number;
   isEmergencyAlertActive: boolean;
+  statusMessage?: string;
+  batteryStatusText?: 'Good' | 'Low' | 'Critical';
+  lastSeenText?: string;
+  safeZoneStatus?: string;
+  emergencyContact?: string;
+  panicGuidance?: string;
 }
 
 export interface ProvisionDevicePayload {
   trackerDeviceId: string;
-  protocolType: ItisDeviceProtocolType;
-  deviceModel: string;
+  protocolType?: ItisDeviceProtocolType;
+  deviceModel?: string;
+  model?: string;
   imei?: string;
   simIdentifier?: string;
   firmwareVersion?: string;
   hardwareRevision?: string;
   initialBatteryPercentage?: number;
+  assignedSchoolId?: string;
+  assignedSchoolName?: string;
+  initialStatus?: 'INVENTORY' | 'REGISTERED' | 'PROVISIONED' | 'AVAILABLE';
 }
 
 export interface AssignDeviceToLearnerPayload {
   deviceId: string;
   learnerId: string;
+  schoolId?: string;
+  schoolName?: string;
   notes?: string;
   forceReassignIfOccupied?: boolean;
 }
 
 export interface ReassignDevicePayload {
   oldDeviceId?: string;
+  currentDeviceId?: string;
   newDeviceId: string;
-  learnerId: string;
-  unassignReason: UnassignReason | string;
+  learnerId?: string;
+  targetLearnerId?: string;
+  unassignReason?: UnassignReason | string;
+  reason?: string;
   notes?: string;
 }
 
@@ -1521,6 +1742,9 @@ export type TelemetrySimulationDiagnosticCode =
   | 'INVALID_DEVICE_PROTOCOL_COMBINATION'
   | 'DUPLICATE_PACKET'
   | 'ACCESS_DENIED'
+  | 'OVERSIZED_PACKET'
+  | 'RATE_LIMIT_EXCEEDED'
+  | 'CONNECTION_LIMIT_EXCEEDED'
   | 'TELEMETRY_PROCESSING_ERROR';
 
 export interface TelemetrySimulationRequest {
@@ -1605,6 +1829,8 @@ export interface TelemetryEnvelope {
   rawPacket: string; // Hex string for binary packets or stringified payload
   receivedAt: string;
   remoteAddress?: string;
+  remotePort?: number;
+  connectionId?: string;
   deviceIdentifier?: string; // Optional target device ID from transport metadata
   protocol?: string; // 'GT012' | 'SIMULATED_TEST_PROTOCOL' | 'AUTO'
   packetMetadata?: Record<string, any>;
@@ -1664,7 +1890,10 @@ export interface AuthoritativeTelemetryRecord {
   trackerDeviceId: string; // Physical Hardware Tracking Identifier (Serial / IMEI / Terminal ID)
   learnerId?: string | null; // Assigned Learner ID if mapped
   schoolId?: string | null; // School ID if learner is enrolled
-  timestamp: string; // Timestamp recorded on GPS hardware
+  timestamp: string; // Timestamp recorded on GPS hardware (Device Time)
+  deviceTime?: string; // Explicit device recorded time (Prompt 24 Section 14)
+  serverReceivedAt?: string; // Explicit server receipt time
+  databasePersistedAt?: string; // Explicit database persistence time
   latitude: number;
   longitude: number;
   accuracyMeters?: number;
@@ -1759,6 +1988,13 @@ export interface TelemetryGatewayStatus {
     totalDuplicates: number;
     totalQuarantined: number;
     lastIngestionTimestamp: string | null;
+    malformedPacketsCount?: number;
+    crcFailuresCount?: number;
+    duplicateSuppressedCount?: number;
+    unauthorizedDevicesCount?: number;
+    oversizedPacketsCount?: number;
+    rateLimitExceededCount?: number;
+    connectionErrorsCount?: number;
   };
   serverEnvironment: {
     nodeEnv: string;
@@ -2024,7 +2260,7 @@ export type SafetyAutomationEventType =
   | 'LOW_BATTERY'
   | 'EMERGENCY_SOS';
 
-export type SafetyRuleSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL_SOS';
+export type SafetyRuleSeverity = 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL' | 'CRITICAL_SOS';
 
 export interface SafetyRuleThresholds {
   offlineSilenceSeconds?: number;
@@ -2134,6 +2370,97 @@ export interface SafetyAutomationEvaluationResult {
     incidentId: string;
     severity: IncidentSeverity;
   }>;
+}
+
+// ----------------------------------------------------
+// SAFETY INTELLIGENCE & INCIDENT ESCALATION (PROMPT 20)
+// ----------------------------------------------------
+
+export type SafetySignalType =
+  | 'DEVICE_OFFLINE'
+  | 'LOW_BATTERY'
+  | 'CRITICAL_BATTERY'
+  | 'GPS_SIGNAL_LOST'
+  | 'UNUSUAL_MOVEMENT'
+  | 'PROLONGED_INACTIVITY'
+  | 'OUT_OF_EXPECTED_ZONE'
+  | 'GEOFENCE_EXIT'
+  | 'PROLONGED_SILENCE'
+  | 'TRACKER_TAMPER'
+  | 'EMERGENCY_SOS';
+
+export type SafetySignalSource =
+  | 'TELEMETRY_SIMULATION'
+  | 'REAL_HARDWARE_BENCH'
+  | 'CELLULAR_GATEWAY'
+  | 'RULE_ENGINE'
+  | 'SYSTEM_MONITOR';
+
+export interface SafetySignal {
+  id: string;
+  signalType: SafetySignalType;
+  severity: SafetyRuleSeverity;
+  learnerId?: string | null;
+  learnerName?: string;
+  deviceId: string;
+  trackerDeviceId: string;
+  schoolId?: string | null;
+  schoolName?: string;
+  timestamp: string;
+  confidence: number;
+  source: SafetySignalSource;
+  details?: Record<string, any>;
+  escalatedToIncidentCandidate?: boolean;
+  incidentCandidateId?: string | null;
+  status: 'NEW' | 'REVIEWING' | 'ESCALATED' | 'DISMISSED' | 'RESOLVED';
+  suppressedDuplicateCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface IncidentCandidate {
+  id: string;
+  candidateNumber: string;
+  signalId: string;
+  signalType: SafetySignalType;
+  severity: SafetyRuleSeverity;
+  deviceId: string;
+  trackerDeviceId: string;
+  learnerId?: string | null;
+  learnerName?: string;
+  schoolId?: string | null;
+  schoolName?: string;
+  deviceStatus: string;
+  lastKnownLocation?: {
+    lat: number;
+    lng: number;
+    accuracyMeters?: number;
+    addressDescription?: string;
+  };
+  timeSinceLastTelemetrySeconds: number;
+  batteryPercentage: number;
+  gpsQuality: 'GOOD' | 'MODERATE' | 'WEAK' | 'UNAVAILABLE';
+  relatedIncidents: string[];
+  createdAt: string;
+  reviewedByUserId?: string | null;
+  reviewedAt?: string | null;
+  reviewStatus: 'PENDING_REVIEW' | 'CONFIRMED_INCIDENT' | 'DISMISSED';
+  dismissReason?: string | null;
+  escalatedIncidentId?: string | null;
+  autoDispatchedResponders: false;
+}
+
+export interface SafetyIntelligenceEvaluationResult {
+  evaluated: boolean;
+  deviceId?: string;
+  signalsGenerated: SafetySignal[];
+  signalsSuppressed: Array<{
+    signalType: SafetySignalType;
+    deviceId: string;
+    reason: string;
+  }>;
+  candidatesCreated: IncidentCandidate[];
+  incidentCandidatesCreated?: IncidentCandidate[];
 }
 
 export interface SafetyAutomationTestSuiteResult {
@@ -2276,6 +2603,360 @@ export interface ProtocolTestSuiteResult {
     evidence?: Record<string, any>;
   }[];
 }
+
+// ==============================================================================
+// TELEMETRY OPERATIONS, DIAGNOSTICS & OBSERVABILITY LAYER
+// ==============================================================================
+
+export interface DeviceFleetHealthSummary {
+  totalDevices: number;
+  online: number;
+  degraded: number;
+  offline: number;
+  suspended: number;
+  retired: number;
+  evaluatedAt: string;
+}
+
+export interface OperationalTelemetryMetrics {
+  packetsReceived: number;
+  packetsAccepted: number;
+  packetsRejected: number;
+  crcFailures: number;
+  duplicatesSuppressed: number;
+  unknownDevices: number;
+  connectedDevices?: number;
+  disconnectedDevices?: number;
+  duplicatePackets?: number;
+  staleTelemetry?: number;
+  gpsInvalidEvents?: number;
+  sosEvents?: number;
+  lowBatteryEvents?: number;
+  reconnectEvents?: number;
+  ackSuccessCount?: number;
+  ackFailureCount?: number;
+  avgProcessingLatencyMs?: number;
+  lastIngestionTimestamp: string | null;
+  // Prepared aggregation metadata for data retention readiness
+  aggregatedAt: string;
+  aggregationInterval: string;
+  isHistoricalScanRequired: false;
+  hourlyBuckets: {
+    hour: string;
+    received: number;
+    accepted: number;
+    rejected: number;
+    crcFailures: number;
+    duplicatesSuppressed: number;
+    unknownDevices: number;
+  }[];
+}
+
+export interface ControlledDiagnosticEvent {
+  id: string;
+  timestamp: string;
+  eventType: 
+    | 'PACKET_RECEIVED' 
+    | 'PACKET_INGESTED' 
+    | 'PACKET_REJECTED' 
+    | 'DUPLICATE_SUPPRESSED' 
+    | 'CRC_FAILURE' 
+    | 'UNKNOWN_DEVICE' 
+    | 'GATEWAY_PROBE' 
+    | 'SIMULATION_CYCLE'
+    | 'DEVICE_QUARANTINED';
+  transport: TelemetryTransportType | 'INTERNAL';
+  protocol: string;
+  deviceIdentifier: string;
+  status: 'ACCEPTED' | 'REJECTED' | 'SUPPRESSED' | 'PROCESSED' | 'ALERT';
+  diagnosticCode: string;
+  latencyMs?: number;
+  summary: string;
+  details?: Record<string, any>; // Strictly scrubbed of secrets/PII
+}
+
+export interface TelemetryGatewayOperationalStatus {
+  pipelineHealth: 'HEALTHY' | 'DEGRADED' | 'ERROR';
+  simulatorStatus: 'ACTIVE' | 'STANDBY' | 'DISABLED';
+  tcpReadiness: 'READY' | 'ACTIVE' | 'DISABLED' | 'ERROR';
+  udpReadiness: 'READY' | 'ACTIVE' | 'DISABLED' | 'ERROR';
+  futureServerConnectionStatus: 'STANDBY_READY' | 'CONNECTED' | 'INDEPENDENT_GATEWAY' | 'DISCONNECTED';
+  activeProtocols: string[];
+  serverEnvironment: {
+    nodeEnv: string;
+    isContainerized: boolean;
+    configuredTcpPort: number;
+    configuredUdpPort: number;
+    networkNotice: string;
+  };
+}
+
+export interface OperationalTelemetryDiagnostics {
+  gatewayStatus: TelemetryGatewayOperationalStatus;
+  fleetHealth: DeviceFleetHealthSummary;
+  metrics: OperationalTelemetryMetrics;
+  recentEvents: ControlledDiagnosticEvent[];
+  retentionReadiness: {
+    metricsEngineMode: 'PRE_AGGREGATED_STREAM';
+    tableScanAvoided: boolean;
+    retentionPolicyDays: number;
+    aggregationBucketsReady: boolean;
+    activeBucketsCount: number;
+  };
+  accessMetadata: {
+    actorRole: UserRole;
+    actorUserId: string;
+    scope: 'TECHNICAL_DIAGNOSTICS_ONLY' | 'SYSTEM_ADMIN_OBSERVABILITY' | 'FOUNDER_AUTHORITATIVE_EXECUTIVE';
+    piiMasked: boolean;
+    credentialsExposed: false;
+    audited: boolean;
+    generatedAt: string;
+  };
+}
+
+export interface TelemetryDiagnosticsTestSuiteResult {
+  suiteId: string;
+  timestamp: string;
+  totalTests: number;
+  passedTests: number;
+  failedTests: number;
+  allPassed: boolean;
+  results: {
+    id: string;
+    name: string;
+    requirement: string;
+    expected: string;
+    actual: string;
+    status: 'PASS' | 'FAIL';
+    evidence?: Record<string, any>;
+  }[];
+}
+
+export type GpsTrackerReadinessClassification =
+  | 'NOT READY'
+  | 'DEVELOPMENT READY'
+  | 'SERVER DEPLOYMENT READY'
+  | 'REAL HARDWARE READY';
+
+export interface GpsTrackerE2ETestCaseResult {
+  id: string;
+  name: string;
+  category: 'SIMULATED' | 'REAL_HARDWARE_VERIFIED';
+  pipelineStage: string;
+  requirement: string;
+  expected: string;
+  actual: string;
+  status: 'PASS' | 'FAIL';
+  evidence?: Record<string, any>;
+}
+
+export interface GpsTrackerE2EReadinessSuiteResult {
+  suiteId: string;
+  timestamp: string;
+  classification: GpsTrackerReadinessClassification;
+  pipeline: string[];
+  summary: {
+    totalTests: number;
+    passed: number;
+    failed: number;
+    allPassed: boolean;
+    simulatedOnlyItemsCount: number;
+    actualHardwareVerifiedItemsCount: number;
+  };
+  hardwareStatus: {
+    realHardwareConnected: boolean;
+    hardwareVerificationNotice: string;
+    allowedClassificationReason: string;
+  };
+  results: GpsTrackerE2ETestCaseResult[];
+  simulatedOnlyItems: string[];
+  actualHardwareVerifiedItems: string[];
+  remainingRequirements: string[];
+  deploymentPrerequisites: string[];
+}
+
+// ==========================================
+// ITIS NETWORK INTERRUPTION, RESILIENCE & RECOVERY TYPES (PROMPT 20)
+// ==========================================
+
+export type TelemetryConnectionState = 'ONLINE' | 'STALE' | 'OFFLINE' | 'PROLONGED_SILENCE';
+export type DatabaseResilienceStatus = 'HEALTHY' | 'DEGRADED' | 'DATABASE_UNAVAILABLE';
+export type CommandCentreConnectionState = 'CONNECTED' | 'DEGRADED' | 'DISCONNECTED';
+export type ResponderGpsStatus = 'LIVE' | 'STALE' | 'OFFLINE';
+
+export interface TelemetryInterruptionReport {
+  deviceId: string;
+  trackerDeviceId: string;
+  status: TelemetryConnectionState;
+  isStale: boolean;
+  isOffline: boolean;
+  silenceSeconds: number;
+  lastSeenTimestamp: string;
+  lastKnownLocation: {
+    latitude: number;
+    longitude: number;
+    accuracyMeters: number;
+    lastLocationTimestamp: string;
+    isFabricated: false; // Guarantee: never fabricate coordinates
+  };
+  operationalAlertGenerated: boolean;
+  alertDetails?: {
+    alertId: string;
+    eventType: string;
+    severity: string;
+    title: string;
+  };
+}
+
+export interface TelemetryRecoveryResult {
+  deviceId: string;
+  trackerDeviceId: string;
+  status: 'ONLINE';
+  accepted: boolean;
+  duplicate: boolean;
+  suppressed: boolean;
+  sequenceNumber?: number;
+  recoveredAt: string;
+  downtimeDurationSeconds: number;
+  latestLocation: {
+    latitude: number;
+    longitude: number;
+    accuracyMeters: number;
+    timestamp: string;
+  };
+  auditEventId: string;
+}
+
+export interface DatabaseOperationResult<T> {
+  success: boolean;
+  status: 'SUCCESS' | 'DATABASE_UNAVAILABLE';
+  data?: T;
+  error?: string;
+  retriesAttempted: number;
+  isIdempotentHit: boolean;
+}
+
+export interface CommandCentreReconciliationResult {
+  clientId: string;
+  connectionState: CommandCentreConnectionState;
+  reconciledAt: string;
+  incidentsReconciledCount: number;
+  eventsMissedCount: number;
+  serverTimestamp: string;
+  auditEventId: string;
+}
+
+export interface ResponderGpsStatusReport {
+  responderId: string;
+  callSign: string;
+  gpsStatus: ResponderGpsStatus;
+  isGpsStale: boolean;
+  lastSeenTimestamp: string;
+  lastKnownPosition: {
+    lat: number;
+    lng: number;
+    addressDescription?: string;
+    isFabricated: false; // Guarantee: never fabricate
+  };
+}
+
+export interface ResilienceAuditLogEntry {
+  actionType: 'INTERRUPTION_DETECTED' | 'SERVICE_DEGRADED' | 'RETRY_ATTEMPTED' | 'SERVICE_RESTORED' | 'RECONCILIATION_COMPLETED' | 'TELEMETRY_RECOVERED' | 'DATABASE_UNAVAILABLE';
+  service: 'TELEMETRY' | 'DATABASE' | 'COMMAND_CENTRE' | 'RESPONDER_GPS';
+  targetId: string;
+  details: Record<string, any>;
+  timestamp: string;
+}
+
+// ============================================================================
+// PROMPT 24: PHYSICAL GT012 / CONCOX HARDWARE INTEGRATION & FIELD-TEST READINESS
+// ============================================================================
+
+export type HardwareTestVerificationClassification =
+  | 'SOFTWARE_VERIFIED'
+  | 'HARDWARE_READY_FOR_TESTING'
+  | 'PHYSICALLY_TESTED'
+  | 'NOT_YET_VERIFIED';
+
+export interface PhysicalHardwareTestRecord {
+  testId: string;
+  deviceId: string;
+  imei: string;
+  firmwareVersion?: string;
+  simCarrier: 'Vodacom' | 'MTN' | 'Telkom' | 'OTHER' | 'PENDING_PHYSICAL_SIM';
+  dateTime: string;
+  location: {
+    name: string;
+    latitude?: number;
+    longitude?: number;
+  };
+  testOperator: string;
+  testScenario: string;
+  expectedResult: string;
+  actualResult: string;
+  status: 'PASS' | 'FAIL' | 'READY_FOR_PHYSICAL_BENCH_TEST' | 'PENDING_FIELD_SIM';
+  verificationClassification: HardwareTestVerificationClassification;
+  evidenceReference: string;
+  notes: string;
+  isControlledTestSubject: true; // Strict safety guarantee: no real children PII used
+}
+
+export type HardwareAcceptanceCriterionKey =
+  | 'A_DEVICE_REGISTRATION'
+  | 'B_IMEI_VALIDATION'
+  | 'C_SIM_ACTIVATION'
+  | 'D_NETWORK_REGISTRATION'
+  | 'E_GPS_ACQUISITION'
+  | 'F_TELEMETRY_CONNECTION'
+  | 'G_VALID_PACKET'
+  | 'H_INVALID_PACKET'
+  | 'I_CRC_FAILURE'
+  | 'J_UNKNOWN_DEVICE'
+  | 'K_SUSPENDED_DEVICE'
+  | 'L_RETIRED_DEVICE'
+  | 'M_DUPLICATE_PACKET'
+  | 'N_RECONNECT'
+  | 'O_LOCATION_UPDATE'
+  | 'P_SOS_ALARM'
+  | 'Q_BATTERY_STATUS'
+  | 'R_DEVICE_OFFLINE'
+  | 'S_DEVICE_RECOVERY'
+  | 'T_DATABASE_PERSISTENCE'
+  | 'U_COMMAND_CENTRE_VISIBILITY'
+  | 'V_INCIDENT_CREATION'
+  | 'W_AUDIT_TRAIL';
+
+export interface HardwareAcceptanceChecklistItem {
+  criterionKey: HardwareAcceptanceCriterionKey;
+  criterionName: string;
+  expected: string;
+  actual: string;
+  status: 'PASS' | 'READY_FOR_PHYSICAL_BENCH_TEST' | 'NOT_VERIFIED_DEVICE_SPECIFICATION_REQUIRED';
+  verificationClassification: HardwareTestVerificationClassification;
+  evidence: Record<string, any>;
+  notes: string;
+}
+
+export interface PhysicalHardwareReadinessSummary {
+  protocol: 'GT012_CONCOX_BINARY';
+  framing: '0x7878_0x0D0A';
+  checksum: 'CRC_ITU_POLYNOMIAL_0x1021';
+  telemetryIngestionPorts: {
+    tcp: number;
+    udp: number;
+  };
+  supportedCarriersZA: ['Vodacom', 'MTN', 'Telkom'];
+  checklistSummary: {
+    totalCriteria: number;
+    softwareVerifiedCount: number;
+    hardwareReadyForTestingCount: number;
+    physicallyTestedCount: 0; // Explicitly 0: Never claim physical tests in software
+    notYetVerifiedCount: number;
+  };
+  generatedAt: string;
+}
+
+
 
 
 

@@ -10,6 +10,7 @@ import {
   IncidentAlert,
   IncidentOutcomeReport,
   ResponderUnit,
+  ResponderOperationalState,
   AssignedIncidentView,
   ImmutableAuditEvent,
   ActiveUserSession,
@@ -171,6 +172,8 @@ export interface IResponderRepository {
   declineAssignment(incidentId: string, user: any, reason: string): Promise<any>;
   updateOperationalStatus(incidentId: string, user: any, status: string, note?: string, telemetry?: any): Promise<any>;
   submitOutcomeReport(report: IncidentOutcomeReport, user: any): Promise<IncidentAlert>;
+  updateOperationalState(responderId: string, state: ResponderOperationalState, activeIncidentId?: string): Promise<ResponderUnit>;
+  updateLocation(responderId: string, latOrLocation: any, maybeLng?: number, maybeOptions?: any): Promise<ResponderUnit>;
   updateLiveLocation?(responderIdOrUserId: string, locationData: { latitude: number; longitude: number; accuracyMeters?: number; heading?: number; speed?: number; locationSharingStatus?: string; addressDescription?: string }): Promise<ResponderUnit>;
   updateAvailability?(responderIdOrUserId: string, status: string, isAvailable: boolean): Promise<ResponderUnit>;
 }
@@ -185,7 +188,7 @@ export interface ITelemetryRepository {
   recordTelemetry(record: Omit<AuthoritativeTelemetryRecord, 'id' | 'ingestedAt'>): Promise<AuthoritativeTelemetryRecord>;
   getLatestLocation(deviceIdOrTrackerId: string): Promise<AuthoritativeLatestLocationRecord | null>;
   getLatestLocationByLearner(learnerId: string): Promise<AuthoritativeLatestLocationRecord | null>;
-  updateLatestLocation(location: AuthoritativeLatestLocationRecord): Promise<void>;
+  updateLatestLocation(location: AuthoritativeLatestLocationRecord): Promise<boolean>;
   queryHistory(options?: TelemetryHistoryQueryOptions): Promise<PaginatedResponse<AuthoritativeTelemetryRecord>>;
   purgeOldTelemetry?(retentionDays: number, actorUserId: string): Promise<{ purgedCount: number; remainingCount: number }>;
   count(filter?: { deviceId?: string; learnerId?: string }): Promise<number>;

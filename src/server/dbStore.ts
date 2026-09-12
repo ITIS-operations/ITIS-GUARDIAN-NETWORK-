@@ -222,6 +222,7 @@ export class AuthoritativeStore {
   public users: Map<string, ServerUserRecord> = new Map();
   public sessions: Map<string, ActiveSessionRecord> = new Map();
   public responderUnits: Map<string, ResponderUnit> = new Map();
+  public get responders(): Map<string, ResponderUnit> { return this.responderUnits; }
   public devices: Map<string, any> = new Map();
   public telemetryRecords: Map<string, AuthoritativeTelemetryRecord> = new Map();
   public latestLocations: Map<string, AuthoritativeLatestLocationRecord> = new Map();
@@ -1251,7 +1252,27 @@ export class AuthoritativeStore {
       ratingScore: 4.60
     };
 
-    [unitPolice, unitMetro, unitEms, unitSecurity, unitCpf].forEach(u => {
+    const unitPrivateSec: ResponderUnit = {
+      id: 'resp-private-01',
+      callSign: 'SECTOR2-PATROL-01',
+      name: 'Sector 2 Rapid Response Private Security',
+      unitType: 'PRIVATE_SECURITY',
+      vehicleId: 'SEC-GP-9901',
+      contactPhone: '+27 11 697 1000',
+      radioFrequency: 'National Emergency Band CH-04',
+      currentLocation: {
+        lat: -25.7530,
+        lng: 28.2350,
+        addressDescription: 'Sector 2 Rapid Intercept (1.5 km)',
+        isVerified: true
+      },
+      status: 'AVAILABLE',
+      operationalState: 'AVAILABLE',
+      capabilities: ['Armed Visual Deterrence', 'Rapid Intercept', 'First Aid'],
+      ratingScore: 4.85
+    };
+
+    [unitPolice, unitMetro, unitEms, unitSecurity, unitCpf, unitPrivateSec].forEach(u => {
       this.responderUnits.set(u.id, u);
     });
   }
@@ -1294,6 +1315,17 @@ export class AuthoritativeStore {
 
     this.auditLogs.unshift(event);
     return event;
+  }
+
+  // Retrieve audit logs with optional limit
+  public getAuditLogs(options?: { limit?: number }): ImmutableAuditEvent[] {
+    const limit = options?.limit || 50;
+    return this.auditLogs.slice(0, limit);
+  }
+
+  // Device maintenance logs accessor
+  public getDeviceMaintenanceLogs(deviceId?: string): any[] {
+    return [];
   }
 
   // Audit Trail Cryptographic Validation Check
@@ -1784,6 +1816,13 @@ export class AuthoritativeStore {
       this.sessions.delete(clean);
       return null;
     }
+
+    // Check underlying user account status for instant invalidation
+    const user = this.users.get(session.userId);
+    if (user && (user.status === 'SUSPENDED' || user.status === 'DISABLED')) {
+      return null;
+    }
+
     return session;
   }
 
@@ -2053,7 +2092,13 @@ export class AuthoritativeStore {
     const salt = generateSalt();
     const hashedPassword = hashPassword(params.password, salt);
     const now = new Date().toISOString();
-    const role: UserRole = params.role || 'PARENT_GUARDIAN';
+
+    // Strict Role Escalation Prevention: Public self-registration is strictly restricted to PARENT_GUARDIAN.
+    if (params.role && params.role !== 'PARENT_GUARDIAN') {
+      throw new Error(`ACCESS DENIED: Role '${params.role}' cannot be self-registered publicly. Platform administrative, executive, tactical, and audit credentials must be provisioned by the Founder.`);
+    }
+
+    const role: UserRole = 'PARENT_GUARDIAN';
     const fullName = `${params.firstName || ''} ${params.surname || ''}`.trim() || 'Registered User';
 
     let assignedGuardianId: string | undefined = undefined;
@@ -3215,6 +3260,9 @@ export class AuthoritativeStore {
       id,
       learnerId: learnerId || null,
       schoolId: schoolId || null,
+      deviceTime: record.deviceTime || record.timestamp,
+      serverReceivedAt: record.serverReceivedAt || ingestedAt,
+      databasePersistedAt: ingestedAt,
       ingestedAt
     };
 
@@ -3296,14 +3344,59 @@ export class AuthoritativeStore {
     return null;
   }
 
-  public updateLatestLocation(location: AuthoritativeLatestLocationRecord): void {
-    this.latestLocations.set(location.deviceId, location);
+  public updateLatestLocation(location: AuthoritativeLatestLocationRecord): boolean {
+    if (!location) return false;
+    // Coordinate validation
+    if (
+      location.latitude === undefined ||
+      location.longitude === undefined ||
+      isNaN(location.latitude) ||
+      isNaN(location.longitude) ||
+      location.latitude < -90 ||
+      location.latitude > 90 ||
+      location.longitude < -180 ||
+      location.longitude > 180
+    ) {
+      return false;
+    }
+
+    const deviceIdKey = location.deviceId || location.trackerDeviceId;
+    if (!deviceIdKey) return false;
+
+    const existing = this.latestLocations.get(deviceIdKey) || (location.trackerDeviceId ? this.latestLocations.get(location.trackerDeviceId) : undefined);
+    if (existing && existing.timestamp && location.timestamp) {
+      const existingTime = new Date(existing.timestamp).getTime();
+      const newTime = new Date(location.timestamp).getTime();
+      // Part 7: Authoritative Last Known Location - Timestamp ordering protection
+      // Never overwrite a newer location with an older packet!
+      if (!isNaN(existingTime) && !isNaN(newTime) && newTime < existingTime) {
+        this.logAuditEvent({
+          actionType: 'OLDER_LOCATION_REJECTED',
+          actorUserId: 'system-telemetry-pipeline',
+          actorName: 'Telemetry Ingestion Gateway',
+          actorRole: 'SYSTEM_ADMIN',
+          targetEntity: 'DEVICE',
+          targetId: deviceIdKey,
+          details: {
+            reason: 'OLDER_LOCATION_REJECTED',
+            existingTimestamp: existing.timestamp,
+            incomingTimestamp: location.timestamp
+          }
+        });
+        return false;
+      }
+    }
+    this.latestLocations.set(deviceIdKey, location);
+    if (location.trackerDeviceId && location.trackerDeviceId !== deviceIdKey) {
+      this.latestLocations.set(location.trackerDeviceId, location);
+    }
     if (location.trackerDeviceId) {
-      this.trackerToDeviceIdMap.set(location.trackerDeviceId, location.deviceId);
+      this.trackerToDeviceIdMap.set(location.trackerDeviceId, deviceIdKey);
     }
     if (location.learnerId) {
-      this.learnerToLatestLocationIndex.set(location.learnerId, location.deviceId);
+      this.learnerToLatestLocationIndex.set(location.learnerId, deviceIdKey);
     }
+    return true;
   }
 
   public queryTelemetryHistory(options?: TelemetryHistoryQueryOptions): PaginatedResponse<AuthoritativeTelemetryRecord> {

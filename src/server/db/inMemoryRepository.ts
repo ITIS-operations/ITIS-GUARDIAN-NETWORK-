@@ -32,6 +32,7 @@ import {
   IncidentAlert,
   IncidentOutcomeReport,
   ResponderUnit,
+  ResponderOperationalState,
   AssignedIncidentView,
   ImmutableAuditEvent,
   PlatformUserItem,
@@ -514,7 +515,202 @@ class InMemoryIncidentRepository implements IIncidentRepository {
     const inc = db.incidents.get(incidentId);
     if (!inc) throw new Error(`Incident ${incidentId} not found`);
     if (event.notes) inc.notes.push(event.notes);
+    if (!inc.timeline) inc.timeline = [];
+    inc.timeline.push({
+      id: 'ev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
+      incidentId,
+      eventType: event.eventType || 'COMMAND_NOTE_ADDED',
+      actorUserId: event.actorUserId,
+      actorName: event.actorName || 'System',
+      actorRole: event.actorRole || 'SYSTEM',
+      timestamp: new Date().toISOString(),
+      notes: event.notes,
+      latitude: event.latitude,
+      longitude: event.longitude,
+      payload: event.payload
+    });
     return event;
+  }
+
+  async claimIncident(incidentId: string, officer: { id: string; name: string; role: string }): Promise<IncidentAlert> {
+    const inc = db.incidents.get(incidentId);
+    if (!inc) throw new Error('Incident not found.');
+
+    if (inc.primaryOfficerId && inc.primaryOfficerId !== officer.id) {
+      throw new Error(`Incident is already claimed by Officer ${inc.primaryOfficerName || inc.primaryOfficerId}. Request a handover to take over.`);
+    }
+
+    const now = new Date().toISOString();
+    inc.primaryOfficerId = officer.id;
+    inc.primaryOfficerName = officer.name;
+    inc.primaryOfficerRole = officer.role;
+    inc.claimedAt = now;
+    if (inc.status === 'NEW' || inc.status === 'QUEUED' || !inc.status) {
+      inc.status = 'CLAIMED';
+    }
+
+    const noteMsg = `Incident claimed by Command Officer ${officer.name} (${officer.role}) at ${new Date().toLocaleTimeString()}`;
+    inc.notes.push(noteMsg);
+
+    if (!inc.timeline) inc.timeline = [];
+    inc.timeline.push({
+      id: 'ev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
+      incidentId,
+      eventType: 'INCIDENT_CLAIMED',
+      actorUserId: officer.id,
+      actorName: officer.name,
+      actorRole: officer.role,
+      timestamp: now,
+      notes: noteMsg
+    });
+
+    db.incidents.set(incidentId, inc);
+    return inc;
+  }
+
+  async releaseIncident(incidentId: string, officer: { id: string; name: string; role: string }, reason?: string): Promise<IncidentAlert> {
+    const inc = db.incidents.get(incidentId);
+    if (!inc) throw new Error('Incident not found.');
+
+    if (inc.primaryOfficerId && inc.primaryOfficerId !== officer.id && officer.role !== 'FOUNDER_EXECUTIVE' && officer.role !== 'SYSTEM_ADMIN') {
+      throw new Error('You cannot release an incident claimed by another officer.');
+    }
+
+    const now = new Date().toISOString();
+    inc.primaryOfficerId = undefined;
+    inc.primaryOfficerName = undefined;
+    inc.primaryOfficerRole = undefined;
+    inc.claimedAt = undefined;
+    if (inc.status === 'CLAIMED') {
+      inc.status = 'QUEUED';
+    }
+
+    const noteMsg = `Incident released back to general queue by ${officer.name} (${officer.role})${reason ? ': ' + reason : ''}`;
+    inc.notes.push(noteMsg);
+
+    if (!inc.timeline) inc.timeline = [];
+    inc.timeline.push({
+      id: 'ev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
+      incidentId,
+      eventType: 'COMMAND_RELEASED',
+      actorUserId: officer.id,
+      actorName: officer.name,
+      actorRole: officer.role,
+      timestamp: now,
+      notes: noteMsg
+    });
+
+    db.incidents.set(incidentId, inc);
+    return inc;
+  }
+
+  async handoverIncident(
+    incidentId: string,
+    fromOfficer: { id: string; name: string; role: string },
+    targetOfficer: { id: string; name: string; role: string },
+    reason: string
+  ): Promise<IncidentAlert> {
+    const inc = db.incidents.get(incidentId);
+    if (!inc) throw new Error('Incident not found.');
+
+    if (inc.primaryOfficerId && inc.primaryOfficerId !== fromOfficer.id && fromOfficer.role !== 'FOUNDER_EXECUTIVE' && fromOfficer.role !== 'SYSTEM_ADMIN') {
+      throw new Error('Only the current primary officer or executive supervisor can transfer incident command.');
+    }
+
+    const now = new Date().toISOString();
+    inc.primaryOfficerId = targetOfficer.id;
+    inc.primaryOfficerName = targetOfficer.name;
+    inc.primaryOfficerRole = targetOfficer.role;
+    inc.claimedAt = now;
+
+    const noteMsg = `COMMAND TRANSFER: Incident command transferred from ${fromOfficer.name} to ${targetOfficer.name}. Reason: ${reason}`;
+    inc.notes.push(noteMsg);
+
+    if (!inc.timeline) inc.timeline = [];
+    inc.timeline.push({
+      id: 'ev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
+      incidentId,
+      eventType: 'COMMAND_HANDOVER',
+      actorUserId: fromOfficer.id,
+      actorName: fromOfficer.name,
+      actorRole: fromOfficer.role,
+      timestamp: now,
+      notes: noteMsg,
+      payload: { targetOfficerId: targetOfficer.id, targetOfficerName: targetOfficer.name, reason }
+    });
+
+    db.incidents.set(incidentId, inc);
+    return inc;
+  }
+
+  async joinMonitoring(incidentId: string, officer: { id: string; name: string; role: string }): Promise<IncidentAlert> {
+    const inc = db.incidents.get(incidentId);
+    if (!inc) throw new Error('Incident not found.');
+
+    if (!inc.monitoringOfficers) inc.monitoringOfficers = [];
+    if (!inc.monitoringOfficers.some(m => m.userId === officer.id)) {
+      const now = new Date().toISOString();
+      inc.monitoringOfficers.push({
+        userId: officer.id,
+        name: officer.name,
+        role: officer.role,
+        joinedAt: now
+      });
+
+      const noteMsg = `Officer ${officer.name} (${officer.role}) joined incident monitoring stream`;
+      inc.notes.push(noteMsg);
+
+      if (!inc.timeline) inc.timeline = [];
+      inc.timeline.push({
+        id: 'ev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
+        incidentId,
+        eventType: 'COMMAND_NOTE_ADDED',
+        actorUserId: officer.id,
+        actorName: officer.name,
+        actorRole: officer.role,
+        timestamp: now,
+        notes: noteMsg
+      });
+    }
+
+    db.incidents.set(incidentId, inc);
+    return inc;
+  }
+
+  async leaveMonitoring(incidentId: string, officerId: string): Promise<IncidentAlert> {
+    const inc = db.incidents.get(incidentId);
+    if (!inc) throw new Error('Incident not found.');
+
+    if (inc.monitoringOfficers) {
+      inc.monitoringOfficers = inc.monitoringOfficers.filter(m => m.userId !== officerId);
+    }
+
+    db.incidents.set(incidentId, inc);
+    return inc;
+  }
+
+  async addTacticalNote(incidentId: string, officer: { id: string; name: string; role: string }, noteText: string): Promise<IncidentAlert> {
+    const inc = db.incidents.get(incidentId);
+    if (!inc) throw new Error('Incident not found.');
+
+    const now = new Date().toISOString();
+    const formatted = `[${officer.name} (${officer.role}) - ${new Date().toLocaleTimeString()}]: ${noteText}`;
+    inc.notes.push(formatted);
+
+    if (!inc.timeline) inc.timeline = [];
+    inc.timeline.push({
+      id: 'ev-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 6),
+      incidentId,
+      eventType: 'COMMAND_NOTE_ADDED',
+      actorUserId: officer.id,
+      actorName: officer.name,
+      actorRole: officer.role,
+      timestamp: now,
+      notes: noteText
+    });
+
+    db.incidents.set(incidentId, inc);
+    return inc;
   }
 }
 
@@ -562,6 +758,71 @@ class InMemoryResponderRepository implements IResponderRepository {
   async getRankedEligibleResponders(incidentId: string): Promise<EligibleResponderRanking[]> {
     return db.getRankedEligibleResponders(incidentId);
   }
+
+  async updateOperationalState(responderId: string, state: ResponderOperationalState, activeIncidentId?: string): Promise<ResponderUnit> {
+    let unit = db.responders.get(responderId);
+    if (!unit) {
+      for (const u of db.responders.values()) {
+        if (u.id === responderId || u.callSign === responderId || u.assignedUserId === responderId) {
+          unit = u;
+          break;
+        }
+      }
+    }
+    if (!unit) {
+      // Create stub if missing for test isolation
+      unit = {
+        id: responderId,
+        callSign: responderId.toUpperCase(),
+        name: `Responder Unit ${responderId}`,
+        unitType: 'SAPS',
+        vehicleId: `VEH-${responderId}`,
+        contactPhone: '+27 82 000 0000',
+        currentLocation: { lat: -25.7589, lng: 28.2321, addressDescription: 'Sector Patrol' },
+        status: state,
+        operationalState: state,
+        activeIncidentId,
+        capabilities: ['EMERGENCY_RESPONSE', 'FIRST_AID']
+      };
+      db.responders.set(responderId, unit);
+    }
+    unit.status = state;
+    unit.operationalState = state;
+    unit.activeIncidentId = activeIncidentId;
+    db.responders.set(unit.id, unit);
+    return unit;
+  }
+
+  async updateLocation(responderId: string, latOrLocation: any, maybeLng?: number, maybeOptions?: any): Promise<ResponderUnit> {
+    let unit = db.responders.get(responderId);
+    if (!unit) {
+      for (const u of db.responders.values()) {
+        if (u.id === responderId || u.callSign === responderId || u.assignedUserId === responderId) {
+          unit = u;
+          break;
+        }
+      }
+    }
+    if (!unit) {
+      unit = await this.updateOperationalState(responderId, 'AVAILABLE');
+    }
+
+    let lat = typeof latOrLocation === 'number' ? latOrLocation : latOrLocation?.lat;
+    let lng = typeof maybeLng === 'number' ? maybeLng : latOrLocation?.lng;
+    let opts = typeof latOrLocation === 'object' ? latOrLocation : (maybeOptions || {});
+
+    unit.currentLocation = {
+      ...unit.currentLocation,
+      lat,
+      lng,
+      heading: opts.heading,
+      speed: opts.speed,
+      accuracy: opts.accuracy,
+      lastReportedAt: new Date().toISOString()
+    };
+    db.responders.set(unit.id, unit);
+    return unit;
+  }
 }
 
 class InMemoryAuditRepository implements IAuditRepository {
@@ -591,8 +852,8 @@ class InMemoryTelemetryRepository implements ITelemetryRepository {
     return db.getLatestLocationByLearner(learnerId);
   }
 
-  async updateLatestLocation(location: AuthoritativeLatestLocationRecord): Promise<void> {
-    db.updateLatestLocation(location);
+  async updateLatestLocation(location: AuthoritativeLatestLocationRecord): Promise<boolean> {
+    return db.updateLatestLocation(location);
   }
 
   async queryHistory(options?: TelemetryHistoryQueryOptions): Promise<PaginatedResponse<AuthoritativeTelemetryRecord>> {

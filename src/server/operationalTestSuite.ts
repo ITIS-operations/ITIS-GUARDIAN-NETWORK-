@@ -59,7 +59,7 @@ export class OperationalTestSuite {
 
     // Context users for automated testing
     const commandOfficer1: ActiveUserSession = {
-      id: 'USR-CMD-001',
+      id: 'usr-command-01',
       name: 'Capt. Thabo Mokoena',
       email: 'command@itis365.co.za',
       role: 'COMMAND_OPERATOR',
@@ -67,9 +67,9 @@ export class OperationalTestSuite {
     };
 
     const commandOfficer2: ActiveUserSession = {
-      id: 'USR-CMD-002',
+      id: 'usr-commandoperator-3840',
       name: 'Lt. Nomvula Khumalo',
-      email: 'command2@itis365.co.za',
+      email: 'pkieth@itis.co.za',
       role: 'COMMAND_OPERATOR',
       token: 'tok-cmd-officer-2'
     };
@@ -603,8 +603,8 @@ export class OperationalTestSuite {
       try {
         await client.query('BEGIN');
         await client.query(
-          `INSERT INTO incidents (id, learner_id, school_id, severity, status, trigger_type, triggered_at)
-           VALUES ('inc-test-rollback', 'lrn-001', 'sch-001', 'CRITICAL_SOS', 'ACTIVE_ALARM', 'APP_PANIC', CURRENT_TIMESTAMP);`
+          `INSERT INTO incidents (id, learner_id, school_id, severity, status, trigger_type, triggered_at, latitude, longitude)
+           VALUES ('inc-test-rollback', 'lrn-001', 'sch-001', 'CRITICAL_SOS', 'ACTIVE_ALARM', 'APP_PANIC', CURRENT_TIMESTAMP, -25.7589, 28.2321);`
         );
         // Force intentional rollback
         await client.query('ROLLBACK');

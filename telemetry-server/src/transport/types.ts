@@ -46,6 +46,11 @@ export interface TelemetryServerMetrics {
   quarantinedPackets: number;
   rateLimitExceededCount: number;
   oversizedPacketsCount: number;
+  malformedPacketsCount: number;
+  crcFailuresCount: number;
+  duplicateSuppressedCount: number;
+  unauthorizedDevicesCount: number;
+  connectionErrorsCount: number;
   activeConnectionsCount: number;
   peakConnectionsCount: number;
   startTime: Date;

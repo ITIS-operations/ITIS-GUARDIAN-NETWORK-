@@ -134,6 +134,7 @@ export class TcpTransportAdapter {
     });
 
     socket.on('error', (err) => {
+      this.metrics.connectionErrorsCount = (this.metrics.connectionErrorsCount || 0) + 1;
       this.cleanupSocket(connectionId);
     });
 
@@ -173,9 +174,15 @@ export class TcpTransportAdapter {
     const existing = this.socketBuffers.get(connectionId) || Buffer.alloc(0);
     const combined = Buffer.concat([existing, chunk]);
 
-    // 3. Packet Size Guard
-    if (combined.length > this.config.maxPacketSizeBytes) {
+    // 3. Buffer & Packet Size Guard
+    const bufferCheck = this.securityEngine.checkBufferedData(combined);
+    if (!bufferCheck.allowed || combined.length > this.config.maxPacketSizeBytes) {
       this.metrics.oversizedPacketsCount++;
+      this.metrics.rejectedPackets++;
+      const reason = !bufferCheck.allowed
+        ? bufferCheck.reason!
+        : `OVERSIZED_TCP_BUFFER: ${combined.length} bytes exceeds ${this.config.maxPacketSizeBytes} bytes`;
+
       this.securityEngine.quarantineMalformedPacket(
         {
           transport: 'TCP',
@@ -186,7 +193,7 @@ export class TcpTransportAdapter {
           rawBuffer: combined,
           rawString: ''
         },
-        `OVERSIZED_TCP_BUFFER: ${combined.length} bytes exceeds ${this.config.maxPacketSizeBytes} bytes`
+        reason
       );
       this.socketBuffers.delete(connectionId);
       socket.destroy();
@@ -217,11 +224,26 @@ export class TcpTransportAdapter {
 
         if (bridgeResult.accepted) {
           this.metrics.acceptedPackets++;
+          this.securityEngine.recordSuccessfulPacket(remoteAddress);
           if (bridgeResult.deviceId) {
             this.connectionManager.identifyDevice(connectionId, bridgeResult.deviceId);
           }
         } else {
           this.metrics.rejectedPackets++;
+
+          if (bridgeResult.diagnosticCode === 'MALFORMED_PACKET') {
+            this.metrics.malformedPacketsCount = (this.metrics.malformedPacketsCount || 0) + 1;
+            this.securityEngine.recordMalformedPacket(remoteAddress);
+          } else if (bridgeResult.diagnosticCode === 'CRC_INVALID') {
+            this.metrics.crcFailuresCount = (this.metrics.crcFailuresCount || 0) + 1;
+            this.securityEngine.recordMalformedPacket(remoteAddress);
+          } else if (bridgeResult.diagnosticCode === 'DUPLICATE_PACKET') {
+            this.metrics.duplicateSuppressedCount = (this.metrics.duplicateSuppressedCount || 0) + 1;
+            this.securityEngine.recordDuplicate(remoteAddress);
+          } else if (bridgeResult.diagnosticCode === 'DEVICE_NOT_REGISTERED' || bridgeResult.diagnosticCode === 'INVALID_DEVICE_PROTOCOL_COMBINATION') {
+            this.metrics.unauthorizedDevicesCount = (this.metrics.unauthorizedDevicesCount || 0) + 1;
+          }
+
           this.securityEngine.quarantineMalformedPacket(
             context,
             bridgeResult.error || `REJECTED: ${bridgeResult.status}`

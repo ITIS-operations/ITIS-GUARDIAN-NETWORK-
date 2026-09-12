@@ -142,8 +142,23 @@ export class UdpTransportAdapter {
 
       if (bridgeResult.accepted) {
         this.metrics.acceptedPackets++;
+        this.securityEngine.recordSuccessfulPacket(rinfo.address);
       } else {
         this.metrics.rejectedPackets++;
+
+        if (bridgeResult.diagnosticCode === 'MALFORMED_PACKET') {
+          this.metrics.malformedPacketsCount = (this.metrics.malformedPacketsCount || 0) + 1;
+          this.securityEngine.recordMalformedPacket(rinfo.address);
+        } else if (bridgeResult.diagnosticCode === 'CRC_INVALID') {
+          this.metrics.crcFailuresCount = (this.metrics.crcFailuresCount || 0) + 1;
+          this.securityEngine.recordMalformedPacket(rinfo.address);
+        } else if (bridgeResult.diagnosticCode === 'DUPLICATE_PACKET') {
+          this.metrics.duplicateSuppressedCount = (this.metrics.duplicateSuppressedCount || 0) + 1;
+          this.securityEngine.recordDuplicate(rinfo.address);
+        } else if (bridgeResult.diagnosticCode === 'DEVICE_NOT_REGISTERED' || bridgeResult.diagnosticCode === 'INVALID_DEVICE_PROTOCOL_COMBINATION') {
+          this.metrics.unauthorizedDevicesCount = (this.metrics.unauthorizedDevicesCount || 0) + 1;
+        }
+
         this.securityEngine.quarantineMalformedPacket(
           context,
           bridgeResult.error || `UDP_REJECTED: ${bridgeResult.status}`
