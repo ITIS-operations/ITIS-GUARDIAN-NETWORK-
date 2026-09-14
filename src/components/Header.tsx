@@ -184,13 +184,14 @@ export const Header: React.FC<Props> = ({
                 </button>
               </div>
             ) : (
-              /* Public Visitor: Single Authoritative Login Button */
+              /* Public Visitor: Single Authoritative Portal Access Button */
               <button
                 onClick={onOpenLogin}
                 className="min-h-[44px] px-4 sm:px-6 py-2.5 rounded-xl bg-[#d4af37] hover:bg-[#c29f2f] text-slate-950 text-xs sm:text-sm font-extrabold tracking-wide transition-all shadow-md shadow-[#d4af37]/20 flex items-center gap-2 cursor-pointer active:scale-95"
+                title="Authorised access for registered guardians, schools and response personnel"
               >
                 <LogIn className="w-4 h-4 text-slate-950 shrink-0" />
-                <span>LOGIN</span>
+                <span>PORTAL ACCESS</span>
               </button>
             )}
 

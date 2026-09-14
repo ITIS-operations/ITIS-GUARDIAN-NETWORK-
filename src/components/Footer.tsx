@@ -2,10 +2,7 @@ import React, { useState } from 'react';
 import { 
   ShieldCheck, 
   ChevronDown, 
-  Mail, 
-  MapPin, 
-  Phone, 
-  Lock,
+  LogIn,
   ArrowRight
 } from 'lucide-react';
 import { AppTab } from './Header.js';
@@ -46,10 +43,10 @@ export const Footer: React.FC<Props> = ({
       {/* MAIN FOOTER CONTAINER */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 lg:py-16">
         
-        {/* DESKTOP 6-COLUMN GRID (Hidden on mobile) */}
+        {/* DESKTOP 12-COLUMN GRID (Hidden on mobile) */}
         <div className="hidden lg:grid grid-cols-12 gap-8">
           
-          {/* COLUMN 1: ITIS BRAND IDENTITY (3.5 Columns) */}
+          {/* COLUMN 1: ITIS BRAND IDENTITY (4 Columns) */}
           <div className="col-span-4 space-y-4 pr-6">
             <div 
               onClick={() => navigateToSection('overview')}
@@ -77,35 +74,27 @@ export const Footer: React.FC<Props> = ({
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed max-w-sm">
-              A coordinated child-safety network connecting schools, guardians and authorised response partners through intelligent technology and human-led coordination.
+              South African child-safety technology and coordination platform connecting guardians, schools, and authorised response partners.
             </p>
 
             <div className="pt-2 flex items-center gap-2 text-[11px] text-slate-400">
               <ShieldCheck className="w-3.5 h-3.5 text-[#d4af37] shrink-0" />
-              <span>Republic of South Africa • National Child Safety</span>
+              <span>South African Child-Safety Technology Platform</span>
             </div>
           </div>
 
-          {/* COLUMN 2: SOLUTIONS (1.6 Columns) */}
+          {/* GROUP 1: PLATFORM (2 Columns) */}
           <div className="col-span-2 space-y-3">
             <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
-              SOLUTIONS
+              PLATFORM
             </h4>
             <ul className="space-y-2 text-xs">
-              <li>
-                <button 
-                  onClick={() => navigateToSection('overview')}
-                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
-                >
-                  Learner Safety
-                </button>
-              </li>
               <li>
                 <button 
                   onClick={() => navigateToSection('for-parents')}
                   className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
-                  Guardian Hub
+                  Guardian Safety
                 </button>
               </li>
               <li>
@@ -113,7 +102,7 @@ export const Footer: React.FC<Props> = ({
                   onClick={() => navigateToSection('for-schools')}
                   className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
-                  Campus Gate Scanners
+                  School Safety
                 </button>
               </li>
               <li>
@@ -121,7 +110,7 @@ export const Footer: React.FC<Props> = ({
                   onClick={() => navigateToSection('emergency-response')}
                   className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
-                  Emergency Response
+                  Response Coordination
                 </button>
               </li>
               <li>
@@ -129,129 +118,55 @@ export const Footer: React.FC<Props> = ({
                   onClick={() => navigateToSection('how-it-works')}
                   className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
-                  Geospatial Safety Zones
+                  How ITIS Works
                 </button>
               </li>
             </ul>
           </div>
 
-          {/* COLUMN 3: FOR PARENTS (1.6 Columns) */}
+          {/* GROUP 2: TRUST (2 Columns) */}
           <div className="col-span-2 space-y-3">
             <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
-              FOR PARENTS
+              TRUST
             </h4>
             <ul className="space-y-2 text-xs">
               <li>
                 <button 
-                  onClick={() => navigateToSection('for-parents')}
+                  onClick={() => navigateToSection('trust-safety')}
                   className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
-                  Parent &amp; Guardian Hub
+                  Privacy
                 </button>
               </li>
               <li>
                 <button 
-                  onClick={() => navigateToSection('for-parents')}
+                  onClick={() => navigateToSection('trust-safety')}
                   className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
-                  Custody Management
+                  POPIA
                 </button>
               </li>
               <li>
                 <button 
-                  onClick={() => navigateToSection('how-it-works')}
+                  onClick={() => navigateToSection('trust-safety')}
                   className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
-                  Live Journey Notifications
+                  Security
                 </button>
               </li>
               <li>
                 <button 
-                  onClick={() => navigateToSection('emergency-response')}
+                  onClick={() => navigateToSection('trust-safety')}
                   className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
-                  24/7 SOS Assistance
+                  Responsible Disclosure
                 </button>
               </li>
             </ul>
           </div>
 
-          {/* COLUMN 4: FOR SCHOOLS (1.6 Columns) */}
+          {/* GROUP 3: COMPANY (2 Columns) */}
           <div className="col-span-2 space-y-3">
-            <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
-              FOR SCHOOLS
-            </h4>
-            <ul className="space-y-2 text-xs">
-              <li>
-                <button 
-                  onClick={() => navigateToSection('for-schools')}
-                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
-                >
-                  School Safety Portal
-                </button>
-              </li>
-              <li>
-                <button 
-                  onClick={() => navigateToSection('for-schools')}
-                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
-                >
-                  Attendance Reconciliation
-                </button>
-              </li>
-              <li>
-                <button 
-                  onClick={() => navigateToSection('request-demo')}
-                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
-                >
-                  Request School Pilot
-                </button>
-              </li>
-              <li>
-                <button 
-                  onClick={() => navigateToSection('trust-safety')}
-                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
-                >
-                  Campus Perimeter Audits
-                </button>
-              </li>
-            </ul>
-          </div>
-
-          {/* COLUMN 5: RESOURCES (1.6 Columns) */}
-          <div className="col-span-1 space-y-3">
-            <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
-              RESOURCES
-            </h4>
-            <ul className="space-y-2 text-xs">
-              <li>
-                <button 
-                  onClick={() => navigateToSection('how-it-works')}
-                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
-                >
-                  How It Works
-                </button>
-              </li>
-              <li>
-                <button 
-                  onClick={() => navigateToSection('trust-safety')}
-                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
-                >
-                  POPIA &amp; Privacy
-                </button>
-              </li>
-              <li>
-                <button 
-                  onClick={() => navigateToSection('trust-safety')}
-                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
-                >
-                  Governance
-                </button>
-              </li>
-            </ul>
-          </div>
-
-          {/* COLUMN 6: COMPANY (1.6 Columns) */}
-          <div className="col-span-1 space-y-3">
             <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
               COMPANY
             </h4>
@@ -266,10 +181,10 @@ export const Footer: React.FC<Props> = ({
               </li>
               <li>
                 <button 
-                  onClick={() => navigateToSection('overview')}
+                  onClick={() => navigateToSection('for-schools')}
                   className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
                 >
-                  Mission
+                  Partnerships
                 </button>
               </li>
               <li>
@@ -280,7 +195,35 @@ export const Footer: React.FC<Props> = ({
                   Contact
                 </button>
               </li>
+              <li>
+                <button 
+                  onClick={() => navigateToSection('overview')}
+                  className="hover:text-[#d4af37] transition-colors text-left cursor-pointer"
+                >
+                  Careers
+                </button>
+              </li>
             </ul>
+          </div>
+
+          {/* GROUP 4: PORTAL (2 Columns) */}
+          <div className="col-span-2 space-y-3">
+            <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
+              PORTAL
+            </h4>
+            <div className="space-y-2">
+              <button 
+                onClick={onOpenLogin}
+                className="w-full px-3.5 py-2.5 rounded-xl bg-[#d4af37] hover:bg-[#c29f2f] text-slate-950 font-extrabold text-xs tracking-wider uppercase transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                title="Authorised access for registered guardians, schools and response personnel"
+              >
+                <LogIn className="w-3.5 h-3.5 text-slate-950 shrink-0" />
+                <span>PORTAL ACCESS</span>
+              </button>
+              <p className="text-[10px] text-slate-400 leading-relaxed">
+                Authorised access for registered guardians, schools and response personnel.
+              </p>
+            </div>
           </div>
 
         </div>
@@ -316,126 +259,70 @@ export const Footer: React.FC<Props> = ({
             </div>
 
             <p className="text-xs text-slate-300 leading-relaxed">
-              A coordinated child-safety network connecting schools, guardians and authorised response partners through intelligent technology and human-led coordination.
+              South African child-safety technology and coordination platform connecting guardians, schools, and authorised response partners.
             </p>
           </div>
 
           {/* Collapsible Sections Accordion */}
           <div className="border-t border-b border-slate-800 divide-y divide-slate-800/80">
             
-            {/* Section: SOLUTIONS */}
+            {/* Group: PLATFORM */}
             <div>
               <button
                 type="button"
-                onClick={() => toggleSection('solutions')}
+                onClick={() => toggleSection('platform')}
                 className="w-full py-3.5 flex items-center justify-between text-xs font-bold text-white uppercase font-mono tracking-wider text-left cursor-pointer"
               >
-                <span>SOLUTIONS</span>
-                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'solutions' ? 'rotate-180 text-[#d4af37]' : ''}`} />
+                <span>PLATFORM</span>
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'platform' ? 'rotate-180 text-[#d4af37]' : ''}`} />
               </button>
-              {expandedSection === 'solutions' && (
+              {expandedSection === 'platform' && (
                 <div className="pb-3.5 space-y-2 text-xs pl-2">
-                  <button onClick={() => navigateToSection('overview')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
-                    Learner Safety
-                  </button>
                   <button onClick={() => navigateToSection('for-parents')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
-                    Guardian Hub
+                    Guardian Safety
                   </button>
                   <button onClick={() => navigateToSection('for-schools')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
-                    Campus Gate Scanners
+                    School Safety
                   </button>
                   <button onClick={() => navigateToSection('emergency-response')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
-                    Emergency Response
+                    Response Coordination
                   </button>
                   <button onClick={() => navigateToSection('how-it-works')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
-                    Geospatial Safety Zones
+                    How ITIS Works
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Section: FOR PARENTS */}
+            {/* Group: TRUST */}
             <div>
               <button
                 type="button"
-                onClick={() => toggleSection('parents')}
+                onClick={() => toggleSection('trust')}
                 className="w-full py-3.5 flex items-center justify-between text-xs font-bold text-white uppercase font-mono tracking-wider text-left cursor-pointer"
               >
-                <span>FOR PARENTS</span>
-                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'parents' ? 'rotate-180 text-[#d4af37]' : ''}`} />
+                <span>TRUST</span>
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'trust' ? 'rotate-180 text-[#d4af37]' : ''}`} />
               </button>
-              {expandedSection === 'parents' && (
+              {expandedSection === 'trust' && (
                 <div className="pb-3.5 space-y-2 text-xs pl-2">
-                  <button onClick={() => navigateToSection('for-parents')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
-                    Parent &amp; Guardian Hub
+                  <button onClick={() => navigateToSection('trust-safety')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
+                    Privacy
                   </button>
-                  <button onClick={() => navigateToSection('for-parents')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
-                    Custody Management
+                  <button onClick={() => navigateToSection('trust-safety')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
+                    POPIA
                   </button>
-                  <button onClick={() => navigateToSection('how-it-works')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
-                    Live Journey Notifications
+                  <button onClick={() => navigateToSection('trust-safety')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
+                    Security
                   </button>
-                  <button onClick={() => navigateToSection('emergency-response')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
-                    24/7 SOS Assistance
+                  <button onClick={() => navigateToSection('trust-safety')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
+                    Responsible Disclosure
                   </button>
                 </div>
               )}
             </div>
 
-            {/* Section: FOR SCHOOLS */}
-            <div>
-              <button
-                type="button"
-                onClick={() => toggleSection('schools')}
-                className="w-full py-3.5 flex items-center justify-between text-xs font-bold text-white uppercase font-mono tracking-wider text-left cursor-pointer"
-              >
-                <span>FOR SCHOOLS</span>
-                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'schools' ? 'rotate-180 text-[#d4af37]' : ''}`} />
-              </button>
-              {expandedSection === 'schools' && (
-                <div className="pb-3.5 space-y-2 text-xs pl-2">
-                  <button onClick={() => navigateToSection('for-schools')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
-                    School Safety Portal
-                  </button>
-                  <button onClick={() => navigateToSection('for-schools')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
-                    Attendance Reconciliation
-                  </button>
-                  <button onClick={() => navigateToSection('request-demo')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
-                    Request School Pilot
-                  </button>
-                  <button onClick={() => navigateToSection('trust-safety')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
-                    Campus Perimeter Audits
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Section: RESOURCES */}
-            <div>
-              <button
-                type="button"
-                onClick={() => toggleSection('resources')}
-                className="w-full py-3.5 flex items-center justify-between text-xs font-bold text-white uppercase font-mono tracking-wider text-left cursor-pointer"
-              >
-                <span>RESOURCES</span>
-                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'resources' ? 'rotate-180 text-[#d4af37]' : ''}`} />
-              </button>
-              {expandedSection === 'resources' && (
-                <div className="pb-3.5 space-y-2 text-xs pl-2">
-                  <button onClick={() => navigateToSection('how-it-works')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
-                    How It Works
-                  </button>
-                  <button onClick={() => navigateToSection('trust-safety')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
-                    POPIA &amp; Privacy
-                  </button>
-                  <button onClick={() => navigateToSection('trust-safety')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
-                    Governance
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {/* Section: COMPANY */}
+            {/* Group: COMPANY */}
             <div>
               <button
                 type="button"
@@ -450,12 +337,42 @@ export const Footer: React.FC<Props> = ({
                   <button onClick={() => navigateToSection('why-itis')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
                     About ITIS
                   </button>
-                  <button onClick={() => navigateToSection('overview')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
-                    Mission
+                  <button onClick={() => navigateToSection('for-schools')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
+                    Partnerships
                   </button>
                   <button onClick={() => navigateToSection('request-demo')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
                     Contact
                   </button>
+                  <button onClick={() => navigateToSection('overview')} className="py-1 text-slate-300 hover:text-[#d4af37] block w-full text-left">
+                    Careers
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Group: PORTAL */}
+            <div>
+              <button
+                type="button"
+                onClick={() => toggleSection('portal')}
+                className="w-full py-3.5 flex items-center justify-between text-xs font-bold text-white uppercase font-mono tracking-wider text-left cursor-pointer"
+              >
+                <span>PORTAL</span>
+                <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'portal' ? 'rotate-180 text-[#d4af37]' : ''}`} />
+              </button>
+              {expandedSection === 'portal' && (
+                <div className="pb-3.5 space-y-3 text-xs pl-2">
+                  <button
+                    onClick={onOpenLogin}
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-[#d4af37] hover:bg-[#c29f2f] text-slate-950 font-extrabold text-xs tracking-wider uppercase transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+                    title="Authorised access for registered guardians, schools and response personnel"
+                  >
+                    <LogIn className="w-3.5 h-3.5 text-slate-950 shrink-0" />
+                    <span>PORTAL ACCESS</span>
+                  </button>
+                  <p className="text-[10px] text-slate-400 leading-relaxed text-center">
+                    Authorised access for registered guardians, schools and response personnel.
+                  </p>
                 </div>
               )}
             </div>

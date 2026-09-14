@@ -57,19 +57,19 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
         {
           id: 'who-we-are',
           title: 'Who We Are',
-          description: 'South Africa’s dedicated national child-safety network connecting guardians, schools, and accredited response partners into a coordinated protection ecosystem.',
+          description: 'South African child-safety technology and coordination platform connecting guardians, schools, and authorised response partners into a coordinated protection ecosystem.',
           targetCategory: 'why-itis'
         },
         {
           id: 'why-exists',
           title: 'Why ITIS Exists',
-          description: 'To eliminate safety blind spots during daily school journeys and replace uncertainty with verified, immediate human coordination.',
+          description: 'ITIS connects schools, guardians and authorised response partners so the right people can act when a learner needs help.',
           targetCategory: 'why-itis'
         },
         {
           id: 'our-mission',
-          title: 'Our Mission',
-          description: 'Ensuring every learner experiences safe movement between home and school through responsible technology and certified human oversight.',
+          title: 'Our Approach',
+          description: 'Technology for visibility. People for decisions. Coordination for response.',
           targetCategory: 'overview'
         }
       ]
@@ -88,7 +88,7 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
         {
           id: 'guardian-protection',
           title: 'Guardian Protection',
-          description: 'Real-time arrival and departure notifications, digital custody delegation, and 24/7 emergency reassurance without invasive tracking.',
+          description: 'Arrival and departure notifications, digital custody delegation, and coordinated emergency support without invasive tracking.',
           targetCategory: 'for-parents'
         },
         {
@@ -106,7 +106,7 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
         {
           id: 'emergency-response',
           title: 'Emergency Response',
-          description: 'When a genuine emergency is identified, authorised Command personnel coordinate the appropriate response.',
+          description: 'Designed for coordination with schools, authorised security providers, emergency services and public-sector stakeholders.',
           targetCategory: 'emergency-response'
         }
       ]
@@ -130,14 +130,14 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
         },
         {
           id: 'for-emergency-partners',
-          title: 'For Emergency Partners',
-          description: 'Accredited responders receive verified situational coordinates and emergency contact details for swift coordination.',
+          title: 'For Response Partners',
+          description: 'Authorised response personnel receive relevant incident information and coordinates to support their response.',
           targetCategory: 'emergency-response'
         },
         {
           id: 'for-government',
-          title: 'For Government',
-          description: 'Provincial education and safety alignment with sovereign data hosting and verifiable POPIA compliance.',
+          title: 'Stakeholder Alignment',
+          description: 'Designed to support alignment with school safety standards, role-based privacy and POPIA-aligned safeguards.',
           targetCategory: 'trust-safety'
         }
       ]
@@ -150,25 +150,25 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
         {
           id: 'privacy-popia',
           title: 'Privacy & POPIA',
-          description: 'Strict adherence to POPIA §18 standards for minor data protection, end-to-end encryption, and sovereign South African data custody.',
+          description: 'Built with POPIA-aligned privacy and security safeguards, encrypted data transmission, and controlled role-based access.',
           targetCategory: 'trust-safety'
         },
         {
           id: 'human-oversight',
-          title: 'Human Oversight',
-          description: 'A strict 0% autonomous dispatch policy ensuring every safety alert is verified by certified command specialists before field deployment.',
+          title: 'Human Decision-Making',
+          description: 'Technology supports decisions; authorised people remain responsible for escalation and response.',
           targetCategory: 'trust-safety'
         },
         {
           id: 'responsible-tech',
-          title: 'Responsible Technology',
-          description: 'Purpose-built child protection infrastructure that activates only during designated school travel corridors and active emergencies.',
+          title: 'Controlled Access',
+          description: 'Information is available strictly according to verified role and operational need.',
           targetCategory: 'trust-safety'
         },
         {
           id: 'accountability',
-          title: 'Accountability',
-          description: 'Cryptographic audit trails documenting every verification and dispatch event for complete institutional transparency.',
+          title: 'Privacy by Design',
+          description: 'Personal information is handled with privacy, security and accountability in mind.',
           targetCategory: 'trust-safety'
         }
       ]
@@ -181,25 +181,25 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
         {
           id: 'about-company',
           title: 'About ITIS',
-          description: 'Integrated Technology Intelligence & Safety is a South African child-protection technology initiative dedicated to national learner safety.',
+          description: 'South African child-safety technology platform built to support learner safety coordination.',
           targetCategory: 'why-itis'
         },
         {
           id: 'news',
           title: 'News',
-          description: 'National safety bulletins, institutional pilot milestones, and verified educational updates.',
+          description: 'Platform updates, school pilot milestones, and educational safety guidance.',
           targetCategory: 'overview'
         },
         {
           id: 'careers',
           title: 'Careers',
-          description: 'Opportunities across safety engineering, 24/7 command operations, and school partnership coordination.',
+          description: 'Opportunities across software engineering, operations, and school coordination.',
           targetCategory: 'overview'
         },
         {
           id: 'contact',
           title: 'Contact',
-          description: 'Direct communication channels for headmasters, school governing bodies, emergency agencies, and institutional partners.',
+          description: 'Direct communication channels for schools, guardians, authorised response partners, and stakeholders.',
           targetCategory: 'request-demo'
         }
       ]
@@ -331,23 +331,35 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
 
           </div>
 
-          {/* Drawer Bottom Bar: Single Login CTA & National Support */}
+          {/* Drawer Bottom Bar: Portal Access CTA & Contact Support */}
           <div className="p-4 sm:p-5 bg-[#0a1224] border-t border-slate-800 space-y-3 shrink-0">
             <div className="flex items-center justify-between text-[11px] text-slate-400">
-              <span>National Operations Support</span>
-              <span className="text-[#d4af37] font-mono font-bold">+27 (0) 12 004 8890</span>
+              <span>Questions & Inquiries</span>
+              <button
+                onClick={() => handleOpenDetailedSection('request-demo')}
+                className="text-[#d4af37] hover:text-[#f3d368] font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <span>Contact ITIS</span>
+                <ArrowRight className="w-3 h-3" />
+              </button>
             </div>
 
-            <button
-              onClick={() => {
-                onClose();
-                onOpenLogin();
-              }}
-              className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-[#d4af37] hover:bg-[#c29f2f] text-slate-950 font-extrabold text-xs tracking-wider uppercase transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-98"
-            >
-              <LogIn className="w-4 h-4 text-slate-950" />
-              <span>LOGIN TO AUTHORISED PORTAL</span>
-            </button>
+            <div className="space-y-1.5">
+              <button
+                onClick={() => {
+                  onClose();
+                  onOpenLogin();
+                }}
+                className="w-full min-h-[44px] px-4 py-2.5 rounded-xl bg-[#d4af37] hover:bg-[#c29f2f] text-slate-950 font-extrabold text-xs tracking-wider uppercase transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer active:scale-98"
+                title="Authorised access for registered guardians, schools and response personnel"
+              >
+                <LogIn className="w-4 h-4 text-slate-950" />
+                <span>PORTAL ACCESS</span>
+              </button>
+              <p className="text-[10px] text-slate-400 text-center leading-tight">
+                Authorised access for registered guardians, schools and response personnel.
+              </p>
+            </div>
           </div>
 
         </div>
