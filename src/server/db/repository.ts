@@ -176,6 +176,7 @@ export interface IResponderRepository {
   updateLocation(responderId: string, latOrLocation: any, maybeLng?: number, maybeOptions?: any): Promise<ResponderUnit>;
   updateLiveLocation?(responderIdOrUserId: string, locationData: { latitude: number; longitude: number; accuracyMeters?: number; heading?: number; speed?: number; locationSharingStatus?: string; addressDescription?: string }): Promise<ResponderUnit>;
   updateAvailability?(responderIdOrUserId: string, status: string, isAvailable: boolean): Promise<ResponderUnit>;
+  enrolResponder?(payload: any): Promise<ResponderUnit>;
 }
 
 export interface IAuditRepository {

@@ -25,11 +25,15 @@ import {
   Mail,
   X,
   PlusCircle,
-  Eye
+  Eye,
+  Printer,
+  Building2
 } from 'lucide-react';
 import { HydratedLearnerRecord, School, ActiveUserSession, PaginatedResponse } from '../types.js';
 import { api } from '../services/api.js';
 import { AnnualSafetyUpdateModal } from './AnnualSafetyUpdateModal.js';
+import { SchoolDetailModal } from './SchoolDetailModal.js';
+import { LearnerSmartIdModal } from './LearnerSmartIdModal.js';
 
 export type SchoolSection = 
   | 'DASHBOARD' 
@@ -71,6 +75,8 @@ export const SchoolPortal: React.FC<Props> = ({
   // Grade Progression Modal State
   const [advancingLearner, setAdvancingLearner] = useState<HydratedLearnerRecord | null>(null);
   const [safetyUpdateLearner, setSafetyUpdateLearner] = useState<HydratedLearnerRecord | null>(null);
+  const [selectedLearnerForSmartId, setSelectedLearnerForSmartId] = useState<HydratedLearnerRecord | null>(null);
+  const [showSchoolIntelligenceModal, setShowSchoolIntelligenceModal] = useState(false);
   const [newAcademicYear, setNewAcademicYear] = useState(2027);
   const [newGrade, setNewGrade] = useState('Grade 11');
   const [newClassSection, setNewClassSection] = useState('11-A');
@@ -182,6 +188,16 @@ export const SchoolPortal: React.FC<Props> = ({
         </div>
 
         <div className="flex items-center gap-3">
+          {currentSchool && (
+            <button
+              onClick={() => setShowSchoolIntelligenceModal(true)}
+              className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-xl bg-[#d4af37]/15 hover:bg-[#d4af37]/25 text-[#d4af37] border border-[#d4af37]/30 text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Building2 className="w-4 h-4" />
+              <span>Campus Intelligence &amp; Responders</span>
+            </button>
+          )}
+
           <button
             onClick={onOpenEnrolment}
             className="w-full sm:w-auto min-h-[44px] px-4 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold transition-all shadow-md shadow-cyan-950/40 flex items-center justify-center gap-2 active:scale-95"
@@ -462,6 +478,16 @@ export const SchoolPortal: React.FC<Props> = ({
                       </span>
 
                       <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setSelectedLearnerForSmartId(record)}
+                          className="min-h-[40px] px-3 py-1.5 rounded-xl bg-[#d4af37]/15 hover:bg-[#d4af37]/25 text-[#d4af37] border border-[#d4af37]/30 font-semibold transition-colors flex items-center gap-1.5 cursor-pointer"
+                          title="Generate and Print Smart ID Card"
+                        >
+                          <Printer className="w-3.5 h-3.5" />
+                          <span>Print Smart ID</span>
+                        </button>
+
                         <button
                           type="button"
                           onClick={() => setSafetyUpdateLearner(record)}
@@ -746,6 +772,22 @@ export const SchoolPortal: React.FC<Props> = ({
         schools={schools}
         currentUser={currentUser}
       />
+
+      {/* Campus Intelligence & Responders Modal */}
+      {showSchoolIntelligenceModal && currentSchool && (
+        <SchoolDetailModal
+          school={currentSchool}
+          onClose={() => setShowSchoolIntelligenceModal(false)}
+        />
+      )}
+
+      {/* Printable Learner Smart ID Modal */}
+      {selectedLearnerForSmartId && (
+        <LearnerSmartIdModal
+          learner={selectedLearnerForSmartId}
+          onClose={() => setSelectedLearnerForSmartId(null)}
+        />
+      )}
     </div>
   );
 };

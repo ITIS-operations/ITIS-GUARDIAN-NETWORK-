@@ -823,6 +823,44 @@ class InMemoryResponderRepository implements IResponderRepository {
     db.responders.set(unit.id, unit);
     return unit;
   }
+
+  async enrolResponder(payload: any): Promise<ResponderUnit> {
+    for (const u of db.responderUnits.values()) {
+      if (u.callSign.toUpperCase() === payload.callsign.toUpperCase()) {
+        throw new Error(`Duplicate callsign '${payload.callsign}' already registered in tactical inventory.`);
+      }
+    }
+    const unit: ResponderUnit = {
+      id: payload.id,
+      callSign: payload.callsign,
+      name: payload.name,
+      unitType: payload.unit_type as any,
+      vehicleId: payload.vehicle_id || 'VEH-01',
+      contactPhone: payload.contact_phone,
+      radioFrequency: payload.radio_frequency,
+      currentLocation: {
+        lat: payload.current_latitude || -25.7550,
+        lng: payload.current_longitude || 28.2310,
+        addressDescription: 'Sector Deployment Hub',
+        isVerified: true,
+        lastReportedAt: new Date().toISOString()
+      },
+      status: (payload.status as any) || 'AVAILABLE',
+      operationalState: (payload.status as any) || 'AVAILABLE',
+      assignedUserId: payload.assigned_user_id,
+      capabilities: payload.capabilities || ['Rapid Intercept', 'First Aid'],
+      ratingScore: 4.9,
+      organizationName: payload.organization_name,
+      email: payload.email,
+      serviceArea: payload.assigned_district || 'Tshwane South',
+      verificationStatus: payload.verification_status || 'PENDING_VERIFICATION',
+      enrolledBy: payload.enrolled_by_user_id,
+      enrolmentDate: new Date().toISOString(),
+      profilePhotoUrl: payload.profile_photo_url
+    };
+    db.responderUnits.set(unit.id, unit);
+    return unit;
+  }
 }
 
 class InMemoryAuditRepository implements IAuditRepository {

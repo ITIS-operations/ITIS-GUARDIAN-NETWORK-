@@ -312,6 +312,13 @@ export function App() {
     }
   }, [activeTab]);
 
+  // Controlled Portal Footer: Redundant in operational portals, preserved for Parent/Guardian portal & public views
+  const shouldShowFooter = 
+    activeTab === 'LANDING_PAGE' || 
+    activeTab === 'LOGIN' || 
+    activeTab === 'GUARDIAN_HUB' ||
+    currentUser?.role === 'PARENT_GUARDIAN';
+
   return (
     <div className="min-h-screen bg-[#060b18] text-slate-100 flex flex-col selection:bg-cyan-500 selection:text-white max-w-full overflow-x-hidden">
       {/* Master Canonical Header */}
@@ -514,13 +521,15 @@ export function App() {
         />
       )}
 
-      {/* Complete Corporate Footer */}
-      <Footer 
-        activeTab={activeTab}
-        setActiveTab={handleNavigateTab}
-        onOpenLogin={() => handleNavigateTab('LOGIN')}
-        onSelectLandingSection={handleSelectLandingSection}
-      />
+      {/* Corporate Footer (Preserved in Public Views and Parent/Guardian Portal; Hidden in Operational Portals) */}
+      {shouldShowFooter && (
+        <Footer 
+          activeTab={activeTab}
+          setActiveTab={handleNavigateTab}
+          onOpenLogin={() => handleNavigateTab('LOGIN')}
+          onSelectLandingSection={handleSelectLandingSection}
+        />
+      )}
     </div>
   );
 }

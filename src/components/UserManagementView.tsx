@@ -26,6 +26,7 @@ import { PlatformUserItem, UserRole, AccountStatus, School as SchoolType, Active
 import { api } from '../services/api.js';
 import { CreateUserModal } from './CreateUserModal.js';
 import { EditUserModal } from './EditUserModal.js';
+import { EnrolFirstResponderModal } from './EnrolFirstResponderModal.js';
 
 interface Props {
   schools: SchoolType[];
@@ -41,6 +42,9 @@ export const UserManagementView: React.FC<Props> = ({ schools = [], currentUser 
   
   // Create User Modal state
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+
+  // Enrol First Responder Modal state
+  const [isEnrolResponderModalOpen, setIsEnrolResponderModalOpen] = useState(false);
 
   // Edit User Modal state
   const [editingUser, setEditingUser] = useState<PlatformUserItem | null>(null);
@@ -229,10 +233,19 @@ export const UserManagementView: React.FC<Props> = ({ schools = [], currentUser 
           <button
             id="btn-open-create-user-modal"
             onClick={() => setIsCreateModalOpen(true)}
-            className="min-h-[44px] px-5 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-lg shadow-cyan-900/30"
+            className="min-h-[44px] px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-lg shadow-cyan-900/30 cursor-pointer"
           >
             <UserPlus className="w-4 h-4" />
             <span>CREATE USER</span>
+          </button>
+
+          <button
+            id="btn-open-enrol-responder-modal"
+            onClick={() => setIsEnrolResponderModalOpen(true)}
+            className="min-h-[44px] px-4 py-2 rounded-xl bg-[#d4af37] hover:bg-[#b89528] text-slate-950 text-xs font-bold flex items-center gap-2 transition-all shadow-lg shadow-[#d4af37]/20 cursor-pointer"
+          >
+            <Shield className="w-4 h-4" />
+            <span>ENROL FIRST RESPONDER</span>
           </button>
         </div>
       </div>
@@ -536,6 +549,17 @@ export const UserManagementView: React.FC<Props> = ({ schools = [], currentUser 
         onUserDeleted={handleUserDeleted}
         schools={schools}
       />
+
+      {/* Enrol First Responder Modal */}
+      {isEnrolResponderModalOpen && (
+        <EnrolFirstResponderModal
+          onClose={() => setIsEnrolResponderModalOpen(false)}
+          onSuccess={() => {
+            fetchUsers();
+          }}
+          founderName={currentUser?.name}
+        />
+      )}
     </div>
   );
 };

@@ -47,6 +47,7 @@ import {
 import { api } from '../services/api.js';
 import { UserManagementView } from './UserManagementView.js';
 import { FounderPasswordControl } from './FounderPasswordControl.js';
+import { SchoolDetailModal } from './SchoolDetailModal.js';
 
 export type ExecutivePortalTab = 
   | 'OVERVIEW'
@@ -78,6 +79,7 @@ export const ExecutiveGovernmentPortal: React.FC<Props> = ({
   const [selectedProvinceFilter, setSelectedProvinceFilter] = useState<string>('ALL');
   const [selectedDistrict, setSelectedDistrict] = useState<ExecutiveProvincialMetric | null>(null);
   const [drillDownSearch, setDrillDownSearch] = useState('');
+  const [selectedSchoolForDetail, setSelectedSchoolForDetail] = useState<SchoolType | null>(null);
 
   // Phase 9 Validation Suite State
   const [isValidating, setIsValidating] = useState(false);
@@ -643,6 +645,17 @@ export const ExecutiveGovernmentPortal: React.FC<Props> = ({
                         <strong className="text-emerald-400">Locked ({school.geofenceCenter?.radiusMeters || 25}m)</strong>
                       </div>
                     </div>
+
+                    <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
+                      <span className="text-[10px] text-slate-500 font-mono">Autonomous Safe Campus</span>
+                      <button
+                        onClick={() => setSelectedSchoolForDetail(school)}
+                        className="px-2.5 py-1.5 rounded-lg bg-[#d4af37]/15 hover:bg-[#d4af37]/25 text-[#d4af37] border border-[#d4af37]/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                      >
+                        <Building2 className="w-3.5 h-3.5" />
+                        <span>School Intelligence (Learners &amp; Responders)</span>
+                      </button>
+                    </div>
                   </div>
                 ))}
             </div>
@@ -967,6 +980,14 @@ export const ExecutiveGovernmentPortal: React.FC<Props> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* School Intelligence Detail Modal */}
+      {selectedSchoolForDetail && (
+        <SchoolDetailModal
+          school={selectedSchoolForDetail}
+          onClose={() => setSelectedSchoolForDetail(null)}
+        />
       )}
     </div>
   );

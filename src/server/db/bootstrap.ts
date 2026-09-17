@@ -418,6 +418,14 @@ export async function bootstrapDatabase(): Promise<void> {
       created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
+
+    ALTER TABLE responders ADD COLUMN IF NOT EXISTS verification_status VARCHAR(64) DEFAULT 'PENDING_VERIFICATION';
+    ALTER TABLE responders ADD COLUMN IF NOT EXISTS enrolled_by_user_id VARCHAR(64);
+    ALTER TABLE responders ADD COLUMN IF NOT EXISTS enrolment_date TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+    ALTER TABLE responders ADD COLUMN IF NOT EXISTS verification_date TIMESTAMPTZ;
+    ALTER TABLE responders ADD COLUMN IF NOT EXISTS profile_photo_url TEXT;
+    ALTER TABLE responders ADD COLUMN IF NOT EXISTS email VARCHAR(255);
+    ALTER TABLE responders ADD COLUMN IF NOT EXISTS service_area VARCHAR(128);
   `);
 
   // 15. Incidents

@@ -3677,6 +3677,74 @@ export class PostgresResponderRepository implements IResponderRepository {
     return unit;
   }
 
+  async enrolResponder(payload: {
+    id: string;
+    callsign: string;
+    name: string;
+    unit_type: string;
+    organization_name: string;
+    vehicle_id?: string;
+    primary_officer_name: string;
+    contact_phone: string;
+    radio_frequency?: string;
+    is_available?: boolean;
+    status?: string;
+    assigned_user_id?: string;
+    capabilities?: string[];
+    assigned_district: string;
+    current_latitude?: number;
+    current_longitude?: number;
+    verification_status?: string;
+    enrolled_by_user_id?: string;
+    email?: string;
+    profile_photo_url?: string;
+  }): Promise<ResponderUnit> {
+    const existing = await this.findByCallsign(payload.callsign);
+    if (existing) {
+      throw new Error(`Duplicate callsign '${payload.callsign}' already registered in tactical inventory.`);
+    }
+
+    const res = await query(
+      `INSERT INTO responders (
+        id, callsign, name, unit_type, organization_name, vehicle_id,
+        primary_officer_name, contact_phone, radio_frequency, is_available,
+        status, assigned_user_id, capabilities, rating_score, current_latitude,
+        current_longitude, address_description, last_location_update, assigned_district,
+        verification_status, enrolled_by_user_id, enrolment_date, email, profile_photo_url
+      ) VALUES (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, 4.9, $14, $15, $16, $17, $18, $19, $20, CURRENT_TIMESTAMP, $21, $22
+      ) RETURNING *;`,
+      [
+        payload.id,
+        payload.callsign,
+        payload.name,
+        payload.unit_type,
+        payload.organization_name,
+        payload.vehicle_id || null,
+        payload.primary_officer_name,
+        payload.contact_phone,
+        payload.radio_frequency || null,
+        payload.is_available ?? true,
+        payload.status || 'AVAILABLE',
+        payload.assigned_user_id || null,
+        payload.capabilities || ['Rapid Intercept', 'First Aid'],
+        payload.current_latitude || -25.7550,
+        payload.current_longitude || 28.2310,
+        'Sector Deployment Hub',
+        new Date().toISOString(),
+        payload.assigned_district || 'Tshwane South',
+        payload.verification_status || 'PENDING_VERIFICATION',
+        payload.enrolled_by_user_id || null,
+        payload.email || null,
+        payload.profile_photo_url || null
+      ]
+    );
+
+    const mapped = this.mapRowToResponder(res.rows[0]);
+    db.responderUnits.set(mapped.id, mapped);
+    return mapped;
+  }
+
   private mapRowToResponder(row: any): ResponderUnit {
     return {
       id: row.id,
@@ -3701,7 +3769,15 @@ export class PostgresResponderRepository implements IResponderRepository {
       activeIncidentId: row.current_incident_id || undefined,
       assignedUserId: row.assigned_user_id || undefined,
       capabilities: row.capabilities || [],
-      ratingScore: row.rating_score ? Number(row.rating_score) : 4.8
+      ratingScore: row.rating_score ? Number(row.rating_score) : 4.8,
+      organizationName: row.organization_name || undefined,
+      email: row.email || undefined,
+      serviceArea: row.assigned_district || undefined,
+      verificationStatus: row.verification_status || 'VERIFIED',
+      enrolledBy: row.enrolled_by_user_id || undefined,
+      enrolmentDate: row.enrolment_date ? new Date(row.enrolment_date).toISOString() : undefined,
+      verificationDate: row.verification_date ? new Date(row.verification_date).toISOString() : undefined,
+      profilePhotoUrl: row.profile_photo_url || undefined
     };
   }
 }

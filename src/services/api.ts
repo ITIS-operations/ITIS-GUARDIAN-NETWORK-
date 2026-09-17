@@ -49,7 +49,10 @@ import {
   SafetyAutomationTestSuiteResult,
   SafetyRuleConfig,
   OperationalTelemetryDiagnostics,
-  TelemetryDiagnosticsTestSuiteResult
+  TelemetryDiagnosticsTestSuiteResult,
+  EnrolFirstResponderPayload,
+  NearbyResponderItem,
+  SmartIdVerificationResult
 } from '../types.js';
 
 const API_BASE = '/api';
@@ -1445,5 +1448,40 @@ export const api = {
       headers: this.getAuthHeaders()
     });
     return safeFetchJson<TelemetryDiagnosticsTestSuiteResult>(res, 'Failed to run telemetry diagnostics test suite');
+  },
+
+  // First Responder Enrolment (Founder/SuperAdmin only)
+  async enrolFirstResponder(payload: EnrolFirstResponderPayload): Promise<{ success: boolean; responder: ResponderUnit; user: PlatformUserItem }> {
+    const res = await fetch(`${API_BASE}/responders/enrol`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify(payload)
+    });
+    return safeFetchJson<{ success: boolean; responder: ResponderUnit; user: PlatformUserItem }>(res, 'Failed to enrol First Responder');
+  },
+
+  // School Intelligence: Nearby Responders View
+  async getSchoolNearbyResponders(schoolId: string): Promise<{ schoolId: string; schoolName: string; disclaimer: string; responders: NearbyResponderItem[] }> {
+    const res = await fetch(`${API_BASE}/schools/${encodeURIComponent(schoolId)}/nearby-responders`, {
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<{ schoolId: string; schoolName: string; disclaimer: string; responders: NearbyResponderItem[] }>(res, 'Failed to fetch nearby responders');
+  },
+
+  // Single School Detail
+  async getSchoolById(schoolId: string): Promise<School & { enrolledLearnersCount?: number }> {
+    const res = await fetch(`${API_BASE}/schools/${encodeURIComponent(schoolId)}`, {
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<School & { enrolledLearnersCount?: number }>(res, 'Failed to fetch school details');
+  },
+
+  // Privacy-Preserving Smart ID Verification
+  async verifySmartId(ref: string): Promise<SmartIdVerificationResult> {
+    const res = await fetch(`${API_BASE}/verify/smart-id/${encodeURIComponent(ref)}`);
+    return safeFetchJson<SmartIdVerificationResult>(res, 'Failed to verify Smart ID card');
   }
 };

@@ -1498,6 +1498,289 @@ app.post('/api/schools', requireAuth, async (req, res) => {
   }
 });
 
+// Proximity distance calculation helper using Haversine formula
+function computeHaversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; // Earth radius in km
+  const dLat = (lat2 - lat1) * (Math.PI / 180);
+  const dLon = (lon2 - lon1) * (Math.PI / 180);
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * (Math.PI / 180)) *
+      Math.cos(lat2 * (Math.PI / 180)) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// Single School Detail View (with enrolled learners count)
+app.get('/api/schools/:id', requireAuth, async (req, res) => {
+  try {
+    const schoolId = normalizeParam(req.params.id);
+    const school = await repository.schools.findById(schoolId);
+    if (!school) {
+      return res.status(404).json({ error: 'School not found' });
+    }
+    const countRes = await query(
+      `SELECT COUNT(*)::int as count FROM learners WHERE current_school_id = $1 AND enrolment_status = 'ACTIVE';`,
+      [schoolId]
+    );
+    const enrolledLearnersCount = countRes.rows[0]?.count ?? 0;
+    res.json({ ...school, enrolledLearnersCount });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// School Nearby First Responders (Authorized Admin situational awareness)
+app.get('/api/schools/:id/nearby-responders', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const schoolId = normalizeParam(req.params.id);
+
+    // RBAC Authorization: Founder, System Admin, Command Operator, and assigned School Principal/Staff
+    const isAuthorized = 
+      user.role === 'FOUNDER_EXECUTIVE' || 
+      user.role === 'SYSTEM_ADMIN' || 
+      user.role === 'COMMAND_OPERATOR' ||
+      ((user.role === 'SCHOOL_PRINCIPAL' || user.role === 'SCHOOL_ADMIN_STAFF') && (!user.schoolId || user.schoolId === schoolId));
+
+    if (!isAuthorized) {
+      return res.status(403).json({
+        error: 'ACCESS DENIED: Insufficient clearance to view school tactical responder deployment.',
+        violationCode: 'RBAC_NEARBY_RESPONDER_FORBIDDEN'
+      });
+    }
+
+    const school = await repository.schools.findById(schoolId);
+    if (!school) {
+      return res.status(404).json({ error: 'School not found' });
+    }
+
+    const schoolLat = school.geofenceCenter?.lat ?? -25.7589;
+    const schoolLng = school.geofenceCenter?.lng ?? 28.2321;
+
+    const allResponders = await repository.responders.findAll();
+
+    const nearbyList = allResponders.map(r => {
+      const respLat = r.currentLocation?.lat ?? -25.7550;
+      const respLng = r.currentLocation?.lng ?? 28.2310;
+      const dist = computeHaversineDistanceKm(schoolLat, schoolLng, respLat, respLng);
+
+      // Evaluate location freshness based on lastReportedAt
+      let freshness: 'LIVE' | 'STALE' | 'UNAVAILABLE' = 'UNAVAILABLE';
+      if (r.currentLocation?.lastReportedAt) {
+        const diffMinutes = Math.floor((Date.now() - new Date(r.currentLocation.lastReportedAt).getTime()) / 60000);
+        if (diffMinutes <= 15) {
+          freshness = 'LIVE';
+        } else if (diffMinutes <= 60) {
+          freshness = 'STALE';
+        } else {
+          freshness = 'UNAVAILABLE';
+        }
+      } else {
+        freshness = 'UNAVAILABLE';
+      }
+
+      return {
+        id: r.id,
+        callSign: r.callSign,
+        name: r.name,
+        unitType: r.unitType,
+        organization: r.organizationName || (r.unitType === 'SAPS' ? 'South African Police Service' : 'Emergency Services'),
+        status: r.status,
+        distanceKm: Math.round(dist * 10) / 10,
+        distanceDisplay: `${(Math.round(dist * 10) / 10).toFixed(1)} km`,
+        locationFreshness: freshness,
+        lastReportedAt: r.currentLocation?.lastReportedAt,
+        capabilities: r.capabilities || ['Rapid Intercept', 'First Aid'],
+        vehicleId: r.vehicleId,
+        verificationStatus: r.verificationStatus || 'VERIFIED'
+      };
+    }).sort((a, b) => a.distanceKm - b.distanceKm);
+
+    res.json({
+      schoolId: school.id,
+      schoolName: school.name,
+      disclaimer: 'Nearby responder display is for operational situational awareness only. In accordance with platform protocols, automatic dispatch is strictly governed by the Command Centre incident lifecycle.',
+      responders: nearbyList
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// First Responder Enrolment (Exclusively Founder/SuperAdmin authority)
+app.post('/api/responders/enrol', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    if (user.role !== 'FOUNDER_EXECUTIVE') {
+      await repository.auditLogs.logEvent({
+        actionType: 'UNAUTHORIZED_RESPONDER_ENROLMENT_ATTEMPT',
+        actorUserId: user.id,
+        actorName: user.name,
+        actorRole: user.role,
+        targetEntity: 'RESPONDER',
+        targetId: req.body?.callSign || 'unknown',
+        details: { attemptedRole: user.role, violation: 'NON_FOUNDER_RESPONDER_ENROLMENT' },
+        ipAddress: req.ip || '127.0.0.1'
+      });
+      return res.status(403).json({
+        error: 'ACCESS DENIED: Only the Founder / Sovereign Administrator is authorized to enrol First Responders into the national network.',
+        violationCode: 'UNAUTHORIZED_RESPONDER_ENROLMENT'
+      });
+    }
+
+    const {
+      firstName,
+      lastName,
+      email,
+      mobileNumber,
+      callSign,
+      unitType,
+      organizationName,
+      serviceArea,
+      vehicleId,
+      radioFrequency,
+      capabilities,
+      status,
+      verificationStatus,
+      profilePhotoUrl,
+      password
+    } = req.body;
+
+    if (!firstName || !lastName || !email || !callSign || !mobileNumber || !organizationName) {
+      return res.status(400).json({
+        error: 'Missing required enrolment fields (firstName, lastName, email, mobileNumber, callSign, organizationName).'
+      });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanCallSign = callSign.trim().toUpperCase();
+
+    // 1. Link to existing user or create platform user identity
+    let platformUser = await repository.users.findByEmailOrAlias(cleanEmail);
+    if (!platformUser) {
+      platformUser = await repository.users.create({
+        email: cleanEmail,
+        firstName: firstName.trim(),
+        surname: lastName.trim(),
+        mobileNumber: mobileNumber.trim(),
+        role: 'FIELD_RESPONDER',
+        password: password || undefined,
+        responderUnit: cleanCallSign,
+        organization: organizationName.trim(),
+        department: 'Tactical Emergency Response',
+        status: 'ACTIVE',
+        permissions: []
+      }, user.id);
+    } else {
+      if (platformUser.role !== 'FIELD_RESPONDER') {
+        await repository.users.update(platformUser.id, {
+          role: 'FIELD_RESPONDER',
+          responderUnit: cleanCallSign,
+          organization: organizationName.trim()
+        }, user.id);
+        platformUser = (await repository.users.findById(platformUser.id)) || platformUser;
+      }
+    }
+
+    // 2. Enrol responder in authoritative repository & database
+    const responderId = `resp-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const enrolledUnit = await (repository.responders as any).enrolResponder({
+      id: responderId,
+      callsign: cleanCallSign,
+      name: `${firstName.trim()} ${lastName.trim()}`,
+      unit_type: unitType || 'PRIVATE_SECURITY',
+      organization_name: organizationName.trim(),
+      vehicle_id: vehicleId?.trim() || `VEH-${cleanCallSign}`,
+      primary_officer_name: `${firstName.trim()} ${lastName.trim()}`,
+      contact_phone: mobileNumber.trim(),
+      radio_frequency: radioFrequency?.trim() || 'VHF TAC-01',
+      is_available: (status || 'AVAILABLE') === 'AVAILABLE',
+      status: status || 'AVAILABLE',
+      assigned_user_id: platformUser.id,
+      capabilities: capabilities && capabilities.length > 0 ? capabilities : ['Rapid Intercept', 'First Aid'],
+      assigned_district: serviceArea?.trim() || 'Tshwane South',
+      current_latitude: -25.7550,
+      current_longitude: 28.2310,
+      verification_status: verificationStatus || 'VERIFIED',
+      enrolled_by_user_id: user.id,
+      email: cleanEmail,
+      profile_photo_url: profilePhotoUrl?.trim() || null
+    });
+
+    // 3. Audit log
+    await repository.auditLogs.logEvent({
+      actionType: 'FIRST_RESPONDER_ENROLLED',
+      actorUserId: user.id,
+      actorName: user.name,
+      actorRole: user.role,
+      targetEntity: 'RESPONDER',
+      targetId: enrolledUnit.id,
+      details: {
+        callSign: enrolledUnit.callSign,
+        officerName: enrolledUnit.name,
+        unitType: enrolledUnit.unitType,
+        organization: enrolledUnit.organizationName,
+        serviceArea: enrolledUnit.serviceArea,
+        verificationStatus: enrolledUnit.verificationStatus,
+        assignedUserId: platformUser.id
+      },
+      ipAddress: req.ip || '127.0.0.1'
+    });
+
+    res.status(201).json({
+      success: true,
+      responder: enrolledUnit,
+      user: platformUser
+    });
+  } catch (err: any) {
+    if (err.message && err.message.includes('already registered')) {
+      return res.status(409).json({ error: err.message, violationCode: 'DUPLICATE_IDENTITY' });
+    }
+    res.status(400).json({ error: err.message || 'Responder enrolment failed.' });
+  }
+});
+
+// Privacy-preserving Smart ID Verification Endpoint
+app.get(['/api/verify/smart-id/:ref', '/api/verify/learner/:ref'], async (req, res) => {
+  try {
+    const ref = normalizeParam(req.params.ref);
+    const learner = await repository.learners.findById(ref);
+    if (!learner) {
+      return res.status(404).json({
+        status: 'INVALID',
+        message: 'No authoritative learner safety record found for this verification reference.',
+        verifiedAt: new Date().toISOString()
+      });
+    }
+
+    const person = await repository.persons.findById(learner.personId);
+    const school = learner.currentSchoolId ? await repository.schools.findById(learner.currentSchoolId) : null;
+    
+    const academicRes = await query(
+      `SELECT grade, class_section FROM academic_records WHERE learner_id = $1 AND is_current = TRUE LIMIT 1;`,
+      [learner.id]
+    );
+    const grade = academicRes.rows[0]?.grade || 'Enrolled Grade';
+    const isValid = learner.enrolmentStatus === 'ACTIVE';
+
+    res.json({
+      status: isValid ? 'VALID' : 'INACTIVE',
+      learnerDisplayName: person ? `${person.firstName} ${person.lastName.charAt(0)}.` : 'Enrolled Learner',
+      schoolName: school ? school.name : 'Registered Partner Institution',
+      admissionNumber: learner.admissionNumber,
+      grade,
+      recordStatus: learner.enrolmentStatus || 'ACTIVE',
+      verifiedAt: new Date().toISOString(),
+      issuer: 'ITIS Guardian Network Sovereign Verification Authority'
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.get('/api/guardians', requireAuth, async (req, res) => {
   const user = req.user!;
 

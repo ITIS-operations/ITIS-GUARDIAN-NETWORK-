@@ -25,12 +25,15 @@ import {
   ExternalLink,
   X,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Printer
 } from 'lucide-react';
 import { ActiveUserSession, HydratedLearnerRecord, School as SchoolType, UserRole, PaginatedResponse } from '../types.js';
 import { api } from '../services/api.js';
 import { RegisterSchoolModal } from './RegisterSchoolModal.js';
 import { AnnualSafetyUpdateModal } from './AnnualSafetyUpdateModal.js';
+import { SchoolDetailModal } from './SchoolDetailModal.js';
+import { LearnerSmartIdModal } from './LearnerSmartIdModal.js';
 
 export type AdminSection = 
   | 'USERS' 
@@ -59,7 +62,10 @@ export const AdminPortal: React.FC<Props> = ({
   const safeLearners = Array.isArray(learners) ? learners : [];
   const safeSchools = Array.isArray(schools) ? schools : [];
 
-  const [currentTab, setCurrentTab] = useState<AdminSection>('USERS');
+  const isSystemAdmin = currentUser?.role === 'SYSTEM_ADMIN';
+  const [currentTab, setCurrentTab] = useState<AdminSection>(
+    currentUser?.role === 'SYSTEM_ADMIN' ? 'SCHOOLS' : 'USERS'
+  );
   const [searchQuery, setSearchQuery] = useState('');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [liveUsers, setLiveUsers] = useState<any[]>([]);
@@ -77,6 +83,8 @@ export const AdminPortal: React.FC<Props> = ({
   // School Registration & Safety Update Modals
   const [isRegisterSchoolOpen, setIsRegisterSchoolOpen] = useState(false);
   const [selectedLearnerForSafetyUpdate, setSelectedLearnerForSafetyUpdate] = useState<HydratedLearnerRecord | null>(null);
+  const [selectedSchoolForDetail, setSelectedSchoolForDetail] = useState<SchoolType | null>(null);
+  const [selectedLearnerForSmartId, setSelectedLearnerForSmartId] = useState<HydratedLearnerRecord | null>(null);
 
   // Enrolment & Duplicate Prevention Validation Test Suite State
   const [enrolmentTestReport, setEnrolmentTestReport] = useState<any | null>(null);
@@ -114,6 +122,12 @@ export const AdminPortal: React.FC<Props> = ({
       setIsLoadingLearners(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (isSystemAdmin && currentTab === 'USERS') {
+      setCurrentTab('SCHOOLS');
+    }
+  }, [isSystemAdmin, currentTab]);
 
   useEffect(() => {
     if (currentTab === 'LEARNERS') {
@@ -239,17 +253,19 @@ export const AdminPortal: React.FC<Props> = ({
 
       {/* Admin Role Navigation Tabs */}
       <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-slate-800 scrollbar-none">
-        <button
-          onClick={() => setCurrentTab('USERS')}
-          className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 ${
-            currentTab === 'USERS'
-              ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 shadow-sm'
-              : 'text-slate-400 hover:text-white hover:bg-slate-900 border border-transparent'
-          }`}
-        >
-          <Users className="w-4 h-4" />
-          <span>Registered Platform Users ({liveUsers.length})</span>
-        </button>
+        {!isSystemAdmin && (
+          <button
+            onClick={() => setCurrentTab('USERS')}
+            className={`min-h-[44px] px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-2 ${
+              currentTab === 'USERS'
+                ? 'bg-cyan-500/15 text-cyan-300 border border-cyan-500/40 shadow-sm'
+                : 'text-slate-400 hover:text-white hover:bg-slate-900 border border-transparent'
+            }`}
+          >
+            <Users className="w-4 h-4" />
+            <span>Registered Platform Users ({liveUsers.length})</span>
+          </button>
+        )}
 
         <button
           onClick={() => setCurrentTab('SCHOOLS')}
@@ -327,7 +343,7 @@ export const AdminPortal: React.FC<Props> = ({
       {/* ==================================================== */}
       {/* 1. USERS SECTION */}
       {/* ==================================================== */}
-      {currentTab === 'USERS' && (
+      {currentTab === 'USERS' && !isSystemAdmin && (
         <div className="space-y-4">
           <div className="p-4 rounded-xl bg-slate-900 border border-slate-800 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
             <div className="relative flex-1 max-w-md">
@@ -453,6 +469,16 @@ export const AdminPortal: React.FC<Props> = ({
                     <span className="text-cyan-400 font-mono">{sch.geofenceCenter.radiusMeters}m Perimeter</span>
                   </div>
                 </div>
+
+                <div className="pt-2 border-t border-slate-800/80 flex justify-end">
+                  <button
+                    onClick={() => setSelectedSchoolForDetail(sch)}
+                    className="px-3 py-1.5 rounded-lg bg-[#d4af37]/15 hover:bg-[#d4af37]/25 text-[#d4af37] border border-[#d4af37]/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    <Building2 className="w-3.5 h-3.5" />
+                    <span>School Intelligence (Learners &amp; Responders)</span>
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -569,13 +595,23 @@ export const AdminPortal: React.FC<Props> = ({
                         {l.guardians.map(g => `${g.person.firstName} ${g.person.lastName}`).join(', ') || 'None'}
                       </td>
                       <td className="py-3 px-4 text-right">
-                        <button
-                          onClick={() => setSelectedLearnerForSafetyUpdate(l)}
-                          className="px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-xs font-bold transition-all inline-flex items-center gap-1"
-                        >
-                          <ShieldCheck className="w-3.5 h-3.5" />
-                          <span>Annual Safety Update</span>
-                        </button>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <button
+                            onClick={() => setSelectedLearnerForSmartId(l)}
+                            className="px-2.5 py-1.5 rounded-lg bg-[#d4af37]/15 hover:bg-[#d4af37]/25 text-[#d4af37] border border-[#d4af37]/30 text-xs font-bold transition-all inline-flex items-center gap-1 cursor-pointer"
+                            title="Generate and Print Smart ID Card"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                            <span>Print Smart ID</span>
+                          </button>
+                          <button
+                            onClick={() => setSelectedLearnerForSafetyUpdate(l)}
+                            className="px-3 py-1.5 rounded-lg bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 text-xs font-bold transition-all inline-flex items-center gap-1 cursor-pointer"
+                          >
+                            <ShieldCheck className="w-3.5 h-3.5" />
+                            <span>Annual Safety Update</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}
@@ -870,6 +906,22 @@ export const AdminPortal: React.FC<Props> = ({
             </div>
           </div>
         </div>
+      )}
+
+      {/* School Intelligence Detail Modal */}
+      {selectedSchoolForDetail && (
+        <SchoolDetailModal
+          school={selectedSchoolForDetail}
+          onClose={() => setSelectedSchoolForDetail(null)}
+        />
+      )}
+
+      {/* Learner Printable Smart ID Modal */}
+      {selectedLearnerForSmartId && (
+        <LearnerSmartIdModal
+          learner={selectedLearnerForSmartId}
+          onClose={() => setSelectedLearnerForSmartId(null)}
+        />
       )}
     </div>
   );

@@ -80,6 +80,7 @@ export interface Learner {
   photoUrl?: string;
   specialSafetyNotes?: string;
   activePanicAlertId?: string;
+  enrolmentStatus?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -651,6 +652,60 @@ export interface ResponderUnit {
   assignedUserId?: string;
   capabilities: string[];
   ratingScore?: number;
+  organizationName?: string;
+  email?: string;
+  serviceArea?: string;
+  verificationStatus?: 'VERIFIED' | 'PENDING_VERIFICATION' | 'UNDER_REVIEW' | 'SUSPENDED';
+  enrolledBy?: string;
+  enrolmentDate?: string;
+  verificationDate?: string;
+  profilePhotoUrl?: string;
+}
+
+export interface EnrolFirstResponderPayload {
+  firstName: string;
+  lastName: string;
+  email: string;
+  mobileNumber: string;
+  callSign: string;
+  unitType: ResponderUnitType;
+  organizationName: string;
+  serviceArea: string;
+  vehicleId?: string;
+  radioFrequency?: string;
+  capabilities?: string[];
+  status?: ResponderOperationalState;
+  verificationStatus?: 'VERIFIED' | 'PENDING_VERIFICATION' | 'UNDER_REVIEW';
+  profilePhotoUrl?: string;
+  password?: string;
+}
+
+export interface NearbyResponderItem {
+  id: string;
+  callSign: string;
+  name: string;
+  unitType: ResponderUnitType;
+  organization: string;
+  status: ResponderOperationalState;
+  distanceKm: number;
+  distanceDisplay: string;
+  locationFreshness: 'LIVE' | 'STALE' | 'UNAVAILABLE';
+  lastReportedAt?: string;
+  capabilities: string[];
+  vehicleId?: string;
+  verificationStatus?: string;
+}
+
+export interface SmartIdVerificationResult {
+  status: 'VALID' | 'INVALID' | 'INACTIVE';
+  learnerDisplayName?: string;
+  schoolName?: string;
+  admissionNumber?: string;
+  grade?: string;
+  recordStatus?: string;
+  verifiedAt?: string;
+  issuer?: string;
+  message?: string;
 }
 
 export interface AssignedIncidentView {
