@@ -48,7 +48,7 @@ export const TrustSafetySection: React.FC = () => {
       number: '04',
       title: 'RESPONSIBLE DATA PROTECTION',
       summary: 'Sensitive information is handled according to applicable privacy and security requirements.',
-      description: 'Learner information is protected under strict privacy guidelines, used solely for safety, and never monetized.',
+      description: 'Learner information is protected under strict privacy guidelines, used solely for safety, and never monetised.',
       icon: Lock,
       color: 'text-emerald-400',
       borderColor: 'border-emerald-500/30',
@@ -58,7 +58,7 @@ export const TrustSafetySection: React.FC = () => {
       number: '05',
       title: 'ACCOUNTABILITY',
       summary: 'Important operational actions are securely recorded for review.',
-      description: 'Verifiable audit trails ensure transparent record-keeping for schools, families, and authorized review.',
+      description: 'Verifiable audit trails ensure transparent record-keeping for schools, families, and authorised review.',
       icon: FileCheck2,
       color: 'text-[#d4af37]',
       borderColor: 'border-[#d4af37]/35',
@@ -70,7 +70,7 @@ export const TrustSafetySection: React.FC = () => {
     {
       label: 'Designed for coordination with',
       entity: 'Police (SAPS)',
-      detail: 'Standardized incident briefs & location handoffs for law enforcement.',
+      detail: 'Standardised incident briefs & location handoffs for law enforcement.',
       icon: Shield
     },
     {
@@ -88,7 +88,7 @@ export const TrustSafetySection: React.FC = () => {
     {
       label: 'Designed for coordination with',
       entity: 'Community Safety Groups',
-      detail: 'Authorised neighborhood watches & Community Policing Forums.',
+      detail: 'Authorised neighbourhood watches & Community Policing Forums.',
       icon: Users
     },
     {
@@ -111,10 +111,10 @@ export const TrustSafetySection: React.FC = () => {
         
         <div className="space-y-1">
           <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight leading-tight uppercase font-mono">
-            BUILT FOR TRUST.
+            Built for trust.
           </h2>
           <h2 className="text-2xl sm:text-4xl font-extrabold text-cyan-300 tracking-tight leading-tight uppercase font-mono">
-            DESIGNED FOR CHILD SAFETY.
+            Designed for child safety.
           </h2>
         </div>
 
@@ -177,7 +177,7 @@ export const TrustSafetySection: React.FC = () => {
             </h3>
           </div>
           <p className="text-xs text-slate-400 max-w-lg leading-relaxed">
-            ITIS is engineered to share verified situational data smoothly with authorized response entities during critical events.
+            ITIS is engineered to share verified situational data smoothly with authorised response entities during critical events.
           </p>
         </div>
 
@@ -216,7 +216,7 @@ export const TrustSafetySection: React.FC = () => {
         {/* Responsible Tech Note */}
         <div className="text-center pt-2">
           <p className="text-[11px] text-slate-400 max-w-2xl mx-auto leading-relaxed">
-            * Operational response dispatch is coordinated directly with accredited, locally active service providers. Response capabilities depend on geographic availability and authorized agreements.
+            * Operational response dispatch is coordinated directly with accredited, locally active service providers. Response capabilities depend on geographic availability and authorised agreements.
           </p>
         </div>
 

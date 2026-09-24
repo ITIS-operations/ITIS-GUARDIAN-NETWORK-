@@ -397,7 +397,7 @@ export const SchoolDetailModal: React.FC<Props> = ({ school, onClose }) => {
                   <Shield className="w-8 h-8 text-slate-600 mx-auto" />
                   <div className="text-sm font-bold text-slate-300">No Tactical Units Active Nearby</div>
                   <p className="text-xs text-slate-500">
-                    No authorized First Responders currently reporting active coordinates within this district perimeter.
+                    No authorised First Responders currently reporting active coordinates within this district perimeter.
                   </p>
                 </div>
               ) : (

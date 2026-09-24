@@ -117,6 +117,13 @@ const panicTriggerRateLimiter = createRateLimiter({
   scope: 'incident_panic'
 });
 
+const smartIdVerifyRateLimiter = createRateLimiter({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: 'Smart ID verification query rate limit exceeded. Please wait 60 seconds before retrying.',
+  scope: 'smart_id_verify'
+});
+
 // ----------------------------------------------------
 // RBAC & ABAC SECURITY MIDDLEWARE
 // ----------------------------------------------------
@@ -1543,7 +1550,7 @@ app.get('/api/schools/:id/nearby-responders', requireAuth, async (req, res) => {
       user.role === 'FOUNDER_EXECUTIVE' || 
       user.role === 'SYSTEM_ADMIN' || 
       user.role === 'COMMAND_OPERATOR' ||
-      ((user.role === 'SCHOOL_PRINCIPAL' || user.role === 'SCHOOL_ADMIN_STAFF') && (!user.schoolId || user.schoolId === schoolId));
+      ((user.role === 'SCHOOL_PRINCIPAL' || user.role === 'SCHOOL_ADMIN_STAFF') && (!!user.schoolId && user.schoolId === schoolId));
 
     if (!isAuthorized) {
       return res.status(403).json({
@@ -1563,10 +1570,6 @@ app.get('/api/schools/:id/nearby-responders', requireAuth, async (req, res) => {
     const allResponders = await repository.responders.findAll();
 
     const nearbyList = allResponders.map(r => {
-      const respLat = r.currentLocation?.lat ?? -25.7550;
-      const respLng = r.currentLocation?.lng ?? 28.2310;
-      const dist = computeHaversineDistanceKm(schoolLat, schoolLng, respLat, respLng);
-
       // Evaluate location freshness based on lastReportedAt
       let freshness: 'LIVE' | 'STALE' | 'UNAVAILABLE' = 'UNAVAILABLE';
       if (r.currentLocation?.lastReportedAt) {
@@ -1582,6 +1585,12 @@ app.get('/api/schools/:id/nearby-responders', requireAuth, async (req, res) => {
         freshness = 'UNAVAILABLE';
       }
 
+      // Proximity calculation: Only calculate distance if real coordinates exist and location is not UNAVAILABLE
+      const hasRealCoords = r.currentLocation && typeof r.currentLocation.lat === 'number' && typeof r.currentLocation.lng === 'number';
+      const dist = (hasRealCoords && freshness !== 'UNAVAILABLE')
+        ? computeHaversineDistanceKm(schoolLat, schoolLng, r.currentLocation!.lat, r.currentLocation!.lng)
+        : null;
+
       return {
         id: r.id,
         callSign: r.callSign,
@@ -1589,15 +1598,15 @@ app.get('/api/schools/:id/nearby-responders', requireAuth, async (req, res) => {
         unitType: r.unitType,
         organization: r.organizationName || (r.unitType === 'SAPS' ? 'South African Police Service' : 'Emergency Services'),
         status: r.status,
-        distanceKm: Math.round(dist * 10) / 10,
-        distanceDisplay: `${(Math.round(dist * 10) / 10).toFixed(1)} km`,
+        distanceKm: dist !== null ? Math.round(dist * 10) / 10 : null,
+        distanceDisplay: dist !== null ? `${(Math.round(dist * 10) / 10).toFixed(1)} km` : (freshness === 'STALE' ? 'Location Stale' : 'Location Unavailable'),
         locationFreshness: freshness,
         lastReportedAt: r.currentLocation?.lastReportedAt,
         capabilities: r.capabilities || ['Rapid Intercept', 'First Aid'],
         vehicleId: r.vehicleId,
         verificationStatus: r.verificationStatus || 'VERIFIED'
       };
-    }).sort((a, b) => a.distanceKm - b.distanceKm);
+    }).sort((a, b) => (a.distanceKm ?? 9999) - (b.distanceKm ?? 9999));
 
     res.json({
       schoolId: school.id,
@@ -1606,7 +1615,8 @@ app.get('/api/schools/:id/nearby-responders', requireAuth, async (req, res) => {
       responders: nearbyList
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    logger.error('School nearby responders query error:', err);
+    res.status(500).json({ error: 'Failed to retrieve nearby responders for school.' });
   }
 });
 
@@ -1649,6 +1659,12 @@ app.post('/api/responders/enrol', requireAuth, async (req, res) => {
       password
     } = req.body;
 
+    const VALID_UNIT_TYPES = ['PRIVATE_SECURITY', 'SAPS', 'METRO_POLICE', 'PARAMEDIC_EMS', 'COMMUNITY_CPF', 'SCHOOL_SECURITY'];
+    const VALID_STATUSES = ['AVAILABLE', 'ON_SCENE', 'DISPATCHED', 'OFF_DUTY', 'STANDBY', 'BUSY'];
+    const VALID_VERIF = ['VERIFIED', 'PENDING_VERIFICATION', 'UNDER_REVIEW'];
+    const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    const PHONE_REGEX = /^\+?[0-9\s\-()]{7,25}$/;
+
     if (!firstName || !lastName || !email || !callSign || !mobileNumber || !organizationName) {
       return res.status(400).json({
         error: 'Missing required enrolment fields (firstName, lastName, email, mobileNumber, callSign, organizationName).'
@@ -1657,6 +1673,25 @@ app.post('/api/responders/enrol', requireAuth, async (req, res) => {
 
     const cleanEmail = email.trim().toLowerCase();
     const cleanCallSign = callSign.trim().toUpperCase();
+
+    if (!EMAIL_REGEX.test(cleanEmail)) {
+      return res.status(400).json({ error: 'Invalid email address format.' });
+    }
+    if (!PHONE_REGEX.test(mobileNumber.trim())) {
+      return res.status(400).json({ error: 'Invalid mobile phone number format.' });
+    }
+    if (unitType && !VALID_UNIT_TYPES.includes(unitType)) {
+      return res.status(400).json({ error: `Invalid responder unitType. Must be one of: ${VALID_UNIT_TYPES.join(', ')}` });
+    }
+    if (status && !VALID_STATUSES.includes(status)) {
+      return res.status(400).json({ error: `Invalid responder status. Must be one of: ${VALID_STATUSES.join(', ')}` });
+    }
+    if (verificationStatus && !VALID_VERIF.includes(verificationStatus)) {
+      return res.status(400).json({ error: `Invalid responder verificationStatus. Must be one of: ${VALID_VERIF.join(', ')}` });
+    }
+    if (firstName.trim().length > 100 || lastName.trim().length > 100 || cleanCallSign.length > 50 || organizationName.trim().length > 150) {
+      return res.status(400).json({ error: 'Enrolment field lengths exceed allowable thresholds.' });
+    }
 
     // 1. Link to existing user or create platform user identity
     let platformUser = await repository.users.findByEmailOrAlias(cleanEmail);
@@ -1739,12 +1774,13 @@ app.post('/api/responders/enrol', requireAuth, async (req, res) => {
     if (err.message && err.message.includes('already registered')) {
       return res.status(409).json({ error: err.message, violationCode: 'DUPLICATE_IDENTITY' });
     }
+    logger.error('Responder enrolment failed:', err);
     res.status(400).json({ error: err.message || 'Responder enrolment failed.' });
   }
 });
 
 // Privacy-preserving Smart ID Verification Endpoint
-app.get(['/api/verify/smart-id/:ref', '/api/verify/learner/:ref'], async (req, res) => {
+app.get(['/api/verify/smart-id/:ref', '/api/verify/learner/:ref'], smartIdVerifyRateLimiter, async (req, res) => {
   try {
     const ref = normalizeParam(req.params.ref);
     const learner = await repository.learners.findById(ref);
@@ -1757,27 +1793,37 @@ app.get(['/api/verify/smart-id/:ref', '/api/verify/learner/:ref'], async (req, r
     }
 
     const person = await repository.persons.findById(learner.personId);
-    const school = learner.currentSchoolId ? await repository.schools.findById(learner.currentSchoolId) : null;
     
-    const academicRes = await query(
-      `SELECT grade, class_section FROM academic_records WHERE learner_id = $1 AND is_current = TRUE LIMIT 1;`,
+    // Authoritative school enrolment lookup
+    const enrRes = await query(
+      `SELECT se.enrolment_status, se.grade, se.class_section, se.school_id, s.name as school_name
+       FROM school_enrolments se
+       LEFT JOIN schools s ON se.school_id = s.id
+       WHERE se.learner_id = $1
+       ORDER BY se.academic_year DESC, se.enrolled_at DESC
+       LIMIT 1;`,
       [learner.id]
     );
-    const grade = academicRes.rows[0]?.grade || 'Enrolled Grade';
-    const isValid = learner.enrolmentStatus === 'ACTIVE';
+
+    const enrolment = enrRes.rows[0];
+    const recordStatus = enrolment?.enrolment_status || 'INACTIVE';
+    const isValid = recordStatus === 'ACTIVE';
+    const schoolName = enrolment?.school_name || 'Registered Partner Institution';
+    const grade = enrolment?.grade ? `${enrolment.grade}${enrolment.class_section ? ` (${enrolment.class_section})` : ''}` : 'Enrolled Grade';
 
     res.json({
       status: isValid ? 'VALID' : 'INACTIVE',
       learnerDisplayName: person ? `${person.firstName} ${person.lastName.charAt(0)}.` : 'Enrolled Learner',
-      schoolName: school ? school.name : 'Registered Partner Institution',
+      schoolName,
       admissionNumber: learner.admissionNumber,
       grade,
-      recordStatus: learner.enrolmentStatus || 'ACTIVE',
+      recordStatus,
       verifiedAt: new Date().toISOString(),
       issuer: 'ITIS Guardian Network Sovereign Verification Authority'
     });
   } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    logger.error('Smart ID verification query error:', err);
+    res.status(500).json({ error: 'Verification service encountered an internal error. Please try again later.' });
   }
 });
 

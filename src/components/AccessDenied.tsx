@@ -56,7 +56,7 @@ export const AccessDenied: React.FC<Props> = ({
       case 'FIELD_RESPONDER': return 'SAPS Tactical Responder Console';
       case 'GOVERNMENT_AUDITOR':
       case 'FOUNDER_EXECUTIVE': return 'Executive Governance Portal';
-      default: return 'Authorized Dashboard';
+      default: return 'Authorised Dashboard';
     }
   };
 

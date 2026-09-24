@@ -314,7 +314,7 @@ export const SchoolPortal: React.FC<Props> = ({
             </div>
 
             <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 space-y-1">
-              <span className="text-xs text-slate-400 font-semibold uppercase">Authorized Guardians</span>
+              <span className="text-xs text-slate-400 font-semibold uppercase">Authorised Guardians</span>
               <div className="text-2xl font-bold text-purple-400 font-mono">
                 {new Set(schoolLearners.flatMap(l => l.guardians.map(g => g.guardian.id))).size} Verified
               </div>

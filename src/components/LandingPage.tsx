@@ -223,14 +223,14 @@ export const LandingPage: React.FC<Props> = ({
                 title="Authorised access for registered guardians, schools and response personnel"
               >
                 <LogIn className="w-4 h-4 text-slate-950 shrink-0 stroke-[2.5]" />
-                <span>PORTAL ACCESS</span>
+                <span>Portal access</span>
               </button>
 
               <button
                 onClick={() => openExplore('overview')}
                 className="min-h-[48px] px-6 py-3.5 rounded-xl bg-[#0a1224] hover:bg-[#0f1a30] border border-[#d4af37]/45 text-slate-100 hover:text-white text-sm font-bold flex items-center justify-center gap-2.5 transition-all cursor-pointer group shadow-lg shadow-[#040812]"
               >
-                <span>EXPLORE GUARDIAN NETWORK</span>
+                <span>Explore guardian network</span>
                 <ArrowRight className="w-4 h-4 text-[#d4af37] group-hover:translate-x-1 transition-transform" />
               </button>
             </div>
@@ -373,14 +373,14 @@ export const LandingPage: React.FC<Props> = ({
               title="Authorised access for registered guardians, schools and response personnel"
             >
               <LogIn className="w-4 h-4 text-slate-950 shrink-0 stroke-[2.5]" />
-              <span>PORTAL ACCESS</span>
+              <span>Portal access</span>
             </button>
 
             <button
               onClick={() => openExplore('overview')}
               className="min-h-[46px] w-full px-5 py-3 rounded-xl bg-[#0a1224] hover:bg-[#0f1a30] border border-[#d4af37]/40 text-slate-100 hover:text-white text-sm font-bold flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
             >
-              <span>EXPLORE GUARDIAN NETWORK</span>
+              <span>Explore guardian network</span>
               <ArrowRight className="w-4 h-4 text-[#d4af37]" />
             </button>
           </div>
@@ -599,7 +599,7 @@ export const LandingPage: React.FC<Props> = ({
               <div className="p-5 rounded-xl bg-[#060b18] border border-emerald-500/30 space-y-2 text-left">
                 <div className="flex items-center gap-2 text-xs font-mono font-bold text-emerald-400">
                   <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  <span>DURING NORMAL JOURNEYS</span>
+                  <span>During normal journeys</span>
                 </div>
                 <ul className="text-xs text-slate-300 space-y-1.5 pl-5 list-disc marker:text-emerald-500">
                   <li>Learner arrival or departure is verified at the campus gate</li>
@@ -611,7 +611,7 @@ export const LandingPage: React.FC<Props> = ({
               <div className="p-5 rounded-xl bg-[#060b18] border border-[#d4af37]/40 space-y-2 text-left">
                 <div className="flex items-center gap-2 text-xs font-mono font-bold text-[#f3d368]">
                   <ShieldAlert className="w-4 h-4 shrink-0 text-[#d4af37]" />
-                  <span>WHEN ASSISTANCE IS NEEDED</span>
+                  <span>When assistance is needed</span>
                 </div>
                 <ul className="text-xs text-slate-300 space-y-1.5 pl-5 list-disc marker:text-[#d4af37]">
                   <li>The platform flags the delay, deviation, or alert</li>
@@ -633,7 +633,7 @@ export const LandingPage: React.FC<Props> = ({
               SOLUTIONS
             </span>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              ONE NETWORK. THREE CRITICAL CONNECTIONS.
+              One network. Three critical connections.
             </h2>
             <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
               Tailored capabilities providing coordinated communication for families, educational institutions, and response personnel.
@@ -660,7 +660,7 @@ export const LandingPage: React.FC<Props> = ({
                 onClick={() => openExplore('for-parents')}
                 className="text-xs font-bold text-[#d4af37] hover:text-[#f3d368] inline-flex items-center gap-1 cursor-pointer pt-1"
               >
-                <span>Learn more</span>
+                <span>Explore guardian features</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -683,7 +683,7 @@ export const LandingPage: React.FC<Props> = ({
                 onClick={() => openExplore('for-schools')}
                 className="text-xs font-bold text-[#d4af37] hover:text-[#f3d368] inline-flex items-center gap-1 cursor-pointer pt-1"
               >
-                <span>Learn more</span>
+                <span>Explore school features</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -706,7 +706,7 @@ export const LandingPage: React.FC<Props> = ({
                 onClick={() => openExplore('emergency-response')}
                 className="text-xs font-bold text-[#d4af37] hover:text-[#f3d368] inline-flex items-center gap-1 cursor-pointer pt-1"
               >
-                <span>Learn more</span>
+                <span>Explore response network</span>
                 <ChevronRight className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -723,7 +723,7 @@ export const LandingPage: React.FC<Props> = ({
               COMPANY
             </span>
             <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              ABOUT ITIS
+              About ITIS
             </h2>
             <p className="text-sm sm:text-base text-slate-300 leading-relaxed">
               Technology built around a simple purpose: helping protect learners.
@@ -732,10 +732,10 @@ export const LandingPage: React.FC<Props> = ({
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
             {[
-              { label: 'ABOUT ITIS', cat: 'why-itis' as ExploreCategory },
-              { label: 'OUR APPROACH', cat: 'how-it-works' as ExploreCategory },
-              { label: 'PARTNERSHIPS', cat: 'for-schools' as ExploreCategory },
-              { label: 'CONTACT', cat: 'request-demo' as ExploreCategory },
+              { label: 'About ITIS', cat: 'why-itis' as ExploreCategory },
+              { label: 'Our approach', cat: 'how-it-works' as ExploreCategory },
+              { label: 'Partnerships', cat: 'for-schools' as ExploreCategory },
+              { label: 'Contact', cat: 'request-demo' as ExploreCategory },
             ].map((item) => (
               <button
                 key={item.label}
@@ -766,7 +766,7 @@ export const LandingPage: React.FC<Props> = ({
           className="min-h-[44px] px-4 py-2 rounded-xl bg-[#0a1224] hover:bg-slate-800 border border-slate-800 text-xs font-bold text-[#d4af37] hover:text-white flex items-center gap-2 transition-all cursor-pointer"
         >
           <ChevronLeft className="w-4 h-4 text-[#d4af37]" />
-          <span>← BACK TO ITIS</span>
+          <span>← Back to ITIS</span>
         </button>
 
         {currentUser && (
@@ -1181,7 +1181,7 @@ export const LandingPage: React.FC<Props> = ({
               <div className="p-5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2 text-left">
                 <div className="flex items-center gap-2">
                   <HeartHandshake className="w-4 h-4 text-[#d4af37]" />
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">1. CHILD FIRST</h3>
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">1. Child first</h3>
                 </div>
                 <p className="text-xs text-slate-300 leading-relaxed">
                   Safety decisions are designed around the learner's wellbeing. Data collection is purposeful and limited to designated travel corridors and active safety events.
@@ -1192,7 +1192,7 @@ export const LandingPage: React.FC<Props> = ({
               <div className="p-5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2 text-left">
                 <div className="flex items-center gap-2">
                   <Users className="w-4 h-4 text-[#f3d368]" />
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">2. CONTROLLED ACCESS</h3>
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">2. Controlled access</h3>
                 </div>
                 <p className="text-xs text-slate-300 leading-relaxed">
                   Information is available according to role and operational need. School staff, guardians, and response teams see only what is required for their responsibilities.
@@ -1203,7 +1203,7 @@ export const LandingPage: React.FC<Props> = ({
               <div className="p-5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2 text-left">
                 <div className="flex items-center gap-2">
                   <UserCheck className="w-4 h-4 text-emerald-400" />
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">3. HUMAN DECISION-MAKING</h3>
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">3. Human decision-making</h3>
                 </div>
                 <p className="text-xs text-slate-300 leading-relaxed">
                   Technology supports decisions; authorised people remain responsible for escalation and response. Human judgment remains central to every emergency workflow.
@@ -1214,7 +1214,7 @@ export const LandingPage: React.FC<Props> = ({
               <div className="p-5 rounded-xl bg-slate-950/60 border border-slate-800 space-y-2 text-left">
                 <div className="flex items-center gap-2">
                   <Lock className="w-4 h-4 text-cyan-400" />
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">4. PRIVACY BY DESIGN</h3>
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">4. Privacy by design</h3>
                 </div>
                 <p className="text-xs text-slate-300 leading-relaxed">
                   Personal information is handled with privacy, security and accountability in mind. Built with POPIA-aligned privacy and security safeguards, subject to formal legal and compliance review.
@@ -1247,7 +1247,7 @@ export const LandingPage: React.FC<Props> = ({
                 </div>
                 <h3 className="text-base font-bold text-white">Consultation Request Received</h3>
                 <p className="text-xs text-slate-300 max-w-md mx-auto leading-relaxed">
-                  Thank you for your inquiry. An ITIS safety specialist will review your details and be in touch promptly.
+                  Thank you for your enquiry. An ITIS safety specialist will review your details and be in touch promptly.
                 </p>
               </div>
             ) : (
@@ -1348,7 +1348,7 @@ export const LandingPage: React.FC<Props> = ({
                   className="w-full sm:w-auto min-h-[48px] px-8 py-3 rounded-xl bg-[#d4af37] hover:bg-[#c29f2f] text-slate-950 text-xs font-extrabold shadow-lg shadow-[#d4af37]/20 flex items-center justify-center gap-2 cursor-pointer transition-all"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  <span>SUBMIT CONSULTATION REQUEST</span>
+                  <span>Submit consultation request</span>
                 </button>
               </form>
             )}

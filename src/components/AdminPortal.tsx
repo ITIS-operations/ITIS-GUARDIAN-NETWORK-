@@ -688,7 +688,7 @@ export const AdminPortal: React.FC<Props> = ({
           <Lock className="w-8 h-8 text-emerald-400 mx-auto" />
           <h3 className="text-base font-bold text-white">National SHA-256 Immutable Audit Ledger</h3>
           <p className="text-xs text-slate-400 max-w-md mx-auto">
-            Every authentication, role delegation, onboarding transaction, and unauthorized access attempt is cryptographically chained.
+            Every authentication, role delegation, onboarding transaction, and unauthorised access attempt is cryptographically chained.
           </p>
           <div className="pt-2">
             <span className="px-3 py-1 bg-slate-950 text-slate-300 border border-slate-800 rounded-lg text-xs font-mono">

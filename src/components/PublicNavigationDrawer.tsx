@@ -44,14 +44,14 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
   onSelectCategory,
   currentUser
 }) => {
-  const [expandedCategory, setExpandedCategory] = useState<string | null>('ABOUT ITIS');
+  const [expandedCategory, setExpandedCategory] = useState<string | null>('About ITIS');
 
   if (!isOpen) return null;
 
   const categories: DrawerCategory[] = [
     {
       id: 'about-itis',
-      title: 'ABOUT ITIS',
+      title: 'About ITIS',
       icon: Building2,
       items: [
         {
@@ -76,7 +76,7 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
     },
     {
       id: 'safety-network',
-      title: 'SAFETY NETWORK',
+      title: 'Safety Network',
       icon: ShieldCheck,
       items: [
         {
@@ -113,7 +113,7 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
     },
     {
       id: 'schools-partners',
-      title: 'SCHOOLS & PARTNERS',
+      title: 'Schools & Partners',
       icon: Users,
       items: [
         {
@@ -144,7 +144,7 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
     },
     {
       id: 'trust-governance',
-      title: 'TRUST & GOVERNANCE',
+      title: 'Trust & Governance',
       icon: Lock,
       items: [
         {
@@ -175,7 +175,7 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
     },
     {
       id: 'company',
-      title: 'COMPANY',
+      title: 'Company',
       icon: Briefcase,
       items: [
         {
@@ -334,7 +334,7 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
           {/* Drawer Bottom Bar: Portal Access CTA & Contact Support */}
           <div className="p-4 sm:p-5 bg-[#0a1224] border-t border-slate-800 space-y-3 shrink-0">
             <div className="flex items-center justify-between text-[11px] text-slate-400">
-              <span>Questions & Inquiries</span>
+              <span>Questions & enquiries</span>
               <button
                 onClick={() => handleOpenDetailedSection('request-demo')}
                 className="text-[#d4af37] hover:text-[#f3d368] font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
@@ -354,7 +354,7 @@ export const PublicNavigationDrawer: React.FC<Props> = ({
                 title="Authorised access for registered guardians, schools and response personnel"
               >
                 <LogIn className="w-4 h-4 text-slate-950" />
-                <span>PORTAL ACCESS</span>
+                <span>Portal access</span>
               </button>
               <p className="text-[10px] text-slate-400 text-center leading-tight">
                 Authorised access for registered guardians, schools and response personnel.

@@ -143,7 +143,7 @@ export const GuardianDashboard: React.FC<Props> = ({
             </h1>
             
             <p className="text-sm sm:text-base text-slate-300 font-medium">
-              Live safety status, school arrival confirmations, and authorized emergency coordination.
+              Live safety status, school arrival confirmations, and authorised emergency coordination.
             </p>
           </div>
 

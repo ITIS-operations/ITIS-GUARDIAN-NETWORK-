@@ -396,7 +396,7 @@ export const LearnerSmartIdModal: React.FC<Props> = ({ learner, onClose }) => {
                     </div>
 
                     <p className="text-slate-300 leading-snug">
-                      Scan with any authorized scanner or camera to verify this learner's active institutional status.
+                      Scan with any authorised scanner or camera to verify this learner's active institutional status.
                     </p>
 
                     <div className="p-1.5 rounded-lg bg-slate-950 border border-slate-800 space-y-0.5 font-mono text-[8px]">

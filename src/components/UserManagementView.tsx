@@ -236,7 +236,7 @@ export const UserManagementView: React.FC<Props> = ({ schools = [], currentUser 
             className="min-h-[44px] px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-xs font-bold flex items-center gap-2 transition-all shadow-lg shadow-cyan-900/30 cursor-pointer"
           >
             <UserPlus className="w-4 h-4" />
-            <span>CREATE USER</span>
+            <span>Create user</span>
           </button>
 
           <button
@@ -245,7 +245,7 @@ export const UserManagementView: React.FC<Props> = ({ schools = [], currentUser 
             className="min-h-[44px] px-4 py-2 rounded-xl bg-[#d4af37] hover:bg-[#b89528] text-slate-950 text-xs font-bold flex items-center gap-2 transition-all shadow-lg shadow-[#d4af37]/20 cursor-pointer"
           >
             <Shield className="w-4 h-4" />
-            <span>ENROL FIRST RESPONDER</span>
+            <span>Enrol first responder</span>
           </button>
         </div>
       </div>
@@ -307,7 +307,7 @@ export const UserManagementView: React.FC<Props> = ({ schools = [], currentUser 
           <input
             id="input-user-directory-search"
             type="text"
-            placeholder="Search users by name, email, role, or organization..."
+            placeholder="Search users by name, email, role, or organisation..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs placeholder:text-slate-500 focus:outline-none focus:border-cyan-500"
@@ -369,11 +369,11 @@ export const UserManagementView: React.FC<Props> = ({ schools = [], currentUser 
           <table className="w-full text-left text-xs border-collapse">
             <thead>
               <tr className="bg-slate-950/90 border-b border-slate-800 text-slate-400 font-semibold uppercase tracking-wider text-[10px]">
-                <th className="py-3.5 px-4">User Details</th>
-                <th className="py-3.5 px-4">Authoritative Role</th>
-                <th className="py-3.5 px-4">Organization / Scope</th>
-                <th className="py-3.5 px-4">Assigned Portal</th>
-                <th className="py-3.5 px-4">Account Status</th>
+                <th className="py-3.5 px-4">User details</th>
+                <th className="py-3.5 px-4">Authoritative role</th>
+                <th className="py-3.5 px-4">Organisation / scope</th>
+                <th className="py-3.5 px-4">Assigned portal</th>
+                <th className="py-3.5 px-4">Account status</th>
                 <th className="py-3.5 px-4 text-right">Actions</th>
               </tr>
             </thead>

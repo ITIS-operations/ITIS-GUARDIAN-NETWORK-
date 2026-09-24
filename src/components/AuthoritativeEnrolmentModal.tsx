@@ -180,7 +180,7 @@ export const AuthoritativeEnrolmentModal: React.FC<Props> = ({
       if (msg.includes('AUTHENTICATION_REQUIRED') || msg.includes('401') || msg.includes('session expired') || msg.includes('sovereign session token')) {
         setErrorMessage('Your session has expired or authentication is no longer valid. Please sign in again.');
       } else if (msg.includes('ENROLMENT_MANAGE') || msg.includes('403') || msg.includes('ACCESS_DENIED')) {
-        setErrorMessage('You do not have permission to create learner enrollments.');
+        setErrorMessage('You do not have permission to create learner enrolments.');
       } else if (msg.includes('503') || msg.includes('DATABASE_UNAVAILABLE')) {
         setErrorMessage('The ITIS service is temporarily unavailable. Please try again.');
       } else {
@@ -347,7 +347,7 @@ export const AuthoritativeEnrolmentModal: React.FC<Props> = ({
       if (msg.includes('AUTHENTICATION_REQUIRED') || msg.includes('401') || msg.includes('session expired') || msg.includes('sovereign session token')) {
         setErrorMessage('Your session has expired or authentication is no longer valid. Please sign in again.');
       } else if (msg.includes('ENROLMENT_MANAGE') || msg.includes('403') || msg.includes('ACCESS_DENIED') || msg.includes('clearance') || msg.includes('permission')) {
-        setErrorMessage('You do not have permission to create learner enrollments.');
+        setErrorMessage('You do not have permission to create learner enrolments.');
       } else if (msg.includes('DATABASE_UNAVAILABLE') || msg.includes('503') || msg.includes('degraded') || msg.includes('temporarily unavailable')) {
         setErrorMessage('The ITIS service is temporarily unavailable. Please try again.');
       } else {
@@ -456,7 +456,7 @@ export const AuthoritativeEnrolmentModal: React.FC<Props> = ({
             <SchoolIcon className="w-4 h-4 text-cyan-400 shrink-0" />
             <div className="flex flex-col">
               <label htmlFor={`${formId}-school-select`} className="text-[9px] uppercase tracking-wider text-slate-400 font-mono">
-                Active Enrolling School
+                Active enrolling school
               </label>
               <select
                 id={`${formId}-school-select`}
@@ -1045,7 +1045,7 @@ export const AuthoritativeEnrolmentModal: React.FC<Props> = ({
                     <div className="p-3.5 rounded-xl bg-slate-950/70 border border-emerald-900/50 space-y-2">
                       <h5 className="text-[11px] font-bold text-slate-300 flex items-center gap-1.5 uppercase font-mono tracking-wider">
                         <Users className="w-3.5 h-3.5 text-emerald-400" />
-                        Existing Enrolled Children ({searchResult.guardianMatch.linkedChildren.length})
+                        Existing enrolled children ({searchResult.guardianMatch.linkedChildren.length})
                       </h5>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                         {searchResult.guardianMatch.linkedChildren.map((child: any, idx: number) => (
@@ -1205,7 +1205,7 @@ export const AuthoritativeEnrolmentModal: React.FC<Props> = ({
                     <option value="GRANDPARENT">Grandparent</option>
                     <option value="FOSTER_PARENT">Foster Parent</option>
                     <option value="SIBLING_ADULT">Adult Sibling</option>
-                    <option value="AUTHORIZED_CAREGIVER">Authorized Caregiver</option>
+                    <option value="AUTHORIZED_CAREGIVER">Authorised caregiver</option>
                     <option value="OTHER">Other</option>
                   </select>
                 </div>
@@ -1261,7 +1261,7 @@ export const AuthoritativeEnrolmentModal: React.FC<Props> = ({
                     className="mt-0.5 rounded bg-slate-900 border-slate-700 text-cyan-500 focus:ring-cyan-500 w-4 h-4"
                   />
                   <div>
-                    <span className="text-xs font-bold text-white block">Authorized for Campus Pickup</span>
+                    <span className="text-xs font-bold text-white block">Authorised for campus pickup</span>
                     <span className="text-[10px] text-slate-400">Permitted for school gate dismissal & transport handover</span>
                   </div>
                 </label>
@@ -1324,7 +1324,7 @@ export const AuthoritativeEnrolmentModal: React.FC<Props> = ({
                       <span className="text-white">{learnerDob} ({learnerGender})</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-400">Enrolling School:</span>
+                      <span className="text-slate-400">Enrolling school:</span>
                       <span className="text-cyan-300 font-semibold">{activeSchool?.name}</span>
                     </div>
                     <div className="flex justify-between">

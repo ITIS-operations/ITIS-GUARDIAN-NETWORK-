@@ -132,25 +132,25 @@ export const Header: React.FC<Props> = ({
               onClick={() => handleNavClick('why-itis')}
               className="min-h-[44px] px-3.5 py-2 rounded-lg hover:text-[#d4af37] hover:bg-[#0a1224] transition-colors cursor-pointer"
             >
-              WHY ITIS
+              Why ITIS
             </button>
             <button
               onClick={() => handleNavClick('solutions')}
               className="min-h-[44px] px-3.5 py-2 rounded-lg hover:text-[#d4af37] hover:bg-[#0a1224] transition-colors cursor-pointer"
             >
-              SOLUTIONS
+              Solutions
             </button>
             <button
               onClick={() => handleNavClick('overview')}
               className="min-h-[44px] px-3.5 py-2 rounded-lg hover:text-[#d4af37] hover:bg-[#0a1224] transition-colors cursor-pointer"
             >
-              EXPLORE
+              Explore
             </button>
             <button
               onClick={() => handleNavClick('company')}
               className="min-h-[44px] px-3.5 py-2 rounded-lg hover:text-[#d4af37] hover:bg-[#0a1224] transition-colors cursor-pointer"
             >
-              COMPANY
+              Company
             </button>
           </nav>
 
@@ -165,7 +165,7 @@ export const Header: React.FC<Props> = ({
                 <button
                   onClick={() => setActiveTab(getPrimaryPortalTab(currentUser.role))}
                   className="min-h-[44px] px-3.5 py-2 rounded-xl bg-[#0a1224] hover:bg-slate-900 border border-[#d4af37]/40 text-xs font-semibold text-[#f3d368] flex items-center gap-2 cursor-pointer transition-colors shadow-sm"
-                  title="Open Authorized Portal"
+                  title="Open Authorised Portal"
                 >
                   <User className="w-3.5 h-3.5 text-[#d4af37] shrink-0" />
                   <span className="max-w-[80px] sm:max-w-[120px] truncate hidden xs:inline">{currentUser.name}</span>
@@ -191,7 +191,7 @@ export const Header: React.FC<Props> = ({
                 title="Authorised access for registered guardians, schools and response personnel"
               >
                 <LogIn className="w-4 h-4 text-slate-950 shrink-0" />
-                <span>PORTAL ACCESS</span>
+                <span>Portal access</span>
               </button>
             )}
 
@@ -203,7 +203,7 @@ export const Header: React.FC<Props> = ({
               title="Public Information Menu"
             >
               <Menu className="w-4 h-4 sm:w-5 sm:h-5 text-[#d4af37]" />
-              <span className="hidden sm:inline text-xs font-bold font-mono tracking-wider">MENU</span>
+              <span className="hidden sm:inline text-xs font-bold font-mono tracking-wider">Menu</span>
             </button>
           </div>
 

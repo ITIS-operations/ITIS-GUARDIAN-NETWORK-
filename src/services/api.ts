@@ -95,7 +95,7 @@ async function safeFetchJson<T>(res: Response, fallbackError: string): Promise<T
       }
       if (res.status === 403) {
         if (rawError.includes('ENROLMENT_MANAGE') || rawError.includes('Learner') || rawError.includes('clearance') || rawError.includes('permission')) {
-          throw new Error('You do not have permission to create learner enrollments.');
+          throw new Error('You do not have permission to create learner enrolments.');
         }
         throw new Error(rawError || 'You do not have permission to perform this action.');
       }
@@ -112,7 +112,7 @@ async function safeFetchJson<T>(res: Response, fallbackError: string): Promise<T
         throw new Error('Your session has expired or authentication is no longer valid. Please sign in again.');
       }
       if (res.status === 403) {
-        throw new Error('You do not have permission to create learner enrollments.');
+        throw new Error('You do not have permission to create learner enrolments.');
       }
       if (res.status === 503) {
         throw new Error('The ITIS service is temporarily unavailable. Please try again.');

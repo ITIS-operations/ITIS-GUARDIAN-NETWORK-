@@ -388,7 +388,7 @@ export const ResponderView: React.FC<Props> = ({
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-0.5">
-                Sector 2 Pretoria Safe Corridor • National Child Protection Mandate • Authorized Dispatch Terminal
+                Sector 2 Pretoria Safe Corridor • National Child Protection Mandate • Authorised dispatch terminal
               </p>
             </div>
           </div>
@@ -486,7 +486,7 @@ export const ResponderView: React.FC<Props> = ({
               Patrol Sector 2 Active
             </h2>
             <p className="text-xs sm:text-sm text-slate-400">
-              Standing by for authorized emergency assignments from the National 24/7 Command Centre. Your unit location and readiness are synchronized in real-time.
+              Standing by for authorised emergency assignments from the National 24/7 Command Centre. Your unit location and readiness are synchronised in real-time.
             </p>
           </div>
 
@@ -545,7 +545,7 @@ export const ResponderView: React.FC<Props> = ({
                   CRITICAL EMERGENCY ASSIGNMENT
                 </span>
                 <h2 className="text-xl sm:text-2xl font-black text-white mt-1">
-                  Immediate Armed Response Authorized
+                  Immediate armed response authorised
                 </h2>
               </div>
             </div>

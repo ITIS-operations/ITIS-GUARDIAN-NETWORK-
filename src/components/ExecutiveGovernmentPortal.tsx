@@ -555,7 +555,7 @@ export const ExecutiveGovernmentPortal: React.FC<Props> = ({
                   Hierarchical Executive Drill-Down Principle
                 </h3>
                 <p className="text-xs text-slate-400 mt-0.5">
-                  Aggregate Metrics → Authorized Cluster Detail → Operational Record (With POPIA PII Minimization)
+                  Aggregate Metrics → Authorised Cluster Detail → Operational Record (With POPIA PII Minimisation)
                 </p>
               </div>
 
@@ -648,13 +648,19 @@ export const ExecutiveGovernmentPortal: React.FC<Props> = ({
 
                     <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
                       <span className="text-[10px] text-slate-500 font-mono">Autonomous Safe Campus</span>
-                      <button
-                        onClick={() => setSelectedSchoolForDetail(school)}
-                        className="px-2.5 py-1.5 rounded-lg bg-[#d4af37]/15 hover:bg-[#d4af37]/25 text-[#d4af37] border border-[#d4af37]/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
-                      >
-                        <Building2 className="w-3.5 h-3.5" />
-                        <span>School Intelligence (Learners &amp; Responders)</span>
-                      </button>
+                      {currentUser?.role !== 'GOVERNMENT_AUDITOR' ? (
+                        <button
+                          onClick={() => setSelectedSchoolForDetail(school)}
+                          className="px-2.5 py-1.5 rounded-lg bg-[#d4af37]/15 hover:bg-[#d4af37]/25 text-[#d4af37] border border-[#d4af37]/30 text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer"
+                        >
+                          <Building2 className="w-3.5 h-3.5" />
+                          <span>School Intelligence (Learners &amp; Responders)</span>
+                        </button>
+                      ) : (
+                        <span className="text-[10px] text-slate-500 font-mono italic">
+                          Aggregate Governance Mode
+                        </span>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -698,7 +704,7 @@ export const ExecutiveGovernmentPortal: React.FC<Props> = ({
                   <span className="px-2 py-0.5 rounded text-[10px] bg-cyan-500/20 text-cyan-300 font-mono">COMMAND_OPERATIONAL</span>
                 </div>
                 <p className="text-slate-300 leading-relaxed">
-                  24/7 Command Centre controller. Authorized to verify SOS triggers and execute Human-In-The-Loop tactical responder dispatch.
+                  24/7 Command Centre controller. Authorised to verify SOS triggers and execute Human-In-The-Loop tactical responder dispatch.
                 </p>
                 <div className="text-[11px] text-slate-400 pt-1 font-mono">
                   Boundary: No autonomous automated AI dispatch permitted.

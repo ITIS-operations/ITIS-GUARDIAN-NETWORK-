@@ -130,7 +130,7 @@ export const TelemetryDiagnosticsDashboard: React.FC<Props> = ({ currentUser }) 
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
-            Real-time ingestion health, device fleet telemetry integrity, and controlled diagnostic logs for authorized ITIS personnel.
+            Real-time ingestion health, device fleet telemetry integrity, and controlled diagnostic logs for authorised ITIS personnel.
           </p>
         </div>
 

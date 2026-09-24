@@ -526,7 +526,7 @@ export const EnrolFirstResponderModal: React.FC<Props> = ({ onClose, onSuccess, 
               className="px-5 py-2.5 rounded-xl bg-[#d4af37] hover:bg-[#b89528] text-slate-950 font-bold text-xs flex items-center gap-2 shadow-lg shadow-[#d4af37]/20 transition-all cursor-pointer disabled:opacity-50"
             >
               <UserCheck className="w-4 h-4" />
-              <span>{isSubmitting ? 'Enrolling Unit...' : 'Authorize & Enrol Responder'}</span>
+              <span>{isSubmitting ? 'Enrolling Unit...' : 'Authorise & enrol responder'}</span>
             </button>
           </div>
         </form>

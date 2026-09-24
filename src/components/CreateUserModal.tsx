@@ -338,7 +338,7 @@ export const CreateUserModal: React.FC<Props> = ({
                   onChange={e => setStatus(e.target.value as AccountStatus)}
                   className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-700 text-white text-xs focus:outline-none focus:border-cyan-500"
                 >
-                  <option value="ACTIVE">ACTIVE (Authorized to Sign In)</option>
+                  <option value="ACTIVE">ACTIVE (Authorised to sign in)</option>
                   <option value="SUSPENDED">SUSPENDED (Access Denied)</option>
                   <option value="DISABLED">DISABLED (Deactivated)</option>
                 </select>
@@ -409,7 +409,7 @@ export const CreateUserModal: React.FC<Props> = ({
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-slate-300 flex items-center gap-1">
                   <Building2 className="w-3 h-3 text-cyan-400" />
-                  <span>Organization / Department (Optional)</span>
+                  <span>Organisation / department (optional)</span>
                 </label>
                 <input
                   id="input-create-user-org"

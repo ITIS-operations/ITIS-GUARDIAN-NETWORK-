@@ -60,7 +60,7 @@ export const NewsCareersSection: React.FC = () => {
     {
       id: 'admin',
       name: 'Administration',
-      description: 'Compliance governance, statutory data protection (POPIA), and organizational support.',
+      description: 'Compliance governance, statutory data protection (POPIA), and organisational support.',
       icon: Building
     }
   ];
@@ -193,7 +193,7 @@ export const NewsCareersSection: React.FC = () => {
           </div>
           
           <h2 className="text-2xl sm:text-4xl font-extrabold text-white tracking-tight uppercase font-mono">
-            BUILD THE FUTURE OF LEARNER SAFETY.
+            Build the future of learner safety.
           </h2>
 
           <p className="text-base sm:text-lg text-slate-300 font-medium leading-relaxed">
@@ -261,7 +261,7 @@ export const NewsCareersSection: React.FC = () => {
 
           <div className="shrink-0 flex flex-col sm:flex-row gap-3 w-full md:w-auto">
             <a
-              href="mailto:careers@itis.safety.za?subject=Talent%20Inquiry%20-%20ITIS%20Mission"
+              href="mailto:careers@itis.safety.za?subject=Talent%20Enquiry%20-%20ITIS%20Mission"
               className="px-6 py-3 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold text-xs transition-all shadow-md flex items-center justify-center gap-2 cursor-pointer text-center"
             >
               <Mail className="w-4 h-4 text-slate-950" />

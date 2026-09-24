@@ -210,7 +210,7 @@ export const RbacSecurityConsole: React.FC<Props> = ({ currentUser, onClose }) =
             <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
               <div className="text-xs text-slate-400">Total Test Scenarios</div>
               <div className="text-2xl font-mono font-bold text-white mt-1">{testReport.totalTests}</div>
-              <div className="text-xs text-slate-500 mt-1">Direct unauthorized API operations</div>
+              <div className="text-xs text-slate-500 mt-1">Direct unauthorised API operations</div>
             </div>
 
             <div className="p-4 rounded-xl bg-slate-950 border border-slate-800">
@@ -395,7 +395,7 @@ export const RbacSecurityConsole: React.FC<Props> = ({ currentUser, onClose }) =
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="p-3 bg-emerald-950/20 border border-emerald-900/30 rounded-xl space-y-1.5">
                           <div className="text-xs font-bold text-emerald-400 flex items-center gap-1.5">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Authorized Authority (CAN)
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Authorised Authority (CAN)
                           </div>
                           <ul className="text-xs text-slate-300 space-y-1 list-disc list-inside">
                             {roleDef.canList?.map((item: string, idx: number) => (

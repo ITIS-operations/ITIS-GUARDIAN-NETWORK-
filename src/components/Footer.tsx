@@ -86,7 +86,7 @@ export const Footer: React.FC<Props> = ({
           {/* GROUP 1: PLATFORM (2 Columns) */}
           <div className="col-span-2 space-y-3">
             <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
-              PLATFORM
+              Platform
             </h4>
             <ul className="space-y-2 text-xs">
               <li>
@@ -127,7 +127,7 @@ export const Footer: React.FC<Props> = ({
           {/* GROUP 2: TRUST (2 Columns) */}
           <div className="col-span-2 space-y-3">
             <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
-              TRUST
+              Trust
             </h4>
             <ul className="space-y-2 text-xs">
               <li>
@@ -168,7 +168,7 @@ export const Footer: React.FC<Props> = ({
           {/* GROUP 3: COMPANY (2 Columns) */}
           <div className="col-span-2 space-y-3">
             <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
-              COMPANY
+              Company
             </h4>
             <ul className="space-y-2 text-xs">
               <li>
@@ -209,7 +209,7 @@ export const Footer: React.FC<Props> = ({
           {/* GROUP 4: PORTAL (2 Columns) */}
           <div className="col-span-2 space-y-3">
             <h4 className="text-xs font-bold text-white uppercase tracking-wider font-mono">
-              PORTAL
+              Portal
             </h4>
             <div className="space-y-2">
               <button 
@@ -218,7 +218,7 @@ export const Footer: React.FC<Props> = ({
                 title="Authorised access for registered guardians, schools and response personnel"
               >
                 <LogIn className="w-3.5 h-3.5 text-slate-950 shrink-0" />
-                <span>PORTAL ACCESS</span>
+                <span>Portal access</span>
               </button>
               <p className="text-[10px] text-slate-400 leading-relaxed">
                 Authorised access for registered guardians, schools and response personnel.
@@ -273,7 +273,7 @@ export const Footer: React.FC<Props> = ({
                 onClick={() => toggleSection('platform')}
                 className="w-full py-3.5 flex items-center justify-between text-xs font-bold text-white uppercase font-mono tracking-wider text-left cursor-pointer"
               >
-                <span>PLATFORM</span>
+                <span>Platform</span>
                 <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'platform' ? 'rotate-180 text-[#d4af37]' : ''}`} />
               </button>
               {expandedSection === 'platform' && (
@@ -301,7 +301,7 @@ export const Footer: React.FC<Props> = ({
                 onClick={() => toggleSection('trust')}
                 className="w-full py-3.5 flex items-center justify-between text-xs font-bold text-white uppercase font-mono tracking-wider text-left cursor-pointer"
               >
-                <span>TRUST</span>
+                <span>Trust</span>
                 <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'trust' ? 'rotate-180 text-[#d4af37]' : ''}`} />
               </button>
               {expandedSection === 'trust' && (
@@ -329,7 +329,7 @@ export const Footer: React.FC<Props> = ({
                 onClick={() => toggleSection('company')}
                 className="w-full py-3.5 flex items-center justify-between text-xs font-bold text-white uppercase font-mono tracking-wider text-left cursor-pointer"
               >
-                <span>COMPANY</span>
+                <span>Company</span>
                 <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'company' ? 'rotate-180 text-[#d4af37]' : ''}`} />
               </button>
               {expandedSection === 'company' && (
@@ -357,7 +357,7 @@ export const Footer: React.FC<Props> = ({
                 onClick={() => toggleSection('portal')}
                 className="w-full py-3.5 flex items-center justify-between text-xs font-bold text-white uppercase font-mono tracking-wider text-left cursor-pointer"
               >
-                <span>PORTAL</span>
+                <span>Portal</span>
                 <ChevronDown className={`w-4 h-4 text-slate-400 transition-transform duration-200 ${expandedSection === 'portal' ? 'rotate-180 text-[#d4af37]' : ''}`} />
               </button>
               {expandedSection === 'portal' && (
@@ -368,7 +368,7 @@ export const Footer: React.FC<Props> = ({
                     title="Authorised access for registered guardians, schools and response personnel"
                   >
                     <LogIn className="w-3.5 h-3.5 text-slate-950 shrink-0" />
-                    <span>PORTAL ACCESS</span>
+                    <span>Portal access</span>
                   </button>
                   <p className="text-[10px] text-slate-400 leading-relaxed text-center">
                     Authorised access for registered guardians, schools and response personnel.

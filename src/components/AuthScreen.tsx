@@ -259,7 +259,7 @@ export const AuthScreen: React.FC<Props> = ({
             {/* Email Address */}
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-slate-300">
-                EMAIL ADDRESS
+                Email address
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -267,7 +267,7 @@ export const AuthScreen: React.FC<Props> = ({
                   type="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="name@organization.co.za"
+                  placeholder="name@organisation.co.za"
                   className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder-slate-500 text-sm focus:outline-none focus:border-cyan-500 transition-colors font-mono"
                   autoComplete="email"
                   required
@@ -279,14 +279,14 @@ export const AuthScreen: React.FC<Props> = ({
             <div className="space-y-1.5">
               <div className="flex items-center justify-between">
                 <label className="block text-xs font-semibold text-slate-300">
-                  PASSWORD
+                  Password
                 </label>
                 <button
                   type="button"
                   onClick={() => setShowForgotPasswordModal(true)}
                   className="text-[11px] text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer"
                 >
-                  FORGOT PASSWORD?
+                  Forgot password?
                 </button>
               </div>
               <div className="relative">
@@ -325,7 +325,7 @@ export const AuthScreen: React.FC<Props> = ({
                   </>
                 ) : (
                   <>
-                    <span>SIGN IN</span>
+                    <span>Sign in</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
@@ -338,7 +338,7 @@ export const AuthScreen: React.FC<Props> = ({
             {/* Account Role Selection */}
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-slate-300">
-                ACCOUNT ROLE / PURPOSE
+                Account role / purpose
               </label>
               <select
                 value={regRole}
@@ -358,7 +358,7 @@ export const AuthScreen: React.FC<Props> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-300">
-                  FIRST NAME
+                  First name
                 </label>
                 <div className="relative">
                   <User className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -375,7 +375,7 @@ export const AuthScreen: React.FC<Props> = ({
 
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-300">
-                  SURNAME
+                  Surname
                 </label>
                 <input
                   type="text"
@@ -391,7 +391,7 @@ export const AuthScreen: React.FC<Props> = ({
             {/* Email Address */}
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-slate-300">
-                EMAIL ADDRESS
+                Email address
               </label>
               <div className="relative">
                 <Mail className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -410,7 +410,7 @@ export const AuthScreen: React.FC<Props> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-300">
-                  MOBILE NUMBER
+                  Mobile number
                 </label>
                 <div className="relative">
                   <Phone className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -426,7 +426,7 @@ export const AuthScreen: React.FC<Props> = ({
 
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-300">
-                  SA ID / OFFICIAL ID (OPTIONAL)
+                  SA ID / official ID (optional)
                 </label>
                 <div className="relative">
                   <CreditCard className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -445,7 +445,7 @@ export const AuthScreen: React.FC<Props> = ({
             {(regRole === 'SCHOOL_PRINCIPAL' || regRole === 'SCHOOL_ADMIN_STAFF') && (
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-300">
-                  ASSIGNED SCHOOL
+                  Assigned school
                 </label>
                 <div className="relative">
                   <Building2 className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -468,7 +468,7 @@ export const AuthScreen: React.FC<Props> = ({
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-300">
-                  PASSWORD
+                  Password
                 </label>
                 <div className="relative">
                   <Key className="w-4 h-4 text-slate-500 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -492,7 +492,7 @@ export const AuthScreen: React.FC<Props> = ({
 
               <div className="space-y-1.5">
                 <label className="block text-xs font-semibold text-slate-300">
-                  CONFIRM PASSWORD
+                  Confirm password
                 </label>
                 <input
                   type={showRegPassword ? 'text' : 'password'}
@@ -519,7 +519,7 @@ export const AuthScreen: React.FC<Props> = ({
                   </>
                 ) : (
                   <>
-                    <span>CREATE AUTHORITATIVE ACCOUNT</span>
+                    <span>Create authoritative account</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
