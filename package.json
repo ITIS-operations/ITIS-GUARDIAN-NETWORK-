@@ -29,6 +29,7 @@
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
     "express": "^4.21.2",
+    "firebase": "^12.19.0",
     "lucide-react": "^0.475.0",
     "pg": "^8.23.0",
     "qrcode": "^1.5.4",

@@ -439,6 +439,119 @@ app.post('/api/auth/register', registerRateLimiter, async (req, res) => {
   }
 });
 
+// Firebase Authentication Endpoint (Google Sign-In)
+app.post('/api/auth/firebase-login', async (req, res) => {
+  try {
+    const { email, name, uid } = req.body;
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required for Firebase authentication' });
+    }
+
+    const cleanEmail = email.toLowerCase().trim();
+    let verifiedUser = await repository.users.findByEmailOrAlias(cleanEmail);
+
+    // Bootstrapped Admin check for bravomtho@gmail.com
+    const isBootstrappedAdmin = cleanEmail === 'bravomtho@gmail.com';
+
+    if (!verifiedUser) {
+      // Auto-provision user account for verified Firebase user
+      const role: UserRole = isBootstrappedAdmin ? 'FOUNDER_EXECUTIVE' : 'PARENT_GUARDIAN';
+      const created = await repository.users.create({
+        email: cleanEmail,
+        name: name || (isBootstrappedAdmin ? 'Founder Executive' : 'Guardian User'),
+        role,
+        status: 'ACTIVE',
+        department: isBootstrappedAdmin ? 'Executive Oversight' : 'Parent & Guardian Community',
+        organization: isBootstrappedAdmin ? 'ITIS Platform Network' : 'Parent & Legal Guardian Community'
+      }, uid || 'firebase-admin');
+      verifiedUser = created;
+    } else if (isBootstrappedAdmin && verifiedUser.role !== 'FOUNDER_EXECUTIVE') {
+      // Ensure sovereign founder role for the owner
+      await repository.users.update(verifiedUser.id, { role: 'FOUNDER_EXECUTIVE' }, verifiedUser.id);
+      verifiedUser.role = 'FOUNDER_EXECUTIVE';
+    }
+
+    if (verifiedUser.status === 'SUSPENDED' || verifiedUser.status === 'DISABLED') {
+      return res.status(403).json({ error: `Account is ${verifiedUser.status}. Contact administrator.` });
+    }
+
+    const token = 'tok_itis_' + crypto.randomBytes(16).toString('hex') + '_' + Date.now().toString(36);
+    let resolvedGuardianId = verifiedUser.guardianId;
+    if (verifiedUser.role === 'PARENT_GUARDIAN' && !resolvedGuardianId) {
+      try {
+        const gRes = await query(
+          `SELECT g.id FROM guardians g 
+           LEFT JOIN persons p ON g.person_id = p.id 
+           WHERE g.user_id = $1 
+              OR (p.email IS NOT NULL AND LOWER(TRIM(p.email)) = LOWER(TRIM($2)))
+           ORDER BY g.created_at ASC LIMIT 1;`,
+          [verifiedUser.id, verifiedUser.email]
+        );
+        if (gRes.rows.length > 0) {
+          resolvedGuardianId = gRes.rows[0].id;
+        }
+      } catch (gErr) {
+        console.error('[FirebaseLogin] Guardian ID resolution error:', gErr);
+      }
+    }
+
+    const sessionUser: ActiveUserSession = {
+      id: verifiedUser.id,
+      name: verifiedUser.name,
+      email: verifiedUser.email,
+      role: verifiedUser.role,
+      schoolId: verifiedUser.schoolId,
+      guardianId: resolvedGuardianId,
+      responderUnit: verifiedUser.responderUnit,
+      department: verifiedUser.department,
+      organization: verifiedUser.organization,
+      token,
+      mustChangePassword: false
+    };
+
+    const roleDef = AUTHORITATIVE_ROLE_MATRIX[verifiedUser.role];
+    const permissions = verifiedUser.permissions && verifiedUser.permissions.length > 0 ? verifiedUser.permissions : (roleDef ? roleDef.canList : []);
+
+    await repository.sessions.createSession(token, verifiedUser.id, sessionUser, permissions);
+
+    await repository.auditLogs.logEvent({
+      actionType: 'PERSON_CREATED',
+      actorUserId: verifiedUser.id,
+      actorName: verifiedUser.name,
+      actorRole: verifiedUser.role,
+      targetEntity: 'USER',
+      targetId: verifiedUser.id,
+      details: {
+        event: 'USER_AUTHENTICATED_FIREBASE',
+        provider: 'GOOGLE_FIREBASE',
+        role: verifiedUser.role,
+        authScope: {
+          schoolId: verifiedUser.schoolId,
+          guardianId: verifiedUser.guardianId,
+          responderUnit: verifiedUser.responderUnit
+        }
+      },
+      ipAddress: req.ip || '127.0.0.1'
+    });
+
+    res.json({
+      success: true,
+      user: sessionUser,
+      token,
+      permissions,
+      scope: {
+        schoolId: verifiedUser.schoolId,
+        guardianId: verifiedUser.guardianId,
+        responderUnit: verifiedUser.responderUnit,
+        department: verifiedUser.department
+      }
+    });
+  } catch (err: any) {
+    console.error('[FirebaseLogin Error]:', err);
+    res.status(500).json({ error: err.message || 'Firebase authentication failed' });
+  }
+});
+
 app.get('/api/auth/session', async (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader) {

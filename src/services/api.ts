@@ -189,6 +189,32 @@ export const api = {
     return data;
   },
 
+  // Authoritative Firebase Authentication (Google Sign-In)
+  async firebaseLogin(payload: { email: string; name?: string; uid: string; idToken?: string }): Promise<{
+    user: ActiveUserSession;
+    token: string;
+    permissions: string[];
+    scope: { schoolId?: string; guardianId?: string; responderUnit?: string; department?: string };
+  }> {
+    const res = await fetch(`${API_BASE}/auth/firebase-login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await safeFetchJson<{
+      user: ActiveUserSession;
+      token: string;
+      permissions: string[];
+      scope: { schoolId?: string; guardianId?: string; responderUnit?: string; department?: string };
+    }>(res, 'Firebase authentication failed');
+
+    if (data.token) {
+      this.setToken(data.token);
+    }
+    return data;
+  },
+
   // Authoritative Self-Registration for Users (Guardians, School Staff, Responders, etc.)
   async register(payload: RegisterUserPayload): Promise<{
     user: ActiveUserSession;

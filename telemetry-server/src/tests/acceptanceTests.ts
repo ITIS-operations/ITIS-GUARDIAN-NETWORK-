@@ -307,6 +307,9 @@ export async function runAllAcceptanceTests(): Promise<{
     const socket2 = new net.Socket();
     await new Promise<void>((resolve) => socket2.connect(16023, '127.0.0.1', resolve));
 
+    // Allow event loop tick for server connection handler to complete
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
     // Connection count should now be 2
     const countBefore = limitedServer.connectionManager.getActiveCount();
 

@@ -1,0 +1,187 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Authenticated user profile in the ITIS Guardian Network",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "email": { "type": "string", "maxLength": 128 },
+        "name": { "type": "string", "maxLength": 128 },
+        "role": { "type": "string", "maxLength": 64, "enum": ["PARENT_GUARDIAN", "SCHOOL_PRINCIPAL", "SCHOOL_ADMIN_STAFF", "COMMAND_OPERATOR", "FIELD_RESPONDER", "TECHNICIAN", "SYSTEM_ADMIN", "GOVERNMENT_AUDITOR", "FOUNDER_EXECUTIVE"] },
+        "accountStatus": { "type": "string", "maxLength": 32, "enum": ["ACTIVE", "SUSPENDED", "PENDING_VERIFICATION"] },
+        "schoolId": { "type": "string", "maxLength": 64 },
+        "guardianId": { "type": "string", "maxLength": 64 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "email", "name", "role", "accountStatus", "createdAt", "updatedAt"]
+    },
+    "School": {
+      "title": "School",
+      "description": "Registered educational institution verified under DBE/EMIS",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "emisCode": { "type": "string", "maxLength": 64 },
+        "name": { "type": "string", "maxLength": 255 },
+        "province": { "type": "string", "maxLength": 64 },
+        "district": { "type": "string", "maxLength": 128 },
+        "principalName": { "type": "string", "maxLength": 128 },
+        "contactPhone": { "type": "string", "maxLength": 32 },
+        "contactEmail": { "type": "string", "maxLength": 128 },
+        "activeStatus": { "type": "string", "maxLength": 32, "enum": ["ACTIVE", "SUSPENDED"] },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "emisCode", "name", "province", "district", "contactEmail", "activeStatus", "createdAt", "updatedAt"]
+    },
+    "Learner": {
+      "title": "Learner",
+      "description": "Child safety subject record with admission number and school affiliation",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "personId": { "type": "string", "maxLength": 64 },
+        "schoolId": { "type": "string", "maxLength": 64 },
+        "emisId": { "type": "string", "maxLength": 64 },
+        "admissionNumber": { "type": "string", "maxLength": 64 },
+        "firstName": { "type": "string", "maxLength": 128 },
+        "lastName": { "type": "string", "maxLength": 128 },
+        "dateOfBirth": { "type": "string", "maxLength": 32 },
+        "enrolmentStatus": { "type": "string", "maxLength": 32, "enum": ["ACTIVE", "TRANSFERRED", "GRADUATED", "WITHDRAWN", "SUSPENDED"] },
+        "trackingBeaconId": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "schoolId", "emisId", "admissionNumber", "firstName", "lastName", "enrolmentStatus", "createdAt", "updatedAt"]
+    },
+    "Guardian": {
+      "title": "Guardian",
+      "description": "Authoritative legal parent or caregiver profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "userId": { "type": "string", "maxLength": 64 },
+        "personId": { "type": "string", "maxLength": 64 },
+        "saIdMasked": { "type": "string", "maxLength": 32 },
+        "mobileNumber": { "type": "string", "maxLength": 32 },
+        "fullName": { "type": "string", "maxLength": 128 },
+        "email": { "type": "string", "maxLength": 128 },
+        "idVerified": { "type": "boolean" },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "mobileNumber", "fullName", "idVerified", "createdAt", "updatedAt"]
+    },
+    "GuardianLearnerRelationship": {
+      "title": "GuardianLearnerRelationship",
+      "description": "Verified legal custody and emergency contact link between guardian and learner",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "guardianId": { "type": "string", "maxLength": 64 },
+        "learnerId": { "type": "string", "maxLength": 64 },
+        "relationshipType": { "type": "string", "maxLength": 64 },
+        "isPrimaryContact": { "type": "boolean" },
+        "hasCustodyRights": { "type": "boolean" },
+        "verificationStatus": { "type": "string", "maxLength": 32, "enum": ["VERIFIED", "PENDING_DOCUMENTATION", "FLAGGED_CONFLICT", "REJECTED"] },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "guardianId", "learnerId", "relationshipType", "isPrimaryContact", "hasCustodyRights", "verificationStatus", "createdAt", "updatedAt"]
+    },
+    "IncidentAlert": {
+      "title": "IncidentAlert",
+      "description": "Real-time emergency SOS incident or panic alert dispatch",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "learnerId": { "type": "string", "maxLength": 64 },
+        "schoolId": { "type": "string", "maxLength": 64 },
+        "reportedByUserId": { "type": "string", "maxLength": 64 },
+        "severity": { "type": "string", "maxLength": 32, "enum": ["LOW", "MEDIUM", "HIGH", "CRITICAL", "CRITICAL_SOS"] },
+        "status": { "type": "string", "maxLength": 32, "enum": ["NEW", "QUEUED", "ACKNOWLEDGED", "CLAIMED", "DISPATCHED", "EN_ROUTE", "ON_SCENE", "ACTIVE", "CONTAINED", "RESOLVED", "CLOSED", "CANCELLED"] },
+        "assignedResponderId": { "type": "string", "maxLength": 64 },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "description": { "type": "string", "maxLength": 500 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "severity", "status", "reportedByUserId", "createdAt", "updatedAt"]
+    },
+    "Device": {
+      "title": "Device",
+      "description": "Hardware IoT beacon and telemetry unit",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "serialNumber": { "type": "string", "maxLength": 128 },
+        "deviceModel": { "type": "string", "maxLength": 128 },
+        "deviceStatus": { "type": "string", "maxLength": 32, "enum": ["ACTIVE", "MAINTENANCE", "QUARANTINED", "RETIRED"] },
+        "batteryLevel": { "type": "number" },
+        "lastPingAt": { "type": "string", "maxLength": 64 },
+        "createdAt": { "type": "string", "maxLength": 64 },
+        "updatedAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "serialNumber", "deviceModel", "deviceStatus", "batteryLevel", "createdAt", "updatedAt"]
+    },
+    "AuditEvent": {
+      "title": "AuditEvent",
+      "description": "Cryptographically chained immutable audit event",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "maxLength": 64, "pattern": "^[a-zA-Z0-9_\\-]+$" },
+        "actionType": { "type": "string", "maxLength": 128 },
+        "actorUserId": { "type": "string", "maxLength": 64 },
+        "actorName": { "type": "string", "maxLength": 128 },
+        "actorRole": { "type": "string", "maxLength": 64 },
+        "targetEntity": { "type": "string", "maxLength": 64 },
+        "targetId": { "type": "string", "maxLength": 64 },
+        "checksum": { "type": "string", "maxLength": 128 },
+        "createdAt": { "type": "string", "maxLength": 64 }
+      },
+      "required": ["id", "actionType", "actorUserId", "actorName", "actorRole", "targetEntity", "targetId", "checksum", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profile records containing account status and role"
+    },
+    "/schools/{schoolId}": {
+      "schema": { "$ref": "#/entities/School" },
+      "description": "Registered institutional school profiles"
+    },
+    "/learners/{learnerId}": {
+      "schema": { "$ref": "#/entities/Learner" },
+      "description": "Child safety learner registry"
+    },
+    "/guardians/{guardianId}": {
+      "schema": { "$ref": "#/entities/Guardian" },
+      "description": "Guardian records with contact and identity details"
+    },
+    "/relationships/{relationshipId}": {
+      "schema": { "$ref": "#/entities/GuardianLearnerRelationship" },
+      "description": "Legal custody and guardian-to-learner links"
+    },
+    "/incidents/{incidentId}": {
+      "schema": { "$ref": "#/entities/IncidentAlert" },
+      "description": "Emergency alerts, panic dispatches, and incident lifecycle"
+    },
+    "/devices/{deviceId}": {
+      "schema": { "$ref": "#/entities/Device" },
+      "description": "IoT tracking hardware and diagnostic status"
+    },
+    "/audit_events/{eventId}": {
+      "schema": { "$ref": "#/entities/AuditEvent" },
+      "description": "Immutable compliance audit records"
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "Privileged admin and founder accounts"
+    }
+  }
+}
