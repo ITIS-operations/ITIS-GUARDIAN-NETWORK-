@@ -34,15 +34,18 @@ import {
   ImmutableAuditEvent,
   UnifiedDeviceStatus,
   UnifiedDeviceOperationalState,
-  SafetyRuleSeverity
+  SafetyRuleSeverity,
+  DeviceCallSession
 } from '../types.js';
 import { db } from './dbStore.js';
+import { validateAndNormalizePhoneNumber } from './phoneValidation.js';
 
 export class DeviceRegistryEngine {
   private devices: Map<string, ItisDeviceRecord> = new Map();
   private trackerIdentifierIndex: Map<string, string> = new Map(); // trackerDeviceId -> itisDeviceId
   private imeiIndex: Map<string, string> = new Map(); // imei -> itisDeviceId
   private assignmentHistory: DeviceAssignmentHistoryRecord[] = [];
+  private callSessions: Map<string, DeviceCallSession> = new Map();
 
   constructor() {
     this.seedAuthoritativeDeviceRegistry();
@@ -58,6 +61,8 @@ export class DeviceRegistryEngine {
         trackerDeviceId: 'GT012-TRK-8812',
         imei: '867543029182734',
         simIdentifier: '8927010203040506070',
+        phoneNumber: '+27821234501',
+        simPhoneNumber: '+27821234501',
         protocolType: 'GT012',
         deviceModel: 'GT012-4G-SOS-WEARABLE',
         deviceStatus: 'ACTIVE',
@@ -94,6 +99,8 @@ export class DeviceRegistryEngine {
         trackerDeviceId: 'GT012-TRK-8813',
         imei: '867543029182735',
         simIdentifier: '8927010203040506071',
+        phoneNumber: '+27821234502',
+        simPhoneNumber: '+27821234502',
         protocolType: 'GT012',
         deviceModel: 'GT012-4G-SOS-WEARABLE',
         deviceStatus: 'ACTIVE',
@@ -129,6 +136,8 @@ export class DeviceRegistryEngine {
         itisDeviceId: 'DEV-ITIS-003',
         trackerDeviceId: 'GT012-TRK-8819',
         imei: '867543029182740',
+        phoneNumber: '+27821234503',
+        simPhoneNumber: '+27821234503',
         protocolType: 'GT012',
         deviceModel: 'GT012-4G-SOS-WEARABLE',
         deviceStatus: 'ACTIVE',
@@ -164,6 +173,8 @@ export class DeviceRegistryEngine {
         itisDeviceId: 'DEV-ITIS-004-SPARE',
         trackerDeviceId: 'GT012-TRK-9901',
         imei: '867543029182991',
+        phoneNumber: '+27821234504',
+        simPhoneNumber: '+27821234504',
         protocolType: 'GT012',
         deviceModel: 'GT012-4G-SOS-WEARABLE',
         deviceStatus: 'ACTIVE',
@@ -188,6 +199,8 @@ export class DeviceRegistryEngine {
         trackerDeviceId: 'DEV-ASCII-001',
         imei: '867543029182745',
         simIdentifier: '8927010203040506085',
+        phoneNumber: '+27821234505',
+        simPhoneNumber: '+27821234505',
         protocolType: 'ASCII',
         deviceModel: 'ASCII-TRACKER-GENERIC',
         deviceStatus: 'ACTIVE',
@@ -221,6 +234,8 @@ export class DeviceRegistryEngine {
         trackerDeviceId: 'DEV-JSON-001',
         imei: '867543029182746',
         simIdentifier: '8927010203040506086',
+        phoneNumber: '+27821234506',
+        simPhoneNumber: '+27821234506',
         protocolType: 'JSON',
         deviceModel: 'JSON-SMART-WEARABLE',
         deviceStatus: 'ACTIVE',
@@ -605,6 +620,43 @@ export class DeviceRegistryEngine {
       }
     }
 
+    // SIM Phone Number Validation and Duplicate Protection
+    let cleanSimPhone: string | undefined = undefined;
+    const rawSimPhone = payload.simPhoneNumber || payload.phoneNumber;
+    if (rawSimPhone) {
+      const simVal = validateAndNormalizePhoneNumber(rawSimPhone);
+      if (!simVal.valid) {
+        throw new Error(simVal.error || `Invalid SIM telephone number '${rawSimPhone}'.`);
+      }
+      cleanSimPhone = simVal.normalized!;
+
+      // Enforce zero duplicate active SIM assignments
+      for (const dev of this.devices.values()) {
+        if (dev.deviceStatus === 'RETIRED') continue;
+        const existingSim = dev.simPhoneNumber || dev.phoneNumber;
+        if (existingSim && existingSim === cleanSimPhone && dev.trackerDeviceId.toLowerCase() !== cleanTrackerId.toLowerCase()) {
+          db.logAuditEvent({
+            actionType: 'DUPLICATE_DEVICE_REGISTRATION_BLOCKED',
+            actorUserId: actorUser.id,
+            actorName: actorUser.name,
+            actorRole: actorUser.role,
+            targetEntity: 'DEVICE',
+            targetId: dev.itisDeviceId,
+            details: {
+              attemptedSimPhone: cleanSimPhone,
+              existingDeviceId: dev.itisDeviceId,
+              existingStatus: dev.deviceStatus,
+              reason: 'DUPLICATE_SIM_NUMBER'
+            }
+          });
+          const err: any = new Error(`DUPLICATE SIM NUMBER CONFLICT: SIM / telephone number '${cleanSimPhone}' is already assigned to active device '${dev.itisDeviceId}' (${dev.trackerDeviceId}). Duplicate SIM assignments are prohibited.`);
+          err.statusCode = 409;
+          err.code = 'DUPLICATE_SIM';
+          throw err;
+        }
+      }
+    }
+
     // Check if promoting from UNREGISTERED record
     let deviceId = this.trackerIdentifierIndex.get(cleanTrackerId);
     let device: ItisDeviceRecord;
@@ -617,7 +669,8 @@ export class DeviceRegistryEngine {
       device.imei = cleanImei || device.imei;
       device.hardwareSerialNumber = cleanTrackerId;
       device.simIdentifier = payload.simIdentifier || payload.iccid || device.simIdentifier;
-      device.phoneNumber = payload.phoneNumber || device.phoneNumber;
+      device.phoneNumber = cleanSimPhone || payload.phoneNumber || device.phoneNumber;
+      device.simPhoneNumber = cleanSimPhone || payload.simPhoneNumber || device.simPhoneNumber;
       device.firmwareVersion = payload.firmwareVersion || device.firmwareVersion || 'v1.0.0-PROVISIONED';
       device.hardwareRevision = payload.hardwareRevision || device.hardwareRevision || 'REV-A';
       device.deviceStatus = 'REGISTERED';
@@ -635,7 +688,8 @@ export class DeviceRegistryEngine {
         hardwareSerialNumber: cleanTrackerId,
         imei: cleanImei,
         simIdentifier: payload.simIdentifier || payload.iccid,
-        phoneNumber: payload.phoneNumber,
+        phoneNumber: cleanSimPhone || payload.phoneNumber,
+        simPhoneNumber: cleanSimPhone || payload.simPhoneNumber,
         protocolType: cleanProtocol,
         manufacturer: payload.manufacturer || 'Topin/Generic',
         deviceModel: cleanModel,
@@ -1937,7 +1991,7 @@ export class DeviceRegistryEngine {
     const all = Array.from(this.devices.values());
     let filtered = all;
 
-    if (actorUser.role === 'FOUNDER_EXECUTIVE' || actorUser.role === 'SYSTEM_ADMIN') {
+    if (actorUser.role === 'FOUNDER_EXECUTIVE' || actorUser.role === 'SYSTEM_ADMIN' || actorUser.role === 'COMMAND_OPERATOR') {
       if (queryParams?.schoolId) {
         filtered = filtered.filter(d => d.assignedSchoolId === queryParams.schoolId);
       }
@@ -2020,7 +2074,7 @@ export class DeviceRegistryEngine {
       throw err;
     }
 
-    if (actorUser.role === 'FOUNDER_EXECUTIVE' || actorUser.role === 'SYSTEM_ADMIN') {
+    if (actorUser.role === 'FOUNDER_EXECUTIVE' || actorUser.role === 'SYSTEM_ADMIN' || actorUser.role === 'COMMAND_OPERATOR') {
       return device;
     }
 
@@ -2073,6 +2127,246 @@ export class DeviceRegistryEngine {
     const err: any = new Error(`ACCESS DENIED: Insufficient clearance.`);
     err.statusCode = 403;
     throw err;
+  }
+
+  /**
+   * Update SIM / telephone number associated with an existing physical device record.
+   * Enforces format validation, duplicate SIM rejection, and immutable cryptographic audit logging.
+   */
+  public updateDeviceSim(
+    deviceId: string,
+    simPhoneNumber: string,
+    actorUser: ActiveUserSession
+  ): ItisDeviceRecord {
+    this.assertTechnicianOrAdminClearance(actorUser, 'UPDATE_DEVICE_SIM');
+
+    const val = validateAndNormalizePhoneNumber(simPhoneNumber);
+    if (!val.valid) {
+      throw new Error(val.error || `Invalid SIM / telephone number '${simPhoneNumber}'.`);
+    }
+    const cleanSim = val.normalized!;
+
+    // Find device by ID or tracker ID
+    const device = this.getDeviceById(deviceId);
+    if (!device) {
+      const err: any = new Error(`Device '${deviceId}' not found.`);
+      err.statusCode = 404;
+      throw err;
+    }
+
+    // Check duplicate SIM assignment across other active devices
+    for (const otherDev of this.devices.values()) {
+      if (otherDev.deviceStatus === 'RETIRED') continue;
+      if (otherDev.itisDeviceId === device.itisDeviceId || otherDev.trackerDeviceId === device.trackerDeviceId) continue;
+
+      const existingSim = otherDev.simPhoneNumber || otherDev.phoneNumber;
+      if (existingSim && existingSim === cleanSim) {
+        db.logAuditEvent({
+          actionType: 'DUPLICATE_DEVICE_REGISTRATION_BLOCKED',
+          actorUserId: actorUser.id,
+          actorName: actorUser.name,
+          actorRole: actorUser.role,
+          targetEntity: 'DEVICE',
+          targetId: device.itisDeviceId,
+          details: {
+            attemptedSim: cleanSim,
+            existingDeviceId: otherDev.itisDeviceId,
+            reason: 'DUPLICATE_SIM_NUMBER'
+          }
+        });
+        const err: any = new Error(`DUPLICATE SIM NUMBER CONFLICT: SIM / telephone number '${cleanSim}' is already assigned to active device '${otherDev.itisDeviceId}' (${otherDev.trackerDeviceId}). Duplicate SIM assignments are prohibited.`);
+        err.statusCode = 409;
+        err.code = 'DUPLICATE_SIM';
+        throw err;
+      }
+    }
+
+    const previousSim = device.simPhoneNumber || device.phoneNumber || 'NONE';
+    device.simPhoneNumber = cleanSim;
+    device.phoneNumber = cleanSim;
+    device.updatedAt = new Date().toISOString();
+
+    // Sync with dbStore device map if present
+    const storeDev = db.devices.get(device.trackerDeviceId) || db.devices.get(device.itisDeviceId);
+    if (storeDev) {
+      storeDev.simPhoneNumber = cleanSim;
+      storeDev.updatedAt = device.updatedAt;
+    }
+
+    db.logAuditEvent({
+      actionType: 'DEVICE_SIM_UPDATED',
+      actorUserId: actorUser.id,
+      actorName: actorUser.name,
+      actorRole: actorUser.role,
+      targetEntity: 'DEVICE',
+      targetId: device.itisDeviceId,
+      details: {
+        deviceId: device.itisDeviceId,
+        trackerDeviceId: device.trackerDeviceId,
+        previousSim,
+        updatedSim: cleanSim,
+        updatedBy: actorUser.name,
+        updatedByRole: actorUser.role
+      }
+    });
+
+    return device;
+  }
+
+  /**
+   * Initiate a restricted Command Centre device calling & live environmental audio monitoring session.
+   * Strictly authorized ONLY for Command Centre Officers (COMMAND_OPERATOR, SYSTEM_ADMIN, FOUNDER_EXECUTIVE).
+   * All other portal roles receive an immediate HTTP 403 Access Denied.
+   */
+  public initiateDeviceCall(
+    deviceId: string,
+    actorUser: ActiveUserSession,
+    incidentId?: string,
+    learnerId?: string
+  ): DeviceCallSession {
+    const authorizedCallRoles = ['COMMAND_OPERATOR', 'SYSTEM_ADMIN', 'FOUNDER_EXECUTIVE'];
+    if (!authorizedCallRoles.includes(actorUser.role)) {
+      const err: any = new Error(`ACCESS DENIED (HTTP 403): Only an authorised Command Centre Officer may initiate device calling and live environmental audio monitoring. Role '${actorUser.role}' is not permitted.`);
+      err.statusCode = 403;
+      err.code = 'FORBIDDEN_CALL_INITIATION';
+      throw err;
+    }
+
+    const device = this.getDeviceById(deviceId);
+    if (!device) {
+      const err: any = new Error(`Device '${deviceId}' not found.`);
+      err.statusCode = 404;
+      throw err;
+    }
+
+    if (device.deviceStatus === 'RETIRED') {
+      const err: any = new Error(`Cannot initiate call to retired device '${device.itisDeviceId}'.`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const simPhone = device.simPhoneNumber || device.phoneNumber;
+    if (!simPhone) {
+      const err: any = new Error(`Device '${device.itisDeviceId}' (${device.trackerDeviceId}) does not have a registered SIM / telephone number configured for audio monitoring.`);
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const sessionId = `call-sess-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+    const now = new Date().toISOString();
+
+    const auditEv = db.logAuditEvent({
+      actionType: 'DEVICE_CALL_INITIATED',
+      actorUserId: actorUser.id,
+      actorName: actorUser.name,
+      actorRole: actorUser.role,
+      targetEntity: 'DEVICE',
+      targetId: device.itisDeviceId,
+      details: {
+        sessionId,
+        deviceId: device.itisDeviceId,
+        trackerDeviceId: device.trackerDeviceId,
+        simPhoneNumber: simPhone,
+        incidentId: incidentId || 'COMMAND_CENTRE_DIRECT',
+        learnerId: device.assignedLearnerId || learnerId || undefined,
+        learnerName: device.assignedLearnerName || undefined,
+        schoolName: device.assignedSchoolName || undefined,
+        channelType: 'LIVE_ENVIRONMENTAL_AUDIO_STREAM',
+        encryption: 'AES-256-GCM',
+        operatorName: actorUser.name,
+        operatorRole: actorUser.role
+      }
+    });
+
+    const session: DeviceCallSession = {
+      sessionId,
+      deviceId: device.itisDeviceId,
+      trackerDeviceId: device.trackerDeviceId,
+      simPhoneNumber: simPhone,
+      learnerId: device.assignedLearnerId || learnerId || undefined,
+      learnerName: device.assignedLearnerName || undefined,
+      schoolName: device.assignedSchoolName || undefined,
+      officerUserId: actorUser.id,
+      officerName: actorUser.name,
+      officerRole: actorUser.role,
+      status: 'ACTIVE',
+      startedAt: now,
+      signalQuality: 'EXCELLENT',
+      decibelLevel: -42,
+      encryption: 'AES-256-GCM',
+      audioChannelUrl: `/api/command-centre/audio-stream/${sessionId}`,
+      auditEventId: auditEv?.id || `aud-${Date.now()}`
+    };
+
+    this.callSessions.set(sessionId, session);
+    return session;
+  }
+
+  /**
+   * Terminate an active Command Centre device calling / audio monitoring session.
+   * Records session duration and writes cryptographic audit event.
+   */
+  public endDeviceCall(
+    sessionId: string,
+    actorUser: ActiveUserSession,
+    durationSeconds?: number
+  ): { success: boolean; session: DeviceCallSession } {
+    const authorizedCallRoles = ['COMMAND_OPERATOR', 'SYSTEM_ADMIN', 'FOUNDER_EXECUTIVE'];
+    if (!authorizedCallRoles.includes(actorUser.role)) {
+      const err: any = new Error(`ACCESS DENIED (HTTP 403): Only an authorised Command Centre Officer may terminate device audio sessions.`);
+      err.statusCode = 403;
+      throw err;
+    }
+
+    let session = this.callSessions.get(sessionId);
+    const now = new Date().toISOString();
+
+    if (session) {
+      session.status = 'TERMINATED';
+      session.endedAt = now;
+      const calculatedDuration = Math.max(1, Math.round((new Date(now).getTime() - new Date(session.startedAt).getTime()) / 1000));
+      session.durationSeconds = durationSeconds ?? calculatedDuration;
+    } else {
+      session = {
+        sessionId,
+        deviceId: 'DEV-UNKNOWN',
+        trackerDeviceId: 'TRK-UNKNOWN',
+        simPhoneNumber: 'N/A',
+        officerUserId: actorUser.id,
+        officerName: actorUser.name,
+        officerRole: actorUser.role,
+        status: 'TERMINATED',
+        startedAt: now,
+        endedAt: now,
+        durationSeconds: durationSeconds ?? 12,
+        signalQuality: 'GOOD',
+        decibelLevel: -42,
+        encryption: 'AES-256-GCM',
+        auditEventId: ''
+      };
+    }
+
+    db.logAuditEvent({
+      actionType: 'DEVICE_CALL_TERMINATED',
+      actorUserId: actorUser.id,
+      actorName: actorUser.name,
+      actorRole: actorUser.role,
+      targetEntity: 'DEVICE',
+      targetId: session.deviceId,
+      details: {
+        sessionId,
+        durationSeconds: session.durationSeconds,
+        simPhoneNumber: session.simPhoneNumber,
+        terminatedBy: actorUser.name,
+        terminatedByRole: actorUser.role
+      }
+    });
+
+    return { success: true, session };
+  }
+
+  public getActiveCallSession(sessionId: string): DeviceCallSession | null {
+    return this.callSessions.get(sessionId) || null;
   }
 
   // Helper authorization validator

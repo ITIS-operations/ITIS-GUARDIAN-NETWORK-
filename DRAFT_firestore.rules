@@ -13,188 +13,55 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function incoming() {
-      return request.resource.data;
-    }
-
-    function existing() {
-      return resource.data;
-    }
-
     function isValidId(id) {
       return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
     function isAdmin() {
-      return isSignedIn() && (
-        (request.auth.token.email == 'bravomtho@gmail.com' && request.auth.token.email_verified == true) ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
-      );
+      return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
     }
 
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
 
-    // 3. Validation Blueprints
-    function isValidUser(data) {
-      return data.keys().hasAll(['id', 'email', 'name', 'role', 'accountStatus', 'createdAt', 'updatedAt']) &&
-        data.keys().hasOnly(['id', 'email', 'name', 'role', 'accountStatus', 'schoolId', 'guardianId', 'phone', 'createdAt', 'updatedAt']) &&
-        data.id is string && data.id.size() <= 128 &&
-        data.email is string && data.email.size() <= 128 &&
-        data.name is string && data.name.size() <= 128 &&
-        data.role is string && data.role in ['PARENT_GUARDIAN', 'SCHOOL_PRINCIPAL', 'SCHOOL_ADMIN_STAFF', 'COMMAND_OPERATOR', 'FIELD_RESPONDER', 'TECHNICIAN', 'SYSTEM_ADMIN', 'GOVERNMENT_AUDITOR', 'FOUNDER_EXECUTIVE'] &&
-        data.accountStatus is string && data.accountStatus in ['ACTIVE', 'SUSPENDED', 'PENDING_VERIFICATION'] &&
-        data.createdAt is string && data.createdAt.size() <= 64 &&
-        data.updatedAt is string && data.updatedAt.size() <= 64;
-    }
-
-    function isValidSchool(data) {
-      return data.keys().hasAll(['id', 'emisCode', 'name', 'province', 'district', 'contactEmail', 'activeStatus', 'createdAt', 'updatedAt']) &&
-        data.keys().hasOnly(['id', 'emisCode', 'name', 'province', 'district', 'principalName', 'contactPhone', 'contactEmail', 'activeStatus', 'createdAt', 'updatedAt']) &&
-        data.id is string && data.id.size() <= 64 &&
-        data.emisCode is string && data.emisCode.size() <= 64 &&
-        data.name is string && data.name.size() <= 255 &&
-        data.province is string && data.province.size() <= 64 &&
-        data.district is string && data.district.size() <= 128 &&
-        data.contactEmail is string && data.contactEmail.size() <= 128 &&
-        data.activeStatus is string && data.activeStatus in ['ACTIVE', 'SUSPENDED'] &&
-        data.createdAt is string && data.createdAt.size() <= 64 &&
-        data.updatedAt is string && data.updatedAt.size() <= 64;
-    }
-
-    function isValidLearner(data) {
-      return data.keys().hasAll(['id', 'schoolId', 'emisId', 'admissionNumber', 'firstName', 'lastName', 'enrolmentStatus', 'createdAt', 'updatedAt']) &&
-        data.keys().hasOnly(['id', 'personId', 'schoolId', 'emisId', 'admissionNumber', 'firstName', 'lastName', 'dateOfBirth', 'enrolmentStatus', 'trackingBeaconId', 'createdAt', 'updatedAt']) &&
-        data.id is string && data.id.size() <= 64 &&
-        data.schoolId is string && data.schoolId.size() <= 64 &&
-        data.emisId is string && data.emisId.size() <= 64 &&
-        data.admissionNumber is string && data.admissionNumber.size() <= 64 &&
-        data.firstName is string && data.firstName.size() <= 128 &&
-        data.lastName is string && data.lastName.size() <= 128 &&
-        data.enrolmentStatus is string && data.enrolmentStatus in ['ACTIVE', 'TRANSFERRED', 'GRADUATED', 'WITHDRAWN', 'SUSPENDED'] &&
-        data.createdAt is string && data.createdAt.size() <= 64 &&
-        data.updatedAt is string && data.updatedAt.size() <= 64;
-    }
-
-    function isValidIncident(data) {
-      return data.keys().hasAll(['id', 'severity', 'status', 'reportedByUserId', 'createdAt', 'updatedAt']) &&
-        data.keys().hasOnly(['id', 'learnerId', 'schoolId', 'reportedByUserId', 'severity', 'status', 'assignedResponderId', 'latitude', 'longitude', 'description', 'createdAt', 'updatedAt']) &&
-        data.id is string && data.id.size() <= 64 &&
-        data.severity is string && data.severity in ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL', 'CRITICAL_SOS'] &&
-        data.status is string && data.status in ['NEW', 'QUEUED', 'ACKNOWLEDGED', 'CLAIMED', 'DISPATCHED', 'EN_ROUTE', 'ON_SCENE', 'ACTIVE', 'CONTAINED', 'RESOLVED', 'CLOSED', 'CANCELLED'] &&
-        data.reportedByUserId is string && data.reportedByUserId.size() <= 64 &&
-        data.createdAt is string && data.createdAt.size() <= 64 &&
-        data.updatedAt is string && data.updatedAt.size() <= 64;
-    }
-
-    function isValidAuditEvent(data) {
-      return data.keys().hasAll(['id', 'actionType', 'actorUserId', 'actorName', 'actorRole', 'targetEntity', 'targetId', 'checksum', 'createdAt']) &&
-        data.keys().hasOnly(['id', 'actionType', 'actorUserId', 'actorName', 'actorRole', 'targetEntity', 'targetId', 'checksum', 'createdAt']) &&
-        data.id is string && data.id.size() <= 64 &&
-        data.actionType is string && data.actionType.size() <= 128 &&
-        data.actorUserId is string && data.actorUserId.size() <= 64 &&
-        data.actorName is string && data.actorName.size() <= 128 &&
-        data.actorRole is string && data.actorRole.size() <= 64 &&
-        data.targetEntity is string && data.targetEntity.size() <= 64 &&
-        data.targetId is string && data.targetId.size() <= 64 &&
-        data.checksum is string && data.checksum.size() <= 128 &&
-        data.createdAt is string && data.createdAt.size() <= 64;
-    }
-
-    // 4. Collections and Path Guarding
-
-    // Test connection doc
+    // 3. Test Connectivity Endpoint (Client Health Check)
     match /test/{docId} {
       allow read: if true;
     }
 
-    // Admin collection
-    match /admins/{adminId} {
-      allow get: if isSignedIn() && (request.auth.uid == adminId || isAdmin());
-      allow list: if isAdmin();
-      allow write: if isAdmin() && isValidId(adminId);
-    }
-
-    // Users
+    // 4. Users Collection (Read-only for owner/admin; writes mastered exclusively via PostgreSQL API)
     match /users/{userId} {
       allow get: if isSignedIn() && isValidId(userId) && (isOwner(userId) || isAdmin());
-      allow list: if isSignedIn() && (resource.data.id == request.auth.uid || isAdmin());
-      allow create: if isSignedIn() && isValidId(userId) && isOwner(userId) &&
-        isValidUser(incoming()) &&
-        incoming().id == userId &&
-        (incoming().role != 'SYSTEM_ADMIN' && incoming().role != 'FOUNDER_EXECUTIVE' || isAdmin());
-      allow update: if isSignedIn() && isValidId(userId) && isValidUser(incoming()) && (
-        isAdmin() ||
-        (
-          isOwner(userId) &&
-          incoming().id == existing().id &&
-          incoming().createdAt == existing().createdAt &&
-          incoming().role == existing().role &&
-          incoming().diff(existing()).affectedKeys().hasOnly(['name', 'phone', 'schoolId', 'guardianId', 'updatedAt'])
-        )
-      );
-      allow delete: if isAdmin() && isValidId(userId);
+      allow list: if false;
+      allow write: if false;
     }
 
-    // Schools
+    // 5. Schools Collection (Read-only metadata for signed-in users)
     match /schools/{schoolId} {
       allow get: if isSignedIn() && isValidId(schoolId);
       allow list: if isSignedIn();
-      allow create, update: if isAdmin() && isValidId(schoolId) && isValidSchool(incoming());
-      allow delete: if isAdmin() && isValidId(schoolId);
+      allow write: if false;
     }
 
-    // Learners
+    // 6. Learners Collection (Mastered & secured authoritatively via ITIS PostgreSQL ABAC API)
     match /learners/{learnerId} {
-      allow get: if isSignedIn() && isValidId(learnerId);
-      allow list: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(learnerId) && isValidLearner(incoming()) && (
-        isAdmin() ||
-        exists(/databases/$(database)/documents/schools/$(incoming().schoolId))
-      );
-      allow update: if isSignedIn() && isValidId(learnerId) && isValidLearner(incoming()) && (
-        isAdmin() ||
-        (
-          incoming().id == existing().id &&
-          incoming().createdAt == existing().createdAt &&
-          incoming().diff(existing()).affectedKeys().hasOnly(['enrolmentStatus', 'trackingBeaconId', 'updatedAt'])
-        )
-      );
-      allow delete: if isAdmin() && isValidId(learnerId);
+      allow read, write: if false;
     }
 
-    // Incidents
+    // 7. Incidents Collection (Mastered & secured authoritatively via ITIS PostgreSQL ABAC API)
     match /incidents/{incidentId} {
-      allow get: if isSignedIn() && isValidId(incidentId);
-      allow list: if isSignedIn();
-      allow create: if isSignedIn() && isValidId(incidentId) && isValidIncident(incoming()) &&
-        incoming().reportedByUserId == request.auth.uid;
-      allow update: if isSignedIn() && isValidId(incidentId) && isValidIncident(incoming()) && (
-        isAdmin() ||
-        (
-          incoming().id == existing().id &&
-          incoming().createdAt == existing().createdAt &&
-          incoming().reportedByUserId == existing().reportedByUserId &&
-          incoming().diff(existing()).affectedKeys().hasOnly(['status', 'assignedResponderId', 'latitude', 'longitude', 'description', 'updatedAt'])
-        )
-      );
-      allow delete: if isAdmin() && isValidId(incidentId);
+      allow read, write: if false;
     }
 
-    // Audit Events (Immutable Append-Only)
+    // 8. Audit Events (Chained & mastered exclusively in PostgreSQL)
     match /audit_events/{eventId} {
-      allow get: if isSignedIn() && isValidId(eventId) && (
-        isAdmin() ||
-        resource.data.actorUserId == request.auth.uid
-      );
-      allow list: if isSignedIn() && (
-        isAdmin() ||
-        resource.data.actorUserId == request.auth.uid
-      );
-      allow create: if isSignedIn() && isValidId(eventId) && isValidAuditEvent(incoming()) &&
-        incoming().actorUserId == request.auth.uid;
-      allow update, delete: if false; // Cryptographic immutability: Updates and deletes are mathematically prohibited
+      allow read, write: if false;
+    }
+
+    // 9. Admins Collection (Managed exclusively server-side)
+    match /admins/{adminId} {
+      allow read, write: if false;
     }
   }
 }

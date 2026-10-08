@@ -17,6 +17,7 @@ import { AuthoritativeEnrolmentModal } from './components/AuthoritativeEnrolment
 import { PanicConsole } from './components/PanicConsole.js';
 import { ForceChangePasswordModal } from './components/ForceChangePasswordModal.js';
 import { api } from './services/api.js';
+import { auth } from './firebase.js';
 import { HydratedLearnerRecord, School, IncidentAlert, ActiveUserSession, UserRole } from './types.js';
 
 // URL Route Mapping Table
@@ -187,6 +188,9 @@ export function App() {
 
   // Logout handler
   const handleLogout = async () => {
+    try {
+      await auth.signOut();
+    } catch {}
     await api.logout();
     setCurrentUser(null);
     setLearners([]);

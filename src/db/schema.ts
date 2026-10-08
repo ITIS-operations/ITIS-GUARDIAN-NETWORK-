@@ -140,6 +140,7 @@ export const devices = pgTable('devices', {
   id: varchar('id', { length: 64 }).primaryKey(),
   serialNumber: varchar('serial_number', { length: 128 }).notNull().unique(),
   imei: varchar('imei', { length: 64 }).unique(),
+  simPhoneNumber: varchar('sim_phone_number', { length: 32 }),
   macAddress: varchar('mac_address', { length: 64 }).unique(),
   deviceModel: varchar('device_model', { length: 128 }).notNull(),
   hardwareRevision: varchar('hardware_revision', { length: 64 }).notNull(),

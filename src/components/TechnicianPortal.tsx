@@ -27,7 +27,8 @@ import {
   RadioTower,
   Play,
   ClipboardList,
-  ArrowRightLeft
+  ArrowRightLeft,
+  Phone
 } from 'lucide-react';
 import { 
   ActiveUserSession, 
@@ -85,6 +86,11 @@ export const TechnicianPortal: React.FC<Props> = ({
   
   const [showMaintenanceModal, setShowMaintenanceModal] = useState<DeviceRecord | null>(null);
   const [maintenanceForm, setMaintenanceForm] = useState({ actionType: 'BATTERY_REPLACEMENT', description: '', status: 'COMPLETED' });
+
+  // SIM / Device Number Management Modal State
+  const [showSimModal, setShowSimModal] = useState<DeviceRecord | null>(null);
+  const [simInput, setSimInput] = useState('');
+  const [isSavingSim, setIsSavingSim] = useState(false);
 
   // Phase 6 Validation Suite State
   const [validationReport, setValidationReport] = useState<TechnicianValidationResult | null>(null);
@@ -194,6 +200,27 @@ export const TechnicianPortal: React.FC<Props> = ({
       loadData();
     } catch (err: any) {
       setActionMessage({ type: 'error', text: `Reassignment failed: ${err.message}` });
+    }
+  };
+
+  const handleUpdateSim = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!showSimModal) return;
+    setIsSavingSim(true);
+    try {
+      await api.updateDeviceSim(showSimModal.id, simInput);
+      setShowSimModal(null);
+      setSimInput('');
+      setActionMessage({
+        type: 'success',
+        text: `Device ${showSimModal.serialNumber} SIM number updated to ${simInput}. Event recorded in authoritative audit trail.`
+      });
+      setTimeout(() => setActionMessage(null), 5000);
+      loadData();
+    } catch (err: any) {
+      setActionMessage({ type: 'error', text: `SIM update failed: ${err.message}` });
+    } finally {
+      setIsSavingSim(false);
     }
   };
 
@@ -489,6 +516,10 @@ export const TechnicianPortal: React.FC<Props> = ({
                             <span className="px-1.5 py-0.2 text-[9px] bg-slate-800 text-slate-400 rounded">Masked</span>
                           </div>
                         )}
+                        <div className="text-cyan-300 truncate font-mono text-[11px] flex items-center justify-between pt-0.5">
+                          <span className="text-slate-500">SIM / Number:</span>
+                          <span className="font-semibold text-emerald-300">{dev.simPhoneNumber || 'Not Configured'}</span>
+                        </div>
                       </div>
                     </div>
 
@@ -559,6 +590,18 @@ export const TechnicianPortal: React.FC<Props> = ({
                           <span>Reassign</span>
                         </button>
                       </div>
+
+                      <button
+                        onClick={() => {
+                          setShowSimModal(dev);
+                          setSimInput(dev.simPhoneNumber || '');
+                        }}
+                        className="w-full min-h-[34px] py-1 px-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-cyan-300 text-[11px] font-semibold transition-colors flex items-center justify-center gap-1.5 border border-cyan-500/20"
+                        title="Authorized technician action: Update SIM / MSISDN"
+                      >
+                        <Phone className="w-3 h-3 text-cyan-400" />
+                        <span>Update SIM / Device Number</span>
+                      </button>
                     </div>
                   </div>
                 );
@@ -1002,6 +1045,63 @@ export const TechnicianPortal: React.FC<Props> = ({
                   className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold"
                 >
                   Authorize Reassignment
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Update Device SIM / Telephone Number */}
+      {showSimModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 space-y-4 text-xs">
+            <div className="flex items-center justify-between">
+              <h3 className="text-base font-bold text-white flex items-center gap-2">
+                <Phone className="w-4 h-4 text-cyan-400" />
+                <span>Update SIM / Device Number</span>
+              </h3>
+              <button onClick={() => setShowSimModal(null)} className="text-slate-400 hover:text-white">✕</button>
+            </div>
+
+            <form onSubmit={handleUpdateSim} className="space-y-3">
+              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800 text-slate-400 space-y-1">
+                <div>Device Serial: <strong className="text-white font-mono">{showSimModal.serialNumber}</strong></div>
+                <div>Model: <span className="text-cyan-400 font-mono">{showSimModal.type}</span></div>
+                <div>Current SIM: <span className="text-emerald-400 font-mono">{showSimModal.simPhoneNumber || 'Not Configured'}</span></div>
+              </div>
+
+              <div>
+                <label className="block text-slate-300 font-semibold mb-1">
+                  SIM / Device Number
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={simInput}
+                  onChange={e => setSimInput(e.target.value)}
+                  placeholder="e.g. +27 82 123 4567"
+                  className="w-full p-2.5 rounded-lg bg-slate-950 border border-slate-700 text-white font-mono outline-none focus:border-cyan-500"
+                />
+                <p className="text-[10px] text-slate-400 mt-1">
+                  MSISDN cellular phone number associated with installed tracker SIM. Supports E.164 South African format (e.g. +27XXXXXXXXX).
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowSimModal(null)}
+                  className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 font-bold"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSavingSim}
+                  className="px-4 py-2 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-bold flex items-center gap-1.5"
+                >
+                  <span>{isSavingSim ? 'Saving...' : 'Save & Authorize SIM'}</span>
                 </button>
               </div>
             </form>

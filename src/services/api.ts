@@ -52,7 +52,11 @@ import {
   TelemetryDiagnosticsTestSuiteResult,
   EnrolFirstResponderPayload,
   NearbyResponderItem,
-  SmartIdVerificationResult
+  SmartIdVerificationResult,
+  DeviceCallSession,
+  InitiateDeviceCallPayload,
+  EndDeviceCallPayload,
+  ItisDeviceRecord
 } from '../types.js';
 
 const API_BASE = '/api';
@@ -190,7 +194,7 @@ export const api = {
   },
 
   // Authoritative Firebase Authentication (Google Sign-In)
-  async firebaseLogin(payload: { email: string; name?: string; uid: string; idToken?: string }): Promise<{
+  async firebaseLogin(payload: { idToken: string }): Promise<{
     user: ActiveUserSession;
     token: string;
     permissions: string[];
@@ -1054,6 +1058,26 @@ export const api = {
     return safeFetchJson<DeviceRecord[]>(res, 'Failed to fetch hardware device telemetry');
   },
 
+  async getDeviceRegistry(filters?: { schoolId?: string; search?: string; status?: string }): Promise<ItisDeviceRecord[]> {
+    const params = new URLSearchParams();
+    if (filters?.schoolId) params.append('schoolId', filters.schoolId);
+    if (filters?.search) params.append('search', filters.search);
+    if (filters?.status) params.append('status', filters.status);
+
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const res = await fetch(`${API_BASE}/devices/registry${qs}`, {
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<ItisDeviceRecord[]>(res, 'Failed to fetch device registry');
+  },
+
+  async getDeviceById(deviceId: string): Promise<ItisDeviceRecord> {
+    const res = await fetch(`${API_BASE}/devices/${encodeURIComponent(deviceId)}`, {
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<ItisDeviceRecord>(res, 'Failed to fetch device details');
+  },
+
   async pingDevice(deviceId: string): Promise<{ success: boolean; deviceId: string; status: string; signalStrength: number; latencyMs: number; timestamp: string }> {
     const res = await fetch(`${API_BASE}/devices/ping`, {
       method: 'POST',
@@ -1076,6 +1100,52 @@ export const api = {
       body: JSON.stringify({ deviceId })
     });
     return safeFetchJson<{ success: boolean; deviceId: string; status: string; batteryLevel?: number; signalStrength: number; tamperStatus: string; calibrationStatus: string }>(res, 'Failed to calibrate hardware device');
+  },
+
+  async updateDeviceSim(deviceId: string, simPhoneNumber: string): Promise<{ success: boolean; message: string; device: any }> {
+    const res = await fetch(`${API_BASE}/devices/${encodeURIComponent(deviceId)}/sim`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify({ simPhoneNumber })
+    });
+    return safeFetchJson<{ success: boolean; message: string; device: any }>(res, 'Failed to update device SIM number');
+  },
+
+  // ----------------------------------------------------
+  // COMMAND CENTRE LIVE ENVIRONMENTAL AUDIO MONITORING & DEVICE CALLING
+  // ----------------------------------------------------
+  async initiateDeviceCall(payload: InitiateDeviceCallPayload): Promise<{ success: boolean; message: string; session: DeviceCallSession }> {
+    const res = await fetch(`${API_BASE}/command-centre/call-device`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify(payload)
+    });
+    return safeFetchJson<{ success: boolean; message: string; session: DeviceCallSession }>(res, 'Failed to initiate device call');
+  },
+
+  async endDeviceCall(payload: EndDeviceCallPayload): Promise<{ success: boolean; session: DeviceCallSession }> {
+    const res = await fetch(`${API_BASE}/command-centre/end-call`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...this.getAuthHeaders()
+      },
+      body: JSON.stringify(payload)
+    });
+    return safeFetchJson<{ success: boolean; session: DeviceCallSession }>(res, 'Failed to terminate device call');
+  },
+
+  async getCallSession(sessionId: string): Promise<DeviceCallSession> {
+    const res = await fetch(`${API_BASE}/command-centre/call-session/${encodeURIComponent(sessionId)}`, {
+      headers: this.getAuthHeaders()
+    });
+    return safeFetchJson<DeviceCallSession>(res, 'Failed to fetch call session');
   },
 
   async logDeviceMaintenance(payload: {

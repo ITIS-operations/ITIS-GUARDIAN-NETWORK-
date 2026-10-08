@@ -20,9 +20,8 @@ import {
 } from 'lucide-react';
 import { api } from '../services/api.js';
 import { ActiveUserSession, UserRole, School } from '../types.js';
-import { auth, googleProvider, db } from '../firebase.js';
+import { auth, googleProvider } from '../firebase.js';
 import { signInWithPopup } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 interface Props {
   onLoginSuccess: (user: ActiveUserSession) => void;
@@ -111,35 +110,11 @@ export const AuthScreen: React.FC<Props> = ({
         throw new Error('Google sign-in did not return a valid email address.');
       }
 
-      // Sync user profile to Firestore
-      const userDocRef = doc(db, 'users', cred.user.uid);
-      try {
-        const userSnap = await getDoc(userDocRef);
-        const nowIso = new Date().toISOString();
-        if (!userSnap.exists()) {
-          const isFounder = cred.user.email.toLowerCase() === 'bravomtho@gmail.com';
-          await setDoc(userDocRef, {
-            id: cred.user.uid,
-            email: cred.user.email,
-            name: cred.user.displayName || (isFounder ? 'Founder Executive' : 'Guardian User'),
-            role: isFounder ? 'FOUNDER_EXECUTIVE' : 'PARENT_GUARDIAN',
-            accountStatus: 'ACTIVE',
-            createdAt: nowIso,
-            updatedAt: nowIso
-          });
-        }
-      } catch (fsErr) {
-        console.warn('Firestore user profile sync notice:', fsErr);
-      }
-
-      // Authenticate with server session
+      // Obtain cryptographically signed Firebase ID token
       const idToken = await cred.user.getIdToken();
-      const res = await api.firebaseLogin({
-        email: cred.user.email,
-        name: cred.user.displayName || undefined,
-        uid: cred.user.uid,
-        idToken
-      });
+      
+      // Authenticate with server-authoritative ITIS session
+      const res = await api.firebaseLogin({ idToken });
 
       onLoginSuccess(res.user);
     } catch (err: any) {

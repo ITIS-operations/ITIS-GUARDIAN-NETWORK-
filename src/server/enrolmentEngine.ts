@@ -22,6 +22,8 @@ import {
   LinkedChildSummary,
   MatchType
 } from '../types.js';
+import { validateAndNormalizePhoneNumber } from './phoneValidation.js';
+import { deviceRegistryEngine } from './deviceRegistryEngine.js';
 
 export class EnrolmentEngine {
   /**
@@ -438,6 +440,30 @@ export class EnrolmentEngine {
       }
     }
 
+    // Validate SIM / Telephone Number and prevent duplicate assignment across active devices
+    let cleanSimPhoneNumber: string | undefined = undefined;
+    if (lData.simPhoneNumber) {
+      const simVal = validateAndNormalizePhoneNumber(lData.simPhoneNumber);
+      if (!simVal.valid) {
+        throw new Error(simVal.error || `Invalid SIM / telephone number "${lData.simPhoneNumber}".`);
+      }
+      cleanSimPhoneNumber = simVal.normalized!;
+
+      // 1. Check against db.devices
+      for (const dev of db.devices.values()) {
+        if (dev.deviceStatus !== 'RETIRED' && (dev.simPhoneNumber === cleanSimPhoneNumber || dev.phoneNumber === cleanSimPhoneNumber)) {
+          throw new Error(`DUPLICATE SIM NUMBER CONFLICT: SIM / telephone number "${cleanSimPhoneNumber}" is already assigned to active device "${dev.serialNumber || dev.id}". Duplicate SIM assignments are prohibited.`);
+        }
+      }
+
+      // 2. Check against deviceRegistryEngine
+      for (const dev of deviceRegistryEngine.getAllDevices()) {
+        if (dev.deviceStatus !== 'RETIRED' && (dev.simPhoneNumber === cleanSimPhoneNumber || dev.phoneNumber === cleanSimPhoneNumber)) {
+          throw new Error(`DUPLICATE SIM NUMBER CONFLICT: SIM / telephone number "${cleanSimPhoneNumber}" is already assigned to active device "${dev.itisDeviceId || dev.trackerDeviceId}". Duplicate SIM assignments are prohibited.`);
+        }
+      }
+    }
+
     if (lData.existingLearnerId && db.learners.has(lData.existingLearnerId)) {
       finalLearnerId = lData.existingLearnerId;
       const existingL = db.learners.get(finalLearnerId)!;
@@ -521,6 +547,23 @@ export class EnrolmentEngine {
 
         // Audit Device Pairing
         if (newLearner.trackingBeaconId) {
+          const beaconId = newLearner.trackingBeaconId;
+          const existingDev = db.devices.get(beaconId);
+          if (existingDev) {
+            existingDev.assignedLearnerId = newLearner.id;
+            if (cleanSimPhoneNumber) existingDev.simPhoneNumber = cleanSimPhoneNumber;
+          } else {
+            db.devices.set(beaconId, {
+              id: beaconId,
+              serialNumber: beaconId,
+              simPhoneNumber: cleanSimPhoneNumber,
+              assignedLearnerId: newLearner.id,
+              deviceStatus: 'ACTIVE',
+              batteryLevel: 98,
+              lastPingAt: now
+            });
+          }
+
           db.logAuditEvent({
             actionType: 'DEVICE_PAIRED',
             actorUserId: staffContext.staffUserId,
@@ -531,6 +574,7 @@ export class EnrolmentEngine {
             details: {
               learnerName: `${newLPerson.firstName} ${newLPerson.lastName}`,
               trackingBeaconId: newLearner.trackingBeaconId,
+              simPhoneNumber: cleanSimPhoneNumber || 'N/A',
               emisId: newLearner.emisId,
               schoolId: eData.schoolId
             },

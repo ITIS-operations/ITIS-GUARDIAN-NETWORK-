@@ -115,6 +115,8 @@ export const AuthoritativeEnrolmentModal: React.FC<Props> = ({
 
   // Step 6: Link Device to Learner
   const [beaconTagId, setBeaconTagId] = useState('');
+  const [simPhoneNumber, setSimPhoneNumber] = useState('');
+  const [simError, setSimError] = useState<string | null>(null);
   const [deviceValidationStatus, setDeviceValidationStatus] = useState<'IDLE' | 'CHECKING' | 'VALID' | 'CONFLICT'>('IDLE');
   const [deviceConflictMessage, setDeviceConflictMessage] = useState<string | null>(null);
   const [skipDevicePairing, setSkipDevicePairing] = useState(false);
@@ -256,9 +258,20 @@ export const AuthoritativeEnrolmentModal: React.FC<Props> = ({
 
     // Step 6 Validation
     if (currentStep === 6) {
-      if (!skipDevicePairing && !beaconTagId.trim()) {
-        setErrorMessage('Please pair a tracking beacon or select "Skip device pairing".');
-        return;
+      if (!skipDevicePairing) {
+        if (!beaconTagId.trim()) {
+          setErrorMessage('Please pair a tracking beacon or select "Skip device pairing".');
+          return;
+        }
+        if (simPhoneNumber.trim()) {
+          const cleanPhone = simPhoneNumber.trim().replace(/[\s\-\(\)\.]/g, '');
+          const isSa = /^0[1-9]\d{8}$/.test(cleanPhone) || /^27[1-9]\d{8}$/.test(cleanPhone) || /^\+27[1-9]\d{8}$/.test(cleanPhone);
+          const isE164 = /^\+[1-9]\d{6,14}$/.test(cleanPhone);
+          if (!isSa && !isE164) {
+            setErrorMessage('Invalid SIM / Device Number. Please enter a valid South African (+27XXXXXXXXX) or international E.164 phone number.');
+            return;
+          }
+        }
       }
       setCurrentStep(7);
       return;
@@ -302,7 +315,8 @@ export const AuthoritativeEnrolmentModal: React.FC<Props> = ({
           medicalNotes: medicalNotes.trim() || undefined,
           bloodType: bloodType || 'O+',
           allergies: allergies.filter(a => a !== 'None'),
-          trackingBeaconId: skipDevicePairing ? undefined : beaconTagId.trim() || undefined
+          trackingBeaconId: skipDevicePairing ? undefined : beaconTagId.trim() || undefined,
+          simPhoneNumber: skipDevicePairing ? undefined : simPhoneNumber.trim() || undefined
         },
         guardian: {
           existingGuardianId: existingGuardianId,
@@ -1450,6 +1464,34 @@ export const AuthoritativeEnrolmentModal: React.FC<Props> = ({
                   </div>
                 </div>
 
+                {/* Device SIM / Telephone Number */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label htmlFor={`${formId}-sim-number`} className="block text-xs font-semibold text-slate-300">
+                      SIM / Device Number
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-mono">Tracker SIM MSISDN (e.g. +27XXXXXXXXX)</span>
+                  </div>
+                  <div className="relative">
+                    <input
+                      id={`${formId}-sim-number`}
+                      type="tel"
+                      value={simPhoneNumber}
+                      disabled={skipDevicePairing}
+                      onChange={e => {
+                        setSimPhoneNumber(e.target.value);
+                        setSimError(null);
+                      }}
+                      placeholder="+27 82 123 4567"
+                      className="w-full px-3.5 py-2.5 pl-9 rounded-xl bg-slate-900 border border-slate-800 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-cyan-500 font-mono disabled:opacity-50"
+                    />
+                    <Phone className="w-4 h-4 text-slate-500 absolute left-3 top-3" />
+                  </div>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    Direct cellular SIM telephone number for Command Centre voice verification and live environmental audio monitoring.
+                  </p>
+                </div>
+
                 {/* Skip toggle */}
                 <label className="flex items-center gap-2 text-xs text-slate-400 cursor-pointer pt-1">
                   <input
@@ -1528,7 +1570,7 @@ export const AuthoritativeEnrolmentModal: React.FC<Props> = ({
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-emerald-400" />
-                    <span>5. Hardware Panic Beacon Allocated ({beaconTagId || 'None'})</span>
+                    <span>5. Hardware Panic Beacon Allocated ({beaconTagId || 'None'}{simPhoneNumber ? ` • SIM: ${simPhoneNumber}` : ''})</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-emerald-400" />

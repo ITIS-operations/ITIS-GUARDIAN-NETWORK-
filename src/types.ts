@@ -261,6 +261,7 @@ export interface AuthoritativeOnboardPayload {
     bloodType?: string;
     allergies?: string[];
     trackingBeaconId?: string;
+    simPhoneNumber?: string;
   };
   
   // 2. Guardian Information
@@ -492,7 +493,10 @@ export interface ImmutableAuditEvent {
     | 'INCIDENT_CLOSED'
     | 'INCIDENT_CANCELLED'
     | 'DISPATCH_CANCELLED'
-    | 'RESPONDER_REASSIGNED';
+    | 'RESPONDER_REASSIGNED'
+    | 'DEVICE_SIM_UPDATED'
+    | 'DEVICE_CALL_INITIATED'
+    | 'DEVICE_CALL_TERMINATED';
   actorUserId: string;
   actorName: string;
   actorRole: string;
@@ -1127,6 +1131,8 @@ export interface AuditLogQueryOptions {
 export interface DeviceRecord {
   id: string;
   serialNumber: string;
+  imei?: string;
+  simPhoneNumber?: string;
   type: 'WEARABLE_BEACON' | 'RFID_GATE_READER' | 'VEHICLE_GPS' | 'BIOMETRIC_TERMINAL' | 'LORAWAN_GATEWAY';
   assignedSchool: string;
   assignedSubject?: string;
@@ -1512,6 +1518,7 @@ export interface ItisDeviceRecord {
   simIdentifier?: string; // Authoritative ICCID where appropriate
   iccid?: string;
   phoneNumber?: string; // SIM phone number
+  simPhoneNumber?: string; // Authoritative SIM / Device telephone number (E.164)
   protocolType: ItisDeviceProtocolType;
   manufacturer?: string;
   deviceModel: string;
@@ -1664,10 +1671,49 @@ export interface RegisterDevicePayload {
   simIdentifier?: string;
   iccid?: string;
   phoneNumber?: string;
+  simPhoneNumber?: string;
   firmwareVersion?: string;
   hardwareRevision?: string;
   initialBatteryPercentage?: number;
   assignedSchoolId?: string;
+}
+
+// ==============================================================================
+// COMMAND CENTRE LIVE ENVIRONMENTAL AUDIO MONITORING & DEVICE CALLING
+// ==============================================================================
+
+export interface DeviceCallSession {
+  sessionId: string;
+  deviceId: string;
+  trackerDeviceId: string;
+  simPhoneNumber: string;
+  learnerId?: string;
+  learnerName?: string;
+  schoolName?: string;
+  officerUserId: string;
+  officerName: string;
+  officerRole: UserRole;
+  status: 'CONNECTING' | 'ACTIVE' | 'TERMINATED' | 'FAILED';
+  startedAt: string;
+  endedAt?: string;
+  durationSeconds?: number;
+  audioChannelUrl?: string;
+  signalQuality: 'EXCELLENT' | 'GOOD' | 'FAIR';
+  decibelLevel: number;
+  encryption: 'AES-256-GCM';
+  auditEventId: string;
+}
+
+export interface InitiateDeviceCallPayload {
+  deviceId: string;
+  incidentId?: string;
+  learnerId?: string;
+}
+
+export interface EndDeviceCallPayload {
+  sessionId: string;
+  deviceId?: string;
+  durationSeconds?: number;
 }
 
 export interface DeviceAssignmentHistoryRecord {

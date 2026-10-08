@@ -41,6 +41,7 @@ import { networkResilienceTestSuite } from './src/server/networkResilienceTestSu
 import { IncidentAlert, ActiveUserSession, PermissionKey, UserRole, ExecutiveOverviewData } from './src/types.js';
 import { correlationMiddleware, logger } from './src/server/logger.js';
 import { assertProductionConfiguration, validateServerConfig } from './src/server/config.js';
+import { verifyFirebaseIdToken } from './src/server/firebaseTokenVerifier.js';
 
 const app = express();
 const PORT = 3000;
@@ -439,36 +440,58 @@ app.post('/api/auth/register', registerRateLimiter, async (req, res) => {
   }
 });
 
-// Firebase Authentication Endpoint (Google Sign-In)
+// Firebase Authentication Endpoint (Cryptographically Verified Google Sign-In)
 app.post('/api/auth/firebase-login', async (req, res) => {
   try {
-    const { email, name, uid } = req.body;
-    if (!email) {
-      return res.status(400).json({ error: 'Email is required for Firebase authentication' });
+    const { idToken } = req.body || {};
+    if (!idToken || typeof idToken !== 'string') {
+      return res.status(401).json({
+        error: 'AUTHENTICATION_REQUIRED: A valid cryptographic Firebase ID token is required to establish identity.'
+      });
     }
 
-    const cleanEmail = email.toLowerCase().trim();
+    // 1. Cryptographically verify the token (signature, issuer, audience, expiration)
+    const verifiedToken = await verifyFirebaseIdToken(idToken);
+
+    if (!verifiedToken.email || !verifiedToken.email_verified) {
+      return res.status(403).json({
+        error: 'UNVERIFIED_EMAIL: The Google account does not have a verified email address. Access denied.'
+      });
+    }
+
+    // 2. Identity is established strictly from the verified token
+    const cleanEmail = verifiedToken.email.toLowerCase().trim();
+
+    // 3. SEC-FB-03: Sovereign Founder & System Admin accounts MUST NOT authenticate via 3P Google Sign-In
+    // The approved Founder journey (Activation Token -> Password -> 6-Digit TOTP MFA) is strictly mandatory
     let verifiedUser = await repository.users.findByEmailOrAlias(cleanEmail);
 
-    // Bootstrapped Admin check for bravomtho@gmail.com
-    const isBootstrappedAdmin = cleanEmail === 'bravomtho@gmail.com';
+    if (verifiedUser && (verifiedUser.role === 'FOUNDER_EXECUTIVE' || verifiedUser.role === 'SYSTEM_ADMIN')) {
+      return res.status(403).json({
+        error: 'ACCESS_DENIED: Sovereign Founder and System Administrator accounts are strictly barred from 3rd-party Google Sign-In. You must authenticate using the approved Founder Setup, sovereign password, and 6-digit TOTP MFA journey.'
+      });
+    }
 
+    // Explicitly prevent claiming reserved Founder address
+    if (cleanEmail === 'founder@itis365.co.za' || cleanEmail === 'bravomtho@gmail.com') {
+      if (!verifiedUser || verifiedUser.role === 'FOUNDER_EXECUTIVE') {
+        return res.status(403).json({
+          error: 'ACCESS_DENIED: Sovereign Founder and SuperAdmin privileges cannot be claimed via 3rd-party Google Sign-In. You must authenticate using the approved Founder Setup, sovereign password, and 6-digit TOTP MFA journey.'
+        });
+      }
+    }
+
+    // 4. Auto-provision or resolve user strictly as PARENT_GUARDIAN
     if (!verifiedUser) {
-      // Auto-provision user account for verified Firebase user
-      const role: UserRole = isBootstrappedAdmin ? 'FOUNDER_EXECUTIVE' : 'PARENT_GUARDIAN';
       const created = await repository.users.create({
         email: cleanEmail,
-        name: name || (isBootstrappedAdmin ? 'Founder Executive' : 'Guardian User'),
-        role,
+        name: verifiedToken.name || 'Guardian User',
+        role: 'PARENT_GUARDIAN', // Google Sign-In users are strictly provisioned as PARENT_GUARDIAN
         status: 'ACTIVE',
-        department: isBootstrappedAdmin ? 'Executive Oversight' : 'Parent & Guardian Community',
-        organization: isBootstrappedAdmin ? 'ITIS Platform Network' : 'Parent & Legal Guardian Community'
-      }, uid || 'firebase-admin');
+        department: 'Parent & Guardian Community',
+        organization: 'Parent & Legal Guardian Community'
+      }, verifiedToken.uid);
       verifiedUser = created;
-    } else if (isBootstrappedAdmin && verifiedUser.role !== 'FOUNDER_EXECUTIVE') {
-      // Ensure sovereign founder role for the owner
-      await repository.users.update(verifiedUser.id, { role: 'FOUNDER_EXECUTIVE' }, verifiedUser.id);
-      verifiedUser.role = 'FOUNDER_EXECUTIVE';
     }
 
     if (verifiedUser.status === 'SUSPENDED' || verifiedUser.status === 'DISABLED') {
@@ -522,12 +545,13 @@ app.post('/api/auth/firebase-login', async (req, res) => {
       targetEntity: 'USER',
       targetId: verifiedUser.id,
       details: {
-        event: 'USER_AUTHENTICATED_FIREBASE',
+        event: 'USER_AUTHENTICATED_FIREBASE_VERIFIED',
         provider: 'GOOGLE_FIREBASE',
+        firebaseUid: verifiedToken.uid,
         role: verifiedUser.role,
         authScope: {
           schoolId: verifiedUser.schoolId,
-          guardianId: verifiedUser.guardianId,
+          guardianId: resolvedGuardianId,
           responderUnit: verifiedUser.responderUnit
         }
       },
@@ -541,14 +565,15 @@ app.post('/api/auth/firebase-login', async (req, res) => {
       permissions,
       scope: {
         schoolId: verifiedUser.schoolId,
-        guardianId: verifiedUser.guardianId,
+        guardianId: resolvedGuardianId,
         responderUnit: verifiedUser.responderUnit,
         department: verifiedUser.department
       }
     });
   } catch (err: any) {
-    console.error('[FirebaseLogin Error]:', err);
-    res.status(500).json({ error: err.message || 'Firebase authentication failed' });
+    console.error('[FirebaseLogin Error]:', err.message);
+    const statusCode = err.message?.includes('INVALID_') || err.message?.includes('TOKEN_EXPIRED') || err.message?.includes('SIGNATURE_') ? 401 : 500;
+    res.status(statusCode).json({ error: err.message || 'Firebase authentication failed' });
   }
 });
 
@@ -2008,7 +2033,7 @@ app.get('/api/devices', requireAuth, async (req, res) => {
   let effectiveSchoolId: string | undefined = undefined;
   if (user.role === 'SCHOOL_PRINCIPAL' || user.role === 'SCHOOL_ADMIN_STAFF') {
     effectiveSchoolId = user.schoolId;
-  } else if (user.role === 'SYSTEM_ADMIN' || user.role === 'FOUNDER_EXECUTIVE') {
+  } else if (user.role === 'SYSTEM_ADMIN' || user.role === 'FOUNDER_EXECUTIVE' || user.role === 'COMMAND_OPERATOR') {
     effectiveSchoolId = schoolId as string;
   } else if (user.role === 'TECHNICIAN') {
     effectiveSchoolId = schoolId as string;
@@ -4383,6 +4408,95 @@ app.post('/api/devices/reassign', requireAuth, async (req, res) => {
     });
   } catch (err: any) {
     res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
+// Update Device SIM Number (Authorised Technician or System Admin)
+app.put('/api/devices/:id/sim', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const deviceId = normalizeParam(req.params.id);
+    const { simPhoneNumber } = req.body || {};
+    if (!simPhoneNumber) {
+      return res.status(400).json({ error: 'simPhoneNumber is required' });
+    }
+    const updated = deviceRegistryEngine.updateDeviceSim(deviceId, simPhoneNumber, user);
+    res.json({
+      success: true,
+      message: 'Device SIM / telephone number updated successfully.',
+      device: updated
+    });
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
+// Command Centre Controlled Device Calling & Live Environmental Audio Monitoring
+// Authorised exclusively for Command Centre Officers (COMMAND_OPERATOR, SYSTEM_ADMIN, FOUNDER_EXECUTIVE)
+app.post('/api/command-centre/call-device', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const authorizedRoles = ['COMMAND_OPERATOR', 'SYSTEM_ADMIN', 'FOUNDER_EXECUTIVE'];
+    if (!authorizedRoles.includes(user.role)) {
+      return res.status(403).json({
+        error: `ACCESS DENIED (HTTP 403): Only an authorised Command Centre Officer may initiate device calling and live environmental audio monitoring. Role '${user.role}' is strictly prohibited.`
+      });
+    }
+
+    const { deviceId, incidentId, learnerId } = req.body || {};
+    if (!deviceId) {
+      return res.status(400).json({ error: 'deviceId is required to initiate device call' });
+    }
+
+    const session = deviceRegistryEngine.initiateDeviceCall(deviceId, user, incidentId, learnerId);
+    res.json({
+      success: true,
+      message: 'Live environmental audio monitoring channel established.',
+      session
+    });
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
+// Terminate Device Call / Audio Monitoring Session
+app.post('/api/command-centre/end-call', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const authorizedRoles = ['COMMAND_OPERATOR', 'SYSTEM_ADMIN', 'FOUNDER_EXECUTIVE'];
+    if (!authorizedRoles.includes(user.role)) {
+      return res.status(403).json({
+        error: `ACCESS DENIED (HTTP 403): Only an authorised Command Centre Officer may terminate device audio sessions.`
+      });
+    }
+
+    const { sessionId, durationSeconds } = req.body || {};
+    if (!sessionId) {
+      return res.status(400).json({ error: 'sessionId is required' });
+    }
+
+    const result = deviceRegistryEngine.endDeviceCall(sessionId, user, durationSeconds);
+    res.json(result);
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ error: err.message });
+  }
+});
+
+// Get Active Call Session Status
+app.get('/api/command-centre/call-session/:sessionId', requireAuth, async (req, res) => {
+  try {
+    const user = req.user!;
+    const authorizedRoles = ['COMMAND_OPERATOR', 'SYSTEM_ADMIN', 'FOUNDER_EXECUTIVE'];
+    if (!authorizedRoles.includes(user.role)) {
+      return res.status(403).json({ error: 'ACCESS DENIED' });
+    }
+    const session = deviceRegistryEngine.getActiveCallSession(req.params.sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Call session not found' });
+    }
+    res.json(session);
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
   }
 });
 

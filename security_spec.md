@@ -2,7 +2,7 @@
 
 ## 1. Data Invariants
 1. **User Identity Boundary**: A user document at `/users/{userId}` can only be created or modified if `request.auth.uid == userId`.
-2. **Role & Privilege Escalation Prevention**: Users cannot self-assign `role: "FOUNDER_EXECUTIVE"` or `role: "SYSTEM_ADMIN"`. Admin verification requires an authoritative record in `/admins/{uid}` or authenticated match with sovereign admin `bravomtho@gmail.com`.
+2. **Role & Privilege Escalation Prevention**: Users cannot self-assign `role: "FOUNDER_EXECUTIVE"` or `role: "SYSTEM_ADMIN"`. Admin verification requires an authoritative record in `/admins/{uid}` managed exclusively server-side. Sovereign Founder access is restricted exclusively to the approved Founder activation, password, and TOTP MFA journey.
 3. **Immutability of Cryptographic & Audit Trails**: `createdAt`, `checksum`, and `id` cannot be modified on update.
 4. **Relational Custody Invariant**: An incident alert or guardian relationship write must explicitly match an authenticated identity or verified authority.
 5. **No Blanket Reads**: Public or unauthenticated queries on `/users`, `/learners`, `/guardians`, or `/incidents` are completely denied.

@@ -56,6 +56,7 @@ import {
 } from '../../types.js';
 import crypto from 'crypto';
 import { AUTHORITATIVE_ROLE_MATRIX } from '../rbacEngine.js';
+import { validateAndNormalizePhoneNumber } from '../phoneValidation.js';
 
 export interface ActiveSessionRecord {
   token: string;
@@ -1305,6 +1306,24 @@ export class PostgresLearnerRepository implements ILearnerRepository {
         }
       }
 
+      // 0b. SIM / Telephone Number Conflict Prevention
+      let cleanSimNumber: string | null = null;
+      if (payload.learner.simPhoneNumber) {
+        const simVal = validateAndNormalizePhoneNumber(payload.learner.simPhoneNumber);
+        if (!simVal.valid) {
+          throw new Error(simVal.error || `Invalid SIM telephone number '${payload.learner.simPhoneNumber}'.`);
+        }
+        cleanSimNumber = simVal.normalized!;
+        const simCheck = await client.query(
+          `SELECT id, serial_number FROM devices 
+           WHERE sim_phone_number = $1 AND ($2::text IS NULL OR assigned_learner_id != $2) LIMIT 1;`,
+          [cleanSimNumber, payload.learner.existingLearnerId || null]
+        );
+        if (simCheck.rows.length > 0) {
+          throw new Error(`DUPLICATE SIM NUMBER CONFLICT: SIM / telephone number '${cleanSimNumber}' is already assigned to another active device.`);
+        }
+      }
+
       // 1. Learner Person & Duplicate Learner Prevention
       let learnerPersonId = (payload.learner as any).existingPersonId;
       const learnerOfficialId = payload.learner.officialId || (payload.learner as any).saIdNumber;
@@ -1737,14 +1756,15 @@ export class PostgresLearnerRepository implements ILearnerRepository {
         const devId = 'dev-' + devSerial.toLowerCase().replace(/[^a-z0-9]/g, '-');
         await client.query(
           `INSERT INTO devices (
-            id, serial_number, device_model, hardware_revision, firmware_version,
+            id, serial_number, sim_phone_number, device_model, hardware_revision, firmware_version,
             device_status, battery_level, assigned_learner_id
-          ) VALUES ($1, $2, 'ITIS-Beacon-Pro', 'REV-2.1', 'v2.4.1-rc3', 'ACTIVE', 100, $3)
+          ) VALUES ($1, $2, $3, 'ITIS-Beacon-Pro', 'REV-2.1', 'v2.4.1-rc3', 'ACTIVE', 100, $4)
           ON CONFLICT (serial_number) DO UPDATE SET
+            sim_phone_number = COALESCE(EXCLUDED.sim_phone_number, devices.sim_phone_number),
             assigned_learner_id = EXCLUDED.assigned_learner_id,
             device_status = 'ACTIVE',
             updated_at = CURRENT_TIMESTAMP;`,
-          [devId, devSerial, learnerId]
+          [devId, devSerial, cleanSimNumber, learnerId]
         );
       }
 
@@ -2347,6 +2367,8 @@ export class PostgresDeviceRepository implements IDeviceRepository {
       return {
         id: r.id,
         serialNumber: r.serial_number,
+        imei: r.imei || undefined,
+        simPhoneNumber: r.sim_phone_number || undefined,
         type: r.device_model?.includes('Gate')
           ? 'RFID_GATE_READER'
           : r.device_model?.includes('LoRa') || r.device_model?.includes('Gateway')
